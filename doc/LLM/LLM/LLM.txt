@@ -1,0 +1,4 @@
+The architecture nomenclature for LLMs is somewhat confusing and unfortunate.
+What's called "encoder only" actually has an encoder and a decoder (just not an auto-regressive decoder).
+What's called "encoder-decoder" really means "encoder with auto-regressive decoder"
+What's called "decoder only" really means "auto-regressive encoder-decoder" By LeCun
