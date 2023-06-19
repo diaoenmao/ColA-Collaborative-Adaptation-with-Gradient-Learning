@@ -17,6 +17,7 @@ import re
 import os
 import numpy as np
 import warnings
+import collections
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import List, Optional, Union
@@ -116,7 +117,7 @@ class ColaConfig(PeftConfig):
             "help": "The layer pattern name, used only if `layers_to_transform` is different to None and if the layer pattern is not in the common layers pattern."
         },
     )
-    get_delta_w: bool = field(default=False, metadata={"help": "Get input embedding and gradients for boosting"})
+    get_delta_h: bool = field(default=False, metadata={"help": "Get input embedding and gradients for boosting"})
     dataset_name: Optional[str] = field(
         default=None,
         metadata={
@@ -124,7 +125,7 @@ class ColaConfig(PeftConfig):
         },
     )
     def __post_init__(self):
-        self.peft_type = PeftType.LORA
+        self.peft_type = PeftType.COLA
 
 
 class ColaModel(torch.nn.Module):
@@ -189,6 +190,8 @@ class ColaModel(torch.nn.Module):
         self.model = model
         self.forward = self.model.forward
         self.peft_config = config
+        self.inputs = collections.defaultdict(list)
+        self.grad_outputs = collections.defaultdict(list)
         self.add_adapter(adapter_name, self.peft_config[adapter_name])
 
     def add_adapter(self, adapter_name, config=None):
@@ -202,8 +205,8 @@ class ColaModel(torch.nn.Module):
                 "ColaModel supports only 1 adapter with bias. When using multiple adapters, set bias to 'none' for all adapters."
             )
         cola_config = self.peft_config[adapter_name]
-        get_delta_w = cola_config.get_delta_w
-        if get_delta_w == True:
+        get_delta_h = cola_config.get_delta_h
+        if get_delta_h == True:
             # boosting model should be empty at this point
             mark_all_module_as_trainable(self.model, 'all')
         else:
@@ -227,7 +230,6 @@ class ColaModel(torch.nn.Module):
             "cola_alpha": cola_config.cola_alpha,
             "cola_dropout": cola_config.cola_dropout,
             "fan_in_fan_out": cola_config.fan_in_fan_out,
-            "get_delta_w": cola_config.get_delta_w,
             "init_cola_weights": cola_config.init_cola_weights,
         }
         key_list = [key for key, _ in self.model.named_modules()]
@@ -236,7 +238,7 @@ class ColaModel(torch.nn.Module):
 
         if cola_config.inference_mode:
             gradient_boosting_models = load_gradient_boosting_models(cola_config)
-
+        # print(key_list)
         for key in key_list:
             if isinstance(cola_config.target_modules, str):
                 target_module_found = re.fullmatch(cola_config.target_modules, key)
@@ -277,6 +279,17 @@ class ColaModel(torch.nn.Module):
                         cola_config.init_cola_weights,
                     )
                 else:
+
+                    kwargs = {
+                        "r": cola_config.r,
+                        "cola_alpha": cola_config.cola_alpha,
+                        "cola_dropout": cola_config.cola_dropout,
+                        "fan_in_fan_out": cola_config.fan_in_fan_out,
+                        "key": key,
+                        "get_delta_h": cola_config.get_delta_h,
+                        "init_cola_weights": cola_config.init_cola_weights,
+                    }
+                    
                     if loaded_in_8bit and isinstance(target, bnb.nn.Linear8bitLt):
                         eightbit_kwargs = kwargs.copy()
                         eightbit_kwargs.update(
@@ -339,12 +352,17 @@ class ColaModel(torch.nn.Module):
                             new_module.gradient_boosting_model = gradient_boosting_model
 
                     self._replace_module(parent, target_name, new_module, target)
+                    # hook hooks when getting delta h, hook outside dict will be cleaned (question mark)
+                    # if cola_config.get_delta_h == True:
+                    #     self.hook_module(new_module, 'forward')
+                    #     self.hook_module(new_module, 'backward')
         if not is_target_modules_in_base_model:
             raise ValueError(
                 f"Target modules {cola_config.target_modules} not found in the base model. "
                 f"Please check the target modules and try again."
             )
 
+    
     def _replace_module(self, parent_module, child_name, new_module, old_module):
         setattr(parent_module, child_name, new_module)
         new_module.weight = old_module.weight
@@ -530,10 +548,10 @@ def mark_only_cola_as_trainable(model: nn.Module, bias: str = "none") -> None:
 class IntermediateInfo(Dataset):
     data_name = 'IntermediateInfo'
 
-    def __init__(self, input_list, grad_input_list, transform=None):
+    def __init__(self, inputs_of_cur_key, grad_outputs_of_cur_key, transform=None):
         self.transform = transform
-        self.id, self.data, self.target = self.make_data(train_data=input_list, train_target=grad_input_list)
-        
+        self.id, self.data, self.target = self.make_data(train_data=inputs_of_cur_key, train_target=grad_outputs_of_cur_key)
+
     def __getitem__(self, index):
         id, data, target = torch.tensor(self.id[index]), torch.tensor(self.data[index]), torch.tensor(
             self.target[index])
@@ -556,7 +574,7 @@ class IntermediateInfo(Dataset):
 
 def create_gradient_boosting_datasets(peft_config):
     model_name = peft_config.base_model_name_or_path
-    task_type = peft_config.task_type,
+    task_type = peft_config.task_type.value
     dataset_name= peft_config.dataset_name
 
     # Return a dictionary of gradient boosting models where the key is the name of the found layers.
@@ -567,12 +585,12 @@ def create_gradient_boosting_datasets(peft_config):
         dataset_name=dataset_name, 
     )
 
-    key_list = [key for key, _ in intermediate_info['input'].items()]
+    key_list = [key for key, _ in intermediate_info['inputs'].items()]
     for key in key_list:            
-        input_list = intermediate_info['input'][key]
-        grad_input_list = intermediate_info['grad_input'][key]
-        gradient_boosting_datasets[key] = IntermediateInfo(input_list, grad_input_list)
-                
+        inputs_of_cur_key = intermediate_info['inputs'][key]
+        grad_outputs_of_cur_key = intermediate_info['grad_outputs'][key]
+        gradient_boosting_datasets[key] = IntermediateInfo(inputs_of_cur_key, grad_outputs_of_cur_key)
+       
     return gradient_boosting_datasets
 
 
@@ -590,13 +608,11 @@ class GradientBoosting(nn.Module):
         return loss
 
     def f(self, x):
-        # Flatten the input tensor
-        x = x.view(-1, self.in_features)
         # Pass the input through the model
         x = self.model(x)
         return x
 
-    def forward(self):
+    def forward(self, input):
         output = {}
         output['target'] = self.f(input['data'])
         output['loss'] = self.loss_fn(output['target'], input['target'])
@@ -606,6 +622,7 @@ def create_gradient_boosting_models(peft_config, model):
     # Return a dictionary of gradient boosting models where the key is the name of the found layers.
     adapter_name = model.active_adapter
     gradient_boosting_models = {}
+    model = model.base_model.model
     key_list = [key for key, _ in model.named_modules()]
     for key in key_list:
         if isinstance(peft_config.target_modules, str):
@@ -622,8 +639,6 @@ def create_gradient_boosting_models(peft_config, model):
             gradient_boosting_models[key] = GradientBoosting(in_features, out_features, adapter_name)
                 
     return gradient_boosting_models
-
-
 
 class ColaLayer:
     def __init__(
@@ -660,7 +675,8 @@ class ColaLayer:
         if r > 0:
             # self.cola_A.update(nn.ModuleDict({adapter_name: nn.Linear(self.in_features, r, bias=False)}))
             # self.cola_B.update(nn.ModuleDict({adapter_name: nn.Linear(r, self.out_features, bias=False)}))
-            self.scaling[adapter_name] = cola_alpha / r
+            # self.scaling[adapter_name] = cola_alpha / r
+            pass
         # if init_cola_weights:
         #     self.reset_cola_parameters(adapter_name)
         self.to(self.weight.device)
@@ -709,7 +725,8 @@ class Linear(nn.Linear, ColaLayer):
         cola_alpha: int = 1,
         cola_dropout: float = 0.0,
         fan_in_fan_out: bool = False,  # Set this to True if the layer to replace stores weight like (fan_in, fan_out),
-        get_delta_w: bool = False,
+        key: str = None, # key of current layer
+        get_delta_h: bool = False,
         **kwargs,
     ):
         init_cola_weights = kwargs.pop("init_cola_weights", True)
@@ -717,45 +734,25 @@ class Linear(nn.Linear, ColaLayer):
         nn.Linear.__init__(self, in_features, out_features, **kwargs)
         ColaLayer.__init__(self, in_features=in_features, out_features=out_features)
         # Freezing the pre-trained weight matrix
-        # first time will not freeze weight matrix to get delta W
-        self.get_delta_w = get_delta_w
-        if get_delta_w == True:
-            self.weight.requires_grad = True
-        else:
-            self.weight.requires_grad = False
-
+        self.weight.requires_grad = False
+        
         self.fan_in_fan_out = fan_in_fan_out
         if fan_in_fan_out:
             self.weight.data = self.weight.data.T
 
+        self.key = key
+        self.get_delta_h = get_delta_h
         nn.Linear.reset_parameters(self)
         self.update_layer(adapter_name, r, cola_alpha, cola_dropout, init_cola_weights)
         self.active_adapter = adapter_name
 
-        if not get_delta_w:
-            self.boosting_model = None
-
-        self.input_list = []
-        self.grad_input_list = []
         self.gradient_boosting_model = None
+        self.inputs = []
+        self.grad_outputs = []
 
-    def forward_hook_fn(self, module, input, output):
-        self.input_list.append(to_device(copy.deepcopy(input), 'cpu'))
-        return
-
-    def backward_hook_fn(self, module, grad_input, grad_output):
-        self.grad_input_list.append(to_device(copy.deepcopy(grad_input), 'cpu'))
-        return
-
-    def hook_module(self, module, type='forward'):
-        if type == 'forward':
-            module.register_module_forward_hook(self.forward_hook_fn)
-        elif type == 'backward':
-            module.register_module_full_backward_hook(self.backward_hook_fn)
-        else:
-            raise ValueError('type must be forward or backward')
-        return
-
+        if self.get_delta_h:
+            self.hook_module(self, 'forward')
+            self.hook_module(self, 'backward')
     def merge(self):
         if self.active_adapter not in self.cola_A.keys():
             return
@@ -788,6 +785,24 @@ class Linear(nn.Linear, ColaLayer):
             )
             self.merged = False
 
+
+    def forward_hook_fn(self, module, input, output):
+        self.inputs.append(to_device(input[0].detach(), 'cpu'))
+        return
+
+    def backward_hook_fn(self, module, grad_input, grad_output):
+        self.grad_outputs.append(to_device(grad_output[0].detach(), 'cpu'))
+        return
+
+    def hook_module(self, module, type='forward'):
+        if type == 'forward':
+            module.register_forward_hook(self.forward_hook_fn)
+        elif type == 'backward':
+            module.register_full_backward_hook(self.backward_hook_fn)
+        else:
+            raise ValueError('type must be forward or backward')
+        return
+    
     def forward(self, x: torch.Tensor):
         previous_dtype = x.dtype
         
@@ -810,15 +825,9 @@ class Linear(nn.Linear, ColaLayer):
         #     )
         # else:
         #     result = F.linear(x, transpose(self.weight, self.fan_in_fan_out), bias=self.bias)
-
-        if self.get_delta_w:
-            # hook hooks to get forward embedding and backward gradient 
-            self.linear = F.linear(x, transpose(self.weight, self.fan_in_fan_out), bias=self.bias)
-            self.hook_module(self.linear, 'forward')
-            self.hook_module(self.linear, 'backward')
-        elif self.gradient_boosting_model is not None:
+        result = F.linear(x, transpose(self.weight, self.fan_in_fan_out), bias=self.bias)
+        if self.gradient_boosting_model is not None:
             # inference mode
-            result = F.linear(x, transpose(self.weight, self.fan_in_fan_out), bias=self.bias)
             result += self.gradient_boosting_model(x)['target']
 
         result = result.to(previous_dtype)  

@@ -12,6 +12,7 @@ from peft import (
     PeftConfig, 
     PeftModel, 
     TaskType, 
+    Metric,
     get_peft_model, 
     save_intermediate_info, 
     create_gradient_boosting_models, 
@@ -27,7 +28,7 @@ from peft import (
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 # device = "cuda"
-device = "cuda"
+device = "cpu"
 model_name_or_path = "facebook/bart-base"
 tokenizer_name_or_path = "facebook/bart-base"
 
@@ -36,20 +37,25 @@ text_column = "sentence"
 label_column = "text_label"
 max_length = 128
 lr = 1e-3
-num_epochs = 8
+num_epochs = 1
 batch_size = 8
 
 gradient_boosting_cfg = {
     'optimizer': 'SGD',
     'scheduler': 'CosineAnnealingLR',
-    'batch_size': 10,
-    'shuffle': True,
+    'batch_size': {'train': 2},
+    'shuffle': {'train': True},
+    'seed': 0,
     'lr': 0.1,
     'momentum': 0.9,
     'weight_decay': 5e-4,
     'nesterov': True,
     'pin_memory': True,
     'num_workers': 0,
+    'max_clip_norm': 10,
+    'optimizer_name': 'SGD',
+    'scheduler_name': 'CosineAnnealingLR',
+    'num_epochs': 100,
 }
 
 peft_config = ColaConfig(
@@ -57,11 +63,9 @@ peft_config = ColaConfig(
     task_type=TaskType.SEQ_2_SEQ_LM,
     dataset_name='financial_sentiment_analysis',
     r=64,
-    lora_alpha=32,
     target_modules=["q_proj", "v_proj"],
-    lora_dropout=0.01,
     bias="none",
-    get_delta_w=True
+    get_delta_h=True
 )
 
 model = AutoModelForSeq2SeqLM.from_pretrained(model_name_or_path)
@@ -125,7 +129,6 @@ lr_scheduler = get_linear_schedule_with_warmup(
     num_training_steps=(len(train_dataloader) * num_epochs),
 )
 
-b = model.base_model
 model.base_model.peft_config['default'].total_step = len(train_dataloader) * num_epochs
 
 # training and evaluation
@@ -142,11 +145,11 @@ for epoch in range(1):
         loss.backward()
         optimizer.step()
         lr_scheduler.step()
-        # Update the importance of low-rank matrices
-        # and allocate the budget accordingly.
-        model.base_model.update_and_allocate(global_step)
         optimizer.zero_grad()
         global_step += 1
+        # test workflow faster
+        if global_step == 2:
+            break
 
     save_intermediate_info(
         peft_config=peft_config, 
@@ -154,6 +157,7 @@ for epoch in range(1):
         save_mode='overwrite_mode'
     )
 
+metric = Metric({'train': ['Loss', 'MAD'], 'test': ['Loss', 'MAD']})
 for epoch in range(num_epochs):
     model.eval()
     eval_loss = 0
@@ -163,26 +167,27 @@ for epoch in range(num_epochs):
 
     # train gradient boosting models
     for key, model in gradient_boosting_models.items():
-        data_loader = make_data_loader(gradient_boosting_datasets[key], gradient_boosting_cfg)
+        data_loader = make_data_loader(
+            {'train': gradient_boosting_datasets[key]}, 
+            gradient_boosting_cfg
+        )
         optimizer = create_optimizer(model, gradient_boosting_cfg)
         scheduler = create_scheduler(optimizer, gradient_boosting_cfg)
-        for i, input in enumerate(data_loader):
-                input = collate(input)
-                # print(f"input[id]: {input['id']}\n")
-                input_size = input['data'].size(0)
-                input = to_device(input, cfg['device'])
-                optimizer.zero_grad()
-                output = model(input)
-                output['loss'].backward()
-
-                # torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
-                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=cfg['max_clip_norm'])
-                optimizer.step()
-                evaluation = metric.evaluate(
-                    metric.metric_name['train'], 
-                    input, 
-                    output
-                )
+        for i, input in enumerate(data_loader['train']):
+            input = collate(input)
+            # print(f"input[id]: {input['id']}\n")
+            input_size = input['data'].size(0)
+            input = to_device(input, device)
+            optimizer.zero_grad()
+            output = model(input)
+            output['loss'].backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=gradient_boosting_cfg['max_clip_norm'])
+            optimizer.step()
+            evaluation = metric.evaluate(
+                metric.metric_name['train'], 
+                input, 
+                output
+            )
 
     # save gradient boosting models
     save_gradient_boosting_models( 
@@ -196,9 +201,7 @@ for epoch in range(num_epochs):
         task_type=TaskType.SEQ_2_SEQ_LM,
         dataset_name='financial_sentiment_analysis',
         r=64,
-        lora_alpha=32,
         target_modules=["q_proj", "v_proj"],
-        lora_dropout=0.01,
         bias="none",
         inference_mode=False
     )
@@ -235,21 +238,6 @@ print(f"{accuracy=} % on the evaluation dataset")
 print(f"{eval_preds[:10]=}")
 print(f"{dataset['validation']['text_label'][:10]=}")
 
-
-# saving model
-peft_model_id = f"{model_name_or_path}_{peft_config.peft_type}_{peft_config.task_type}"
-model.save_pretrained(peft_model_id)
-
-
-ckpt = f"{peft_model_id}/adapter_model.bin"
-# get_ipython().system('du -h $ckpt')
-
-
-peft_model_id = f"{model_name_or_path}_{peft_config.peft_type}_{peft_config.task_type}"
-
-config = PeftConfig.from_pretrained(peft_model_id)
-model = AutoModelForSeq2SeqLM.from_pretrained(config.base_model_name_or_path)
-model = PeftModel.from_pretrained(model, peft_model_id)
 
 
 model.eval()

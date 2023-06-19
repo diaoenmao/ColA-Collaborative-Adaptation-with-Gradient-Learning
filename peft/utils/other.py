@@ -21,6 +21,59 @@ from torch.utils.data import DataLoader
 from torch.utils.data.dataloader import default_collate
 import torch
 
+
+import torch
+import torch.nn.functional as F
+
+
+
+
+def MAD(output, target):
+    with torch.no_grad():
+        mad = F.l1_loss(output, target).item()
+    return mad
+
+class Metric(object):
+    def __init__(self, metric_name):
+        self.metric_name = self.make_metric_name(metric_name)
+        self.pivot, self.pivot_name, self.pivot_direction = self.make_pivot()
+        self.metric = {'Loss': (lambda input, output: output['loss'].item()),
+                       'MAD': (lambda input, output: recur(MAD, output['target'], input['target'])),
+                    }
+
+    def make_metric_name(self, metric_name):
+        return metric_name
+
+    def make_pivot(self):
+        # if cfg['data_name'] in ['CIFAR10', 'CIFAR100', 'FEMNIST', 'SVHN', 'STL10', 'MNIST']:
+        if True:
+            pivot = -float('inf')
+            pivot_direction = 'up'
+            pivot_name = 'Accuracy'
+        else:
+            raise ValueError('Not valid data name')
+        return pivot, pivot_name, pivot_direction
+
+    def evaluate(self, metric_names, input, output):
+        evaluation = {}
+        for metric_name in metric_names:
+            evaluation[metric_name] = self.metric[metric_name](input, output)
+        return evaluation
+
+    def compare(self, val):
+        if self.pivot_direction == 'down':
+            compared = self.pivot > val
+        elif self.pivot_direction == 'up':
+            compared = self.pivot < val
+        else:
+            raise ValueError('Not valid pivot direction')
+        return compared
+
+    def update(self, val):
+        self.pivot = val
+        return
+
+
 def create_optimizer(
     model, cfg
 ):
@@ -247,6 +300,7 @@ class ModulesToSaveWrapper(torch.nn.Module):
 
 
 def _get_submodules(model, key):
+    b = ".".join(key.split(".")[:-1])
     parent = model.get_submodule(".".join(key.split(".")[:-1]))
     target_name = key.split(".")[-1]
     target = model.get_submodule(key)

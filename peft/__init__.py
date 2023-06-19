@@ -53,6 +53,7 @@ from .utils import (
     PeftType,
     PromptLearningConfig,
     TaskType,
+    Metric,
     bloom_model_postprocess_past_key_value,
     create_scheduler,
     create_optimizer,

@@ -62,27 +62,25 @@ def save(input, path, mode='torch'):
     return
 
 def save_data(save_mode, base_path, data_path, data_key, data_list, load_func, save_func):
-    if len(data_list) > 0:
-        cur_layer_info_path = os.path.join(base_path, data_path, data_key)
-        data_to_save = data_list
-        if save_mode == 'append_mode':
-            prev_data_list = load_func(cur_layer_info_path, mode='pickle')
-            data_to_save = prev_data_list + data_to_save
-        save_func(data_to_save, cur_layer_info_path, mode='pickle')
-        data_list = []
-    else:
-        raise ValueError('Nothing to save, check cola intermediate info')
+    cur_layer_info_path = os.path.join(base_path, data_path, data_key)
+    data_to_save = data_list
+    if save_mode == 'append_mode':
+        prev_data_list = load_func(cur_layer_info_path, mode='pickle')
+        data_to_save = prev_data_list + data_to_save
+    save_func(data_to_save, cur_layer_info_path, mode='pickle')
+    data_list = []
+    return
     
 def save_intermediate_info(peft_config, model, save_mode='overwrite_mode'):
     model_name = peft_config.base_model_name_or_path
-    task_type = peft_config.task_type,
+    task_type = peft_config.task_type.value
     dataset_name= peft_config.dataset_name
     # Create the base_path
-    base_path = os.path.join(model_name, task_type, dataset_name, 'intermediate_info')
+    base_path = os.path.join(task_type, model_name, dataset_name, 'intermediate_info')
 
     # Create the corresponding folders
     makedir_exist_ok(base_path)
-
+    model = model.base_model.model
     key_list = [key for key, _ in model.named_modules()]
     for key in key_list:
         if isinstance(peft_config.target_modules, str):
@@ -93,20 +91,21 @@ def save_intermediate_info(peft_config, model, save_mode='overwrite_mode'):
         if target_module_found:
             parent, target, target_name = _get_submodules(model, key)
             if isinstance(target, torch.nn.Linear):
-                if len(target.input_list) > 0:
-                    save_data(save_mode, base_path, 'input', key, target.input_list, load, save)
-                elif len(target.output_list) > 0:                
-                    save_data(save_mode, base_path, 'grad_input', key, target.grad_input_list, load, save)
-                else:
+                if len(target.inputs) == 0 and len(target.grad_outputs) == 0:
                     raise ValueError('Nothing to save, check cola intermediate info')
+                
+                if len(target.inputs) > 0:
+                    save_data(save_mode, base_path, 'inputs', key, target.inputs, load, save)
+                if len(target.grad_outputs) > 0:                
+                    save_data(save_mode, base_path, 'grad_outputs', key, target.grad_outputs, load, save)
             else:
                 raise ValueError('Invalid layer type. Currently, COLA only supports linear layers.')
     return 
 
-def load_intermediate_info(model_name, task_type, dataset_name):
-    intermediate_info = collections.defaultdict(list)
-    for sub_path in ['input', 'grad_input']:
-        path = os.path.join(model_name, task_type, dataset_name, 'intermediate_info', sub_path)
+def load_intermediate_info(task_type, model_name, dataset_name):
+    intermediate_info = collections.defaultdict(dict)
+    for sub_path in ['inputs', 'grad_outputs']:
+        path = os.path.join(task_type, model_name, dataset_name, 'intermediate_info', sub_path)
         # Iterate over the files in the directory
         for filename in os.listdir(path):
             file_path = os.path.join(path, filename)
@@ -118,21 +117,21 @@ def load_intermediate_info(model_name, task_type, dataset_name):
                 intermediate_info[sub_path][filename] = data
     return intermediate_info
         
-def save_gradient_boosting_models(peft_config, model):
+def save_gradient_boosting_models(peft_config, models):
     model_name = peft_config.base_model_name_or_path
-    task_type = peft_config.task_type,
+    task_type = peft_config.task_type.value
     dataset_name= peft_config.dataset_name
-    path = os.path.join(model_name, task_type, dataset_name, 'intermediate_info', 'gradient_boosting_models')
-    save(model, path, mode='pickle')
+    path = os.path.join(task_type, model_name, dataset_name, 'intermediate_info', 'gradient_boosting_models')
+    save(models, path, mode='pickle')
     return
 
 def load_gradient_boosting_models(peft_config, model):
     model_name = peft_config.base_model_name_or_path
-    task_type = peft_config.task_type,
+    task_type = peft_config.task_type.value
     dataset_name= peft_config.dataset_name
 
     gradient_boosting_models = collections.defaultdict(list)
-    path = os.path.join(model_name, task_type, dataset_name, 'intermediate_info', 'gradient_boosting_models')
+    path = os.path.join(task_type, model_name, dataset_name, 'intermediate_info', 'gradient_boosting_models')
     if len(os.listdir(path)) == 0:
         raise ValueError('No gradient boosting models found')
     # Iterate over the files in the directory
@@ -141,9 +140,7 @@ def load_gradient_boosting_models(peft_config, model):
         # Check if the current item is a file
         if os.path.isfile(file_path):
             # Load the file
-            data = load(file_path, mode='pickle')
-            # Store the loaded data in the data_dict using filename as the key
-            gradient_boosting_models[filename] = data
+            gradient_boosting_models = load(file_path, mode='pickle')
     return gradient_boosting_models
 
 def get_peft_model_state_dict(model, state_dict=None, adapter_name="default"):

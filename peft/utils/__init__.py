@@ -41,6 +41,7 @@ from .other import (
     make_data_loader,
     collate,
     ModulesToSaveWrapper,
+    Metric
 )
 from .save_and_load import (
     check_exists,

@@ -23,6 +23,7 @@ from .peft_model import (
 from .tuners import (
     AdaLoraConfig,
     AdaptionPromptConfig,
+    ColaConfig,
     LoraConfig,
     PrefixTuningConfig,
     PromptEncoderConfig,
@@ -45,6 +46,7 @@ PEFT_TYPE_TO_CONFIG_MAPPING = {
     "P_TUNING": PromptEncoderConfig,
     "LORA": LoraConfig,
     "ADALORA": AdaLoraConfig,
+    "COLA": ColaConfig
 }
 
 
@@ -117,4 +119,5 @@ def get_peft_model(model, peft_config):
         return PeftModel(model, peft_config)
     if isinstance(peft_config, PromptLearningConfig):
         peft_config = _prepare_prompt_learning_config(peft_config, model_config)
+    a = MODEL_TYPE_TO_PEFT_MODEL_MAPPING[peft_config.task_type](model, peft_config)
     return MODEL_TYPE_TO_PEFT_MODEL_MAPPING[peft_config.task_type](model, peft_config)
