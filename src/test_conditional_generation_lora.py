@@ -114,7 +114,7 @@ for epoch in range(num_epochs):
         lr_scheduler.step()
         # Update the importance of low-rank matrices
         # and allocate the budget accordingly.
-        model.base_model.update_and_allocate(global_step)
+        # model.base_model.update_and_allocate(global_step)
         optimizer.zero_grad()
         global_step += 1
 
