@@ -32,7 +32,7 @@ from transformers.pytorch_utils import Conv1D
 from ..import_utils import is_bnb_4bit_available, is_bnb_available
 from ..utils import (
     COMMON_LAYERS_PATTERN,
-    TRANSFORMERS_MODELS_TO_LORA_TARGET_MODULES_MAPPING,
+    TRANSFORMERS_MODELS_TO_COLA_TARGET_MODULES_MAPPING,
     ModulesToSaveWrapper,
     PeftConfig,
     PeftType,
@@ -48,7 +48,6 @@ from ..utils import (
     to_device,
     load_gradient_boosting_models
 )
-
 
 if is_bnb_available():
     import bitsandbytes as bnb
@@ -83,7 +82,7 @@ class ColaConfig(PeftConfig):
         default=None,
         metadata={
             "help": "List of module names or regex expression of the module names to replace with Cola."
-            "For example, ['q', 'v'] or '.*decoder.*(SelfAttention|EncDecAttention).*(q|v)$' "
+                    "For example, ['q', 'v'] or '.*decoder.*(SelfAttention|EncDecAttention).*(q|v)$' "
         },
     )
     cola_alpha: int = field(default=None, metadata={"help": "Cola alpha"})
@@ -97,8 +96,8 @@ class ColaConfig(PeftConfig):
         default=None,
         metadata={
             "help": "List of modules apart from LoRA layers to be set as trainable and saved in the final checkpoint. "
-            "For example, in Sequence Classification or Token Classification tasks, "
-            "the final layer `classifier/score` are randomly initialized and as such need to be trainable and saved."
+                    "For example, in Sequence Classification or Token Classification tasks, "
+                    "the final layer `classifier/score` are randomly initialized and as such need to be trainable and saved."
         },
     )
     init_cola_weights: bool = field(
@@ -124,6 +123,7 @@ class ColaConfig(PeftConfig):
             "help": "The name of the dataset to use"
         },
     )
+
     def __post_init__(self):
         self.peft_type = PeftType.COLA
 
@@ -289,7 +289,7 @@ class ColaModel(torch.nn.Module):
                         "get_delta_h": cola_config.get_delta_h,
                         "init_cola_weights": cola_config.init_cola_weights,
                     }
-                    
+
                     if loaded_in_8bit and isinstance(target, bnb.nn.Linear8bitLt):
                         eightbit_kwargs = kwargs.copy()
                         eightbit_kwargs.update(
@@ -344,7 +344,7 @@ class ColaModel(torch.nn.Module):
                                 f"Target module {target} is not supported. "
                                 f"Currently, only `torch.nn.Linear` and `Conv1D` are supported."
                             )
-                        
+
                         new_module = Linear(adapter_name, in_features, out_features, bias=bias, **kwargs)
                         if cola_config.inference_mode:
                             gradient_boosting_model = gradient_boosting_models[key]
@@ -362,7 +362,6 @@ class ColaModel(torch.nn.Module):
                 f"Please check the target modules and try again."
             )
 
-    
     def _replace_module(self, parent_module, child_name, new_module, old_module):
         setattr(parent_module, child_name, new_module)
         new_module.weight = old_module.weight
@@ -483,7 +482,7 @@ class ColaModel(torch.nn.Module):
                         if adapter not in target.cola_A:
                             continue
                         target.cola_A[adapter_name].weight.data += (
-                            target.cola_A[adapter].weight.data * weight * target.scaling[adapter]
+                                target.cola_A[adapter].weight.data * weight * target.scaling[adapter]
                         )
                         target.cola_B[adapter_name].weight.data += target.cola_B[adapter].weight.data * weight
 
@@ -494,7 +493,7 @@ class ColaModel(torch.nn.Module):
                         if adapter not in target.cola_embedding_A:
                             continue
                         target.cola_embedding_A[adapter_name].data += (
-                            target.cola_embedding_A[adapter].data * weight * target.scaling[adapter]
+                                target.cola_embedding_A[adapter].data * weight * target.scaling[adapter]
                         )
                         target.cola_embedding_B[adapter_name].data += target.cola_embedding_B[adapter].data * weight
 
@@ -526,7 +525,8 @@ def mark_all_module_as_trainable(model: nn.Module, bias: str = "none") -> None:
                 m.bias.requires_grad = True
     else:
         raise NotImplementedError
-    
+
+
 # had to adapt it for `cola_only` to work
 def mark_only_cola_as_trainable(model: nn.Module, bias: str = "none") -> None:
     for n, p in model.named_parameters():
@@ -545,12 +545,14 @@ def mark_only_cola_as_trainable(model: nn.Module, bias: str = "none") -> None:
     else:
         raise NotImplementedError
 
+
 class IntermediateInfo(Dataset):
     data_name = 'IntermediateInfo'
 
     def __init__(self, inputs_of_cur_key, grad_outputs_of_cur_key, transform=None):
         self.transform = transform
-        self.id, self.data, self.target = self.make_data(train_data=inputs_of_cur_key, train_target=grad_outputs_of_cur_key)
+        self.id, self.data, self.target = self.make_data(train_data=inputs_of_cur_key,
+                                                         train_target=grad_outputs_of_cur_key)
 
     def __getitem__(self, index):
         id, data, target = torch.tensor(self.id[index]), torch.tensor(self.data[index]), torch.tensor(
@@ -572,25 +574,26 @@ class IntermediateInfo(Dataset):
         train_id = np.arange(len(train_data)).astype(np.int64)
         return (train_id, train_data, train_target)
 
+
 def create_gradient_boosting_datasets(peft_config):
     model_name = peft_config.base_model_name_or_path
     task_type = peft_config.task_type.value
-    dataset_name= peft_config.dataset_name
+    dataset_name = peft_config.dataset_name
 
     # Return a dictionary of gradient boosting models where the key is the name of the found layers.
     gradient_boosting_datasets = {}
     intermediate_info = load_intermediate_info(
-        model_name=model_name, 
-        task_type=task_type, 
-        dataset_name=dataset_name, 
+        model_name=model_name,
+        task_type=task_type,
+        dataset_name=dataset_name,
     )
 
     key_list = [key for key, _ in intermediate_info['inputs'].items()]
-    for key in key_list:            
+    for key in key_list:
         inputs_of_cur_key = intermediate_info['inputs'][key]
         grad_outputs_of_cur_key = intermediate_info['grad_outputs'][key]
         gradient_boosting_datasets[key] = IntermediateInfo(inputs_of_cur_key, grad_outputs_of_cur_key)
-       
+
     return gradient_boosting_datasets
 
 
@@ -620,6 +623,7 @@ class GradientBoosting(nn.Module):
             output['loss'] = self.loss_fn(output['target'], input['target'])
         return output
 
+
 def create_gradient_boosting_models(peft_config, model):
     # Return a dictionary of gradient boosting models where the key is the name of the found layers.
     adapter_name = model.active_adapter
@@ -639,14 +643,15 @@ def create_gradient_boosting_models(peft_config, model):
             else:
                 raise ValueError('Invalid layer type. Currently, COLA only supports linear layers.')
             gradient_boosting_models[key] = GradientBoosting(in_features, out_features, adapter_name)
-                
+
     return gradient_boosting_models
+
 
 class ColaLayer:
     def __init__(
-        self,
-        in_features: int,
-        out_features: int,
+            self,
+            in_features: int,
+            out_features: int,
     ):
         self.r = {}
         self.cola_alpha = {}
@@ -714,22 +719,23 @@ class ColaLayer:
             # initialize a the same way as the default for nn.linear and b to zero
             nn.init.zeros_(self.cola_embedding_A[adapter_name])
             nn.init.normal_(self.cola_embedding_B[adapter_name])
-        
+
 
 class Linear(nn.Linear, ColaLayer):
     # Cola implemented in a dense layer
     def __init__(
-        self,
-        adapter_name: str,
-        in_features: int,
-        out_features: int,
-        r: int = 0,
-        cola_alpha: int = 1,
-        cola_dropout: float = 0.0,
-        fan_in_fan_out: bool = False,  # Set this to True if the layer to replace stores weight like (fan_in, fan_out),
-        key: str = None, # key of current layer
-        get_delta_h: bool = False,
-        **kwargs,
+            self,
+            adapter_name: str,
+            in_features: int,
+            out_features: int,
+            r: int = 0,
+            cola_alpha: int = 1,
+            cola_dropout: float = 0.0,
+            fan_in_fan_out: bool = False,
+            # Set this to True if the layer to replace stores weight like (fan_in, fan_out),
+            key: str = None,  # key of current layer
+            get_delta_h: bool = False,
+            **kwargs,
     ):
         init_cola_weights = kwargs.pop("init_cola_weights", True)
 
@@ -737,7 +743,7 @@ class Linear(nn.Linear, ColaLayer):
         ColaLayer.__init__(self, in_features=in_features, out_features=out_features)
         # Freezing the pre-trained weight matrix
         self.weight.requires_grad = False
-        
+
         self.fan_in_fan_out = fan_in_fan_out
         if fan_in_fan_out:
             self.weight.data = self.weight.data.T
@@ -755,6 +761,7 @@ class Linear(nn.Linear, ColaLayer):
         if self.get_delta_h:
             self.hook_module(self, 'forward')
             self.hook_module(self, 'backward')
+
     def merge(self):
         if self.active_adapter not in self.cola_A.keys():
             return
@@ -763,11 +770,11 @@ class Linear(nn.Linear, ColaLayer):
             return
         if self.r[self.active_adapter] > 0:
             self.weight.data += (
-                transpose(
-                    self.cola_B[self.active_adapter].weight @ self.cola_A[self.active_adapter].weight,
-                    self.fan_in_fan_out,
-                )
-                * self.scaling[self.active_adapter]
+                    transpose(
+                        self.cola_B[self.active_adapter].weight @ self.cola_A[self.active_adapter].weight,
+                        self.fan_in_fan_out,
+                    )
+                    * self.scaling[self.active_adapter]
             )
             self.merged = True
 
@@ -779,14 +786,13 @@ class Linear(nn.Linear, ColaLayer):
             return
         if self.r[self.active_adapter] > 0:
             self.weight.data -= (
-                transpose(
-                    self.cola_B[self.active_adapter].weight @ self.cola_A[self.active_adapter].weight,
-                    self.fan_in_fan_out,
-                )
-                * self.scaling[self.active_adapter]
+                    transpose(
+                        self.cola_B[self.active_adapter].weight @ self.cola_A[self.active_adapter].weight,
+                        self.fan_in_fan_out,
+                    )
+                    * self.scaling[self.active_adapter]
             )
             self.merged = False
-
 
     def forward_hook_fn(self, module, input, output):
         self.inputs.append(to_device(input[0].detach(), 'cpu'))
@@ -804,10 +810,10 @@ class Linear(nn.Linear, ColaLayer):
         else:
             raise ValueError('type must be forward or backward')
         return
-    
+
     def forward(self, x: torch.Tensor):
         previous_dtype = x.dtype
-        
+
         # if self.active_adapter not in self.cola_A.keys():
         #     return F.linear(x, transpose(self.weight, self.fan_in_fan_out), bias=self.bias)
         # if self.disable_adapters:
@@ -832,7 +838,7 @@ class Linear(nn.Linear, ColaLayer):
             # inference mode
             result += self.gradient_boosting_model({'data': x})['target']
 
-        result = result.to(previous_dtype)  
+        result = result.to(previous_dtype)
 
         return result
 
@@ -840,14 +846,14 @@ class Linear(nn.Linear, ColaLayer):
 class Embedding(nn.Embedding, ColaLayer):
     # LoRA implemented in a Embedding layer
     def __init__(
-        self,
-        adapter_name: str,
-        num_embeddings: int,
-        embedding_dim: int,
-        r: int = 0,
-        cola_alpha: int = 1,
-        cola_dropout: float = 0.0,
-        **kwargs,
+            self,
+            adapter_name: str,
+            num_embeddings: int,
+            embedding_dim: int,
+            r: int = 0,
+            cola_alpha: int = 1,
+            cola_dropout: float = 0.0,
+            **kwargs,
     ):
         init_cola_weights = kwargs.pop("init_cola_weights", True)
 
@@ -866,10 +872,10 @@ class Embedding(nn.Embedding, ColaLayer):
             return
         if self.r[self.active_adapter] > 0:
             self.weight.data -= (
-                transpose(
-                    self.cola_embedding_B[self.active_adapter] @ self.cola_embedding_A[self.active_adapter], True
-                )
-                * self.scaling[self.active_adapter]
+                    transpose(
+                        self.cola_embedding_B[self.active_adapter] @ self.cola_embedding_A[self.active_adapter], True
+                    )
+                    * self.scaling[self.active_adapter]
             )
             self.merged = False
 
@@ -879,10 +885,10 @@ class Embedding(nn.Embedding, ColaLayer):
             return
         if self.r[self.active_adapter] > 0:
             self.weight.data += (
-                transpose(
-                    self.cola_embedding_B[self.active_adapter] @ self.cola_embedding_A[self.active_adapter], True
-                )
-                * self.scaling[self.active_adapter]
+                    transpose(
+                        self.cola_embedding_B[self.active_adapter] @ self.cola_embedding_A[self.active_adapter], True
+                    )
+                    * self.scaling[self.active_adapter]
             )
             self.merged = True
 
@@ -890,12 +896,12 @@ class Embedding(nn.Embedding, ColaLayer):
         if self.disable_adapters:
             if self.r[self.active.adapter] > 0 and self.merged:
                 self.weight.data -= (
-                    transpose(
-                        self.cola_embedding_B[self.active_adapter].weight
-                        @ self.cola_embedding_A[self.active_adapter].weight,
-                        True,
-                    )
-                    * self.scaling[self.active_adapter]
+                        transpose(
+                            self.cola_embedding_B[self.active_adapter].weight
+                            @ self.cola_embedding_A[self.active_adapter].weight,
+                            True,
+                        )
+                        * self.scaling[self.active_adapter]
                 )
                 self.merged = False
             return nn.Embedding.forward(self, x)
@@ -923,14 +929,14 @@ if is_bnb_available():
     class Linear8bitLt(bnb.nn.Linear8bitLt, ColaLayer):
         # Cola implemented in a dense layer
         def __init__(
-            self,
-            adapter_name,
-            in_features,
-            out_features,
-            r: int = 0,
-            cola_alpha: int = 1,
-            cola_dropout: float = 0.0,
-            **kwargs,
+                self,
+                adapter_name,
+                in_features,
+                out_features,
+                r: int = 0,
+                cola_alpha: int = 1,
+                cola_dropout: float = 0.0,
+                **kwargs,
         ):
             bnb.nn.Linear8bitLt.__init__(
                 self,
@@ -962,34 +968,35 @@ if is_bnb_available():
                     if x.dtype != torch.float32:
                         x = x.float()
                     output = (
-                        self.cola_B[self.active_adapter](
-                            self.cola_A[self.active_adapter](self.cola_dropout[self.active_adapter](x))
-                        ).to(expected_dtype)
-                        * self.scaling[self.active_adapter]
+                            self.cola_B[self.active_adapter](
+                                self.cola_A[self.active_adapter](self.cola_dropout[self.active_adapter](x))
+                            ).to(expected_dtype)
+                            * self.scaling[self.active_adapter]
                     )
                 else:
                     output = (
-                        self.cola_B[self.active_adapter](
-                            self.cola_A[self.active_adapter](self.cola_dropout[self.active_adapter](x))
-                        )
-                        * self.scaling[self.active_adapter]
+                            self.cola_B[self.active_adapter](
+                                self.cola_A[self.active_adapter](self.cola_dropout[self.active_adapter](x))
+                            )
+                            * self.scaling[self.active_adapter]
                     )
                 result += output
             return result
+
 
     if is_bnb_4bit_available():
 
         class Linear4bit(bnb.nn.Linear4bit, ColaLayer):
             # Cola implemented in a dense layer
             def __init__(
-                self,
-                adapter_name,
-                in_features,
-                out_features,
-                r: int = 0,
-                cola_alpha: int = 1,
-                cola_dropout: float = 0.0,
-                **kwargs,
+                    self,
+                    adapter_name,
+                    in_features,
+                    out_features,
+                    r: int = 0,
+                    cola_alpha: int = 1,
+                    cola_dropout: float = 0.0,
+                    **kwargs,
             ):
                 bnb.nn.Linear4bit.__init__(
                     self,
@@ -1020,17 +1027,17 @@ if is_bnb_available():
                         expected_dtype = result.dtype
                         x = x.to(self.cola_A[self.active_adapter].weight.dtype)
                         output = (
-                            self.cola_B[self.active_adapter](
-                                self.cola_A[self.active_adapter](self.cola_dropout[self.active_adapter](x))
-                            ).to(expected_dtype)
-                            * self.scaling[self.active_adapter]
+                                self.cola_B[self.active_adapter](
+                                    self.cola_A[self.active_adapter](self.cola_dropout[self.active_adapter](x))
+                                ).to(expected_dtype)
+                                * self.scaling[self.active_adapter]
                         )
                     else:
                         output = (
-                            self.cola_B[self.active_adapter](
-                                self.cola_A[self.active_adapter](self.cola_dropout[self.active_adapter](x))
-                            )
-                            * self.scaling[self.active_adapter]
+                                self.cola_B[self.active_adapter](
+                                    self.cola_A[self.active_adapter](self.cola_dropout[self.active_adapter](x))
+                                )
+                                * self.scaling[self.active_adapter]
                         )
                     result += output
                 return result

@@ -21,11 +21,8 @@ from torch.utils.data import DataLoader
 from torch.utils.data.dataloader import default_collate
 import torch
 
-
 import torch
 import torch.nn.functional as F
-
-
 
 
 def MAD(output, target):
@@ -33,13 +30,14 @@ def MAD(output, target):
         mad = F.l1_loss(output, target).item()
     return mad
 
+
 class Metric(object):
     def __init__(self, metric_name):
         self.metric_name = self.make_metric_name(metric_name)
         self.pivot, self.pivot_name, self.pivot_direction = self.make_pivot()
         self.metric = {'Loss': (lambda input, output: output['loss'].item()),
                        'MAD': (lambda input, output: recur(MAD, output['target'], input['target'])),
-                    }
+                       }
 
     def make_metric_name(self, metric_name):
         return metric_name
@@ -75,12 +73,12 @@ class Metric(object):
 
 
 def create_optimizer(
-    model, cfg
+        model, cfg
 ):
     # print('optimizer ratio:', ratio)
     if cfg['optimizer_name'] == 'SGD':
         optimizer = optim.SGD(model.parameters(), lr=cfg['lr'], momentum=cfg['momentum'],
-                                weight_decay=cfg['weight_decay'], nesterov=cfg['nesterov'])
+                              weight_decay=cfg['weight_decay'], nesterov=cfg['nesterov'])
     elif cfg['optimizer_name'] == 'Adam':
         optimizer = optim.Adam(model.parameters(), lr=cfg['lr'], betas=cfg['betas'],
                                weight_decay=cfg['weight_decay'])
@@ -90,8 +88,9 @@ def create_optimizer(
         raise ValueError('Not valid optimizer name')
     return optimizer
 
+
 def create_scheduler(
-    optimizer, cfg
+        optimizer, cfg
 ):
     if cfg['scheduler_name'] == 'None':
         scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[65535])
@@ -114,6 +113,7 @@ def create_scheduler(
     else:
         raise ValueError('Not valid scheduler name')
     return scheduler
+
 
 def recur(fn, input, *args):
     if isinstance(input, torch.Tensor) or isinstance(input, np.ndarray):
@@ -139,6 +139,7 @@ def recur(fn, input, *args):
         raise ValueError('Not valid input type')
     return output
 
+
 def to_device(input, device):
     output = recur(lambda x, y: x.to(y), input, device)
     return output
@@ -155,7 +156,8 @@ def input_collate(batch):
         return output
     else:
         return default_collate(batch)
-    
+
+
 def make_data_loader(dataset, cfg, batch_size=None, shuffle=None, sampler=None, batch_sampler=None):
     data_loader = {}
     for k in dataset:
@@ -163,31 +165,31 @@ def make_data_loader(dataset, cfg, batch_size=None, shuffle=None, sampler=None, 
         _shuffle = cfg['shuffle'][k] if shuffle is None else shuffle[k]
         if sampler is not None:
             data_loader[k] = DataLoader(
-                dataset=dataset[k], 
-                batch_size=_batch_size, 
+                dataset=dataset[k],
+                batch_size=_batch_size,
                 sampler=sampler[k],
-                pin_memory=cfg['pin_memory'], 
+                pin_memory=cfg['pin_memory'],
                 num_workers=cfg['num_workers'],
-                collate_fn=input_collate, 
+                collate_fn=input_collate,
                 worker_init_fn=np.random.seed(cfg['seed'])
             )
         elif batch_sampler is not None:
             data_loader[k] = DataLoader(
-                dataset=dataset[k], 
+                dataset=dataset[k],
                 batch_sampler=batch_sampler[k],
-                pin_memory=cfg['pin_memory'], 
+                pin_memory=cfg['pin_memory'],
                 num_workers=cfg['num_workers'],
-                collate_fn=input_collate, 
+                collate_fn=input_collate,
                 worker_init_fn=np.random.seed(cfg['seed'])
             )
         else:
             data_loader[k] = DataLoader(
-                dataset=dataset[k], 
-                batch_size=_batch_size, 
+                dataset=dataset[k],
+                batch_size=_batch_size,
                 shuffle=_shuffle,
-                pin_memory=cfg['pin_memory'], 
+                pin_memory=cfg['pin_memory'],
                 num_workers=cfg['num_workers'],
-                collate_fn=input_collate, 
+                collate_fn=input_collate,
                 worker_init_fn=np.random.seed(cfg['seed'])
             )
 
@@ -199,6 +201,7 @@ def collate(input):
         input[k] = torch.stack(input[k], 0)
     return input
 
+
 # needed for prefix-tuning of bloom model
 def bloom_model_postprocess_past_key_value(past_key_values):
     past_key_values = torch.cat(past_key_values)
@@ -207,7 +210,7 @@ def bloom_model_postprocess_past_key_value(past_key_values):
     keys = keys.transpose(2, 3).reshape(
         total_layers // 2, batch_size * num_attention_heads, head_dim, num_virtual_tokens
     )
-    values = past_key_values[total_layers // 2 :]
+    values = past_key_values[total_layers // 2:]
     values = values.reshape(total_layers // 2, batch_size * num_attention_heads, num_virtual_tokens, head_dim)
 
     return tuple(zip(keys, values))
@@ -312,10 +315,11 @@ def _freeze_adapter(model, adapter_name):
         if adapter_name in n:
             p.requires_grad = False
 
+
 def _freeze_boosting_model(model):
     for n, p in model.named_parameters():
         p.requires_grad = False
-    
+
 
 def _set_trainable(model, adapter_name):
     key_list = [key for key, _ in model.named_modules()]
@@ -348,9 +352,9 @@ def fsdp_auto_wrap_policy(model):
 
     def lambda_policy_fn(module):
         if (
-            len(list(module.named_children())) == 0
-            and getattr(module, "weight", None) is not None
-            and module.weight.requires_grad
+                len(list(module.named_children())) == 0
+                and getattr(module, "weight", None) is not None
+                and module.weight.requires_grad
         ):
             return True
         return False
@@ -375,6 +379,29 @@ def fsdp_auto_wrap_policy(model):
 def transpose(weight, fan_in_fan_out):
     return weight.T if fan_in_fan_out else weight
 
+
+TRANSFORMERS_MODELS_TO_COLA_TARGET_MODULES_MAPPING = {
+    "t5": ["q", "v"],
+    "mt5": ["q", "v"],
+    "bart": ["q_proj", "v_proj"],
+    "gpt2": ["c_attn"],
+    "bloom": ["query_key_value"],
+    "blip-2": ["q", "v", "q_proj", "v_proj"],
+    "opt": ["q_proj", "v_proj"],
+    "gptj": ["q_proj", "v_proj"],
+    "gpt_neox": ["query_key_value"],
+    "gpt_neo": ["q_proj", "v_proj"],
+    "bert": ["query", "value"],
+    "roberta": ["query", "value"],
+    "xlm-roberta": ["query", "value"],
+    "electra": ["query", "value"],
+    "deberta-v2": ["query_proj", "value_proj"],
+    "deberta": ["in_proj"],
+    "layoutlm": ["query", "value"],
+    "llama": ["q_proj", "v_proj"],
+    "chatglm": ["query_key_value"],
+    "starcoder": ["c_attn"],
+}
 
 TRANSFORMERS_MODELS_TO_LORA_TARGET_MODULES_MAPPING = {
     "t5": ["q", "v"],

@@ -27,6 +27,7 @@ from transformers.pytorch_utils import Conv1D
 def check_exists(path):
     return os.path.exists(path)
 
+
 def makedir_exist_ok(path):
     try:
         os.makedirs(path)
@@ -36,6 +37,7 @@ def makedir_exist_ok(path):
         else:
             raise
     return
+
 
 def load(path, mode='torch'):
     if mode == 'torch':
@@ -47,6 +49,7 @@ def load(path, mode='torch'):
     else:
         raise ValueError('Not valid save mode')
     return
+
 
 def save(input, path, mode='torch'):
     dirname = os.path.dirname(path)
@@ -61,6 +64,7 @@ def save(input, path, mode='torch'):
         raise ValueError('Not valid save mode')
     return
 
+
 def save_data(save_mode, base_path, data_path, data_key, data_list, load_func, save_func):
     cur_layer_info_path = os.path.join(base_path, data_path, data_key)
     data_to_save = data_list
@@ -70,11 +74,12 @@ def save_data(save_mode, base_path, data_path, data_key, data_list, load_func, s
     save_func(data_to_save, cur_layer_info_path, mode='pickle')
     data_list = []
     return
-    
+
+
 def save_intermediate_info(peft_config, model, save_mode='overwrite_mode'):
     model_name = peft_config.base_model_name_or_path
     task_type = peft_config.task_type.value
-    dataset_name= peft_config.dataset_name
+    dataset_name = peft_config.dataset_name
     # Create the base_path
     base_path = os.path.join(task_type, model_name, dataset_name, 'intermediate_info')
 
@@ -93,14 +98,15 @@ def save_intermediate_info(peft_config, model, save_mode='overwrite_mode'):
             if isinstance(target, torch.nn.Linear):
                 if len(target.inputs) == 0 and len(target.grad_outputs) == 0:
                     raise ValueError('Nothing to save, check cola intermediate info')
-                
+
                 if len(target.inputs) > 0:
                     save_data(save_mode, base_path, 'inputs', key, target.inputs, load, save)
-                if len(target.grad_outputs) > 0:                
+                if len(target.grad_outputs) > 0:
                     save_data(save_mode, base_path, 'grad_outputs', key, target.grad_outputs, load, save)
             else:
                 raise ValueError('Invalid layer type. Currently, COLA only supports linear layers.')
-    return 
+    return
+
 
 def load_intermediate_info(task_type, model_name, dataset_name):
     intermediate_info = collections.defaultdict(dict)
@@ -116,11 +122,12 @@ def load_intermediate_info(task_type, model_name, dataset_name):
                 # Store the loaded data in the data_dict using filename as the key
                 intermediate_info[sub_path][filename] = data
     return intermediate_info
-        
+
+
 def save_gradient_boosting_models(peft_config, models):
     model_name = peft_config.base_model_name_or_path
     task_type = peft_config.task_type.value
-    dataset_name= peft_config.dataset_name
+    dataset_name = peft_config.dataset_name
     path = os.path.join(task_type, model_name, dataset_name, 'intermediate_info', 'gradient_boosting_models')
     save(models, path, mode='pickle')
     return
@@ -128,7 +135,7 @@ def save_gradient_boosting_models(peft_config, models):
 def load_gradient_boosting_models(peft_config):
     model_name = peft_config.base_model_name_or_path
     task_type = peft_config.task_type.value
-    dataset_name= peft_config.dataset_name
+    dataset_name = peft_config.dataset_name
 
     gradient_boosting_models = collections.defaultdict(list)
     # path = os.path.join(task_type, model_name, dataset_name, 'intermediate_info', 'gradient_boosting_models')
@@ -144,6 +151,7 @@ def load_gradient_boosting_models(peft_config):
             gradient_boosting_models = load(file_path, mode='pickle')
             break
     return gradient_boosting_models
+
 
 def get_peft_model_state_dict(model, state_dict=None, adapter_name="default"):
     """
