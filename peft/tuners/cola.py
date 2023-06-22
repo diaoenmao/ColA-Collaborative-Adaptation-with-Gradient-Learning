@@ -615,7 +615,9 @@ class GradientBoosting(nn.Module):
     def forward(self, input):
         output = {}
         output['target'] = self.f(input['data'])
-        output['loss'] = self.loss_fn(output['target'], input['target'])
+        # training mode
+        if 'target' in input:
+            output['loss'] = self.loss_fn(output['target'], input['target'])
         return output
 
 def create_gradient_boosting_models(peft_config, model):
@@ -828,7 +830,7 @@ class Linear(nn.Linear, ColaLayer):
         result = F.linear(x, transpose(self.weight, self.fan_in_fan_out), bias=self.bias)
         if self.gradient_boosting_model is not None:
             # inference mode
-            result += self.gradient_boosting_model(x)['target']
+            result += self.gradient_boosting_model({'data': x})['target']
 
         result = result.to(previous_dtype)  
 

@@ -203,7 +203,7 @@ for epoch in range(num_epochs):
         r=64,
         target_modules=["q_proj", "v_proj"],
         bias="none",
-        inference_mode=False
+        inference_mode=True
     )
 
     model = AutoModelForSeq2SeqLM.from_pretrained(model_name_or_path)

@@ -2,3 +2,6 @@
 */.DS_Store
 ../.DS_Store
 ../doc/.DS_Store
+
+__pycache__/
+*.py[cod]

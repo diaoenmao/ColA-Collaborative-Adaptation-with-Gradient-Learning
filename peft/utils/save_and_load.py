@@ -125,13 +125,14 @@ def save_gradient_boosting_models(peft_config, models):
     save(models, path, mode='pickle')
     return
 
-def load_gradient_boosting_models(peft_config, model):
+def load_gradient_boosting_models(peft_config):
     model_name = peft_config.base_model_name_or_path
     task_type = peft_config.task_type.value
     dataset_name= peft_config.dataset_name
 
     gradient_boosting_models = collections.defaultdict(list)
-    path = os.path.join(task_type, model_name, dataset_name, 'intermediate_info', 'gradient_boosting_models')
+    # path = os.path.join(task_type, model_name, dataset_name, 'intermediate_info', 'gradient_boosting_models')
+    path = os.path.join(task_type, model_name, dataset_name, 'intermediate_info')
     if len(os.listdir(path)) == 0:
         raise ValueError('No gradient boosting models found')
     # Iterate over the files in the directory
@@ -141,6 +142,7 @@ def load_gradient_boosting_models(peft_config, model):
         if os.path.isfile(file_path):
             # Load the file
             gradient_boosting_models = load(file_path, mode='pickle')
+            break
     return gradient_boosting_models
 
 def get_peft_model_state_dict(model, state_dict=None, adapter_name="default"):
