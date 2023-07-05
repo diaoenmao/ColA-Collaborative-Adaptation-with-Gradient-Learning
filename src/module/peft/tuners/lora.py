@@ -48,13 +48,13 @@ class LoraConfig(PeftConfig):
 
     Args:
         r (`int`): Lora attention dimension.
-        target_modules (`Union[List[str],str]`): The names of the modules to apply Lora to.
+        target_modules (`Union[List[str],str]`): The names of the module to apply Lora to.
         lora_alpha (`int`): The alpha parameter for Lora scaling.
         lora_dropout (`float`): The dropout probability for Lora layers.
         fan_in_fan_out (`bool`): Set this to True if the layer to replace stores weight like (fan_in, fan_out).
         For example, gpt-2 uses `Conv1D` which stores weights like (fan_in, fan_out) and hence this should be set to `True`.:
         bias (`str`): Bias type for Lora. Can be 'none', 'all' or 'lora_only'
-        modules_to_save (`List[str]`):List of modules apart from LoRA layers to be set as trainable
+        modules_to_save (`List[str]`):List of module apart from LoRA layers to be set as trainable
             and saved in the final checkpoint.
         layers_to_transform (`Union[List[int],int]`):
             The layer indexes to transform, if this argument is specified, it will apply the LoRA transformations on
@@ -83,7 +83,7 @@ class LoraConfig(PeftConfig):
     modules_to_save: Optional[List[str]] = field(
         default=None,
         metadata={
-            "help": "List of modules apart from LoRA layers to be set as trainable and saved in the final checkpoint. "
+            "help": "List of module apart from LoRA layers to be set as trainable and saved in the final checkpoint. "
             "For example, in Sequence Classification or Token Classification tasks, "
             "the final layer `classifier/score` are randomly initialized and as such need to be trainable and saved."
         },
@@ -124,7 +124,7 @@ class LoraModel(torch.nn.Module):
 
         ```py
         >>> from transformers import AutoModelForSeq2SeqLM, LoraConfig
-        >>> from peft import LoraModel, LoraConfig
+        >>> from module.peft import LoraModel, LoraConfig
 
         >>> config = LoraConfig(
         ...     peft_type="LORA",
@@ -141,7 +141,7 @@ class LoraModel(torch.nn.Module):
 
         ```py
         >>> import transformers
-        >>> from peft import LoraConfig, PeftModel, get_peft_model, prepare_model_for_int8_training
+        >>> from module.peft import LoraConfig, PeftModel, get_peft_model, prepare_model_for_int8_training
 
         >>> target_modules = ["q_proj", "k_proj", "v_proj", "out_proj", "fc_in", "fc_out", "wte"]
         >>> config = LoraConfig(
@@ -306,8 +306,8 @@ class LoraModel(torch.nn.Module):
                     self._replace_module(parent, target_name, new_module, target)
         if not is_target_modules_in_base_model:
             raise ValueError(
-                f"Target modules {lora_config.target_modules} not found in the base model. "
-                f"Please check the target modules and try again."
+                f"Target module {lora_config.target_modules} not found in the base model. "
+                f"Please check the target module and try again."
             )
 
     def _replace_module(self, parent_module, child_name, new_module, old_module):
@@ -385,7 +385,7 @@ class LoraModel(torch.nn.Module):
         as a standalone model.
         """
         if getattr(self.config, "model_type", None) == "gpt2":
-            raise ValueError("GPT2 models are not supported for merging LORA layers")
+            raise ValueError("GPT2 model are not supported for merging LORA layers")
 
         if getattr(self.model, "is_loaded_in_8bit", False) or getattr(self.model, "is_loaded_in_4bit", False):
             raise ValueError("Cannot merge LORA layers when the model is loaded in 8-bit mode")
@@ -405,7 +405,7 @@ class LoraModel(torch.nn.Module):
                 target.merge()
                 self._replace_module(parent, target_name, new_module, target)
 
-            # save any additional trainable modules part of `modules_to_save`
+            # save any additional trainable module part of `modules_to_save`
             if isinstance(target, ModulesToSaveWrapper):
                 setattr(parent, target_name, target.modules_to_save[target.active_adapter])
 

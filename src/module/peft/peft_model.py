@@ -442,7 +442,7 @@ class PeftModel(PushToHubMixin, torch.nn.Module):
                 remove_hook_from_submodules(self.prompt_encoder)
             add_hook_to_module(self.get_base_model(), hook)
 
-        # Set model in evaluation mode to deactivate Dropout modules by default
+        # Set model in evaluation mode to deactivate Dropout module by default
         self.eval()
         return load_result
 
@@ -478,7 +478,7 @@ class PeftModelForSequenceClassification(PeftModel):
 
         ```py
         >>> from transformers import AutoModelForSequenceClassification
-        >>> from peft import PeftModelForSequenceClassification, get_peft_config
+        >>> from module.peft import PeftModelForSequenceClassification, get_peft_config
 
         >>> config = {
         ...     "peft_type": "PREFIX_TUNING",
@@ -663,7 +663,7 @@ class PeftModelForCausalLM(PeftModel):
 
         ```py
         >>> from transformers import AutoModelForCausalLM
-        >>> from peft import PeftModelForCausalLM, get_peft_config
+        >>> from module.peft import PeftModelForCausalLM, get_peft_config
 
         >>> config = {
         ...     "peft_type": "PREFIX_TUNING",
@@ -765,7 +765,7 @@ class PeftModelForCausalLM(PeftModel):
             else:
                 if "input_ids" not in kwargs:
                     raise ValueError("input_ids must be provided for Peft model generation")
-                # For gpt2 models, we construct postion_ids on the fly by using attention mask, and position ids need to match input_shape.
+                # For gpt2 model, we construct postion_ids on the fly by using attention mask, and position ids need to match input_shape.
                 # for prefix tuning, input shape is determined using `input_ids`. Thus we should not expand 'attention_mask' here
                 # for prompt tuning input_ids is not passed but a concatenated input_embeds is passed. Thus attention_mask needs to be of same size of num_virtual_tokens + input_ids
                 if kwargs.get("attention_mask", None) is not None and peft_config.peft_type in [
@@ -852,7 +852,7 @@ class PeftModelForSeq2SeqLM(PeftModel):
 
         ```py
         >>> from transformers import AutoModelForSeq2SeqLM
-        >>> from peft import PeftModelForSeq2SeqLM, get_peft_config
+        >>> from module.peft import PeftModelForSeq2SeqLM, get_peft_config
 
         >>> config = {
         ...     "peft_type": "LORA",
@@ -1057,7 +1057,7 @@ class PeftModelForTokenClassification(PeftModel):
 
         ```py
         >>> from transformers import AutoModelForSequenceClassification
-        >>> from peft import PeftModelForTokenClassification, get_peft_config
+        >>> from module.peft import PeftModelForTokenClassification, get_peft_config
 
         >>> config = {
         ...     "peft_type": "PREFIX_TUNING",

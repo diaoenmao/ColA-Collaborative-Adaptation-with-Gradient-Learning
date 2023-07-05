@@ -74,7 +74,7 @@ class PromptEncoder(torch.nn.Module):
     Example:
 
     ```py
-    >>> from peft import PromptEncoder, PromptEncoderConfig
+    >>> from module.peft import PromptEncoder, PromptEncoderConfig
 
     >>> config = PromptEncoderConfig(
     ...     peft_type="P_TUNING",

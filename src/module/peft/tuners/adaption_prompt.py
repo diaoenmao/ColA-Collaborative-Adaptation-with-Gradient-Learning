@@ -22,8 +22,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from peft.utils.config import PeftConfig, PeftType
-from peft.utils.other import _freeze_adapter, _get_submodules
+from module.peft.utils.config import PeftConfig, PeftType
+from module.peft.utils.other import _freeze_adapter, _get_submodules
 
 
 def llama_rotate_half(x: torch.Tensor) -> torch.Tensor:
@@ -60,7 +60,7 @@ def llama_apply_rotary_pos_emb(q, cos, sin, position_ids):
 
 def llama_compute_query_states(model: nn.Module, **kwargs) -> torch.Tensor:
     """
-    Compute query states for Llama models specifically.
+    Compute query states for Llama model specifically.
 
     They need to be recomputed as the forward() method of the original LlamaModel in the transformers library does not
     return them. See the related discussion in the PR: https://github.com/huggingface/peft/pull/268
@@ -135,17 +135,17 @@ class AdaptionPromptModel(nn.Module):
     """
     Implements adaption prompts as described in https://arxiv.org/pdf/2303.16199.pdf.
 
-    The top L attention modules are replaced with AdaptedAttention modules that wrap the original ones, but insert
+    The top L attention module are replaced with AdaptedAttention module that wrap the original ones, but insert
     trainable prompts with gates (for zero init).
 
     Notes on the multi-adapter pattern:
-    - We store the states of different adapters by keeping a dictionary of AdaptedAttention modules indexed by adapter
+    - We store the states of different adapters by keeping a dictionary of AdaptedAttention module indexed by adapter
       name.
-    - Every time we switch adapters, we remove the modules of the currently active adapter from the model, store them
-      in the dictionary, and replace them with the modules of the new adapter.
+    - Every time we switch adapters, we remove the module of the currently active adapter from the model, store them
+      in the dictionary, and replace them with the module of the new adapter.
     - To avoid duplicated and potentially inconsistent state, the currently active adapter is always removed from the
       dictionary.
-    - Disabling the adapter would also result in the modules being removed from the model.
+    - Disabling the adapter would also result in the module being removed from the model.
     """
 
     def __init__(self, model, configs: Dict, adapter_name: str):
@@ -153,10 +153,10 @@ class AdaptionPromptModel(nn.Module):
         self.model = model
         # Store adapter configs by name.
         self._configs: Dict[str, AdaptionPromptConfig] = {}
-        # Store lists of the parents of the affected attention modules by adapter name.
+        # Store lists of the parents of the affected attention module by adapter name.
         # We keep references to the parents so we can swap the adapters in-and-out of the model.
         self._parents: Dict[str, List[nn.Module]] = {}
-        # Store lists of cached AdaptedAttention modules by name.
+        # Store lists of cached AdaptedAttention module by name.
         self._cached_adapters: Dict[str, List] = {}
         # The name of the currently active adapter.
         self._active_adapter = None
@@ -182,15 +182,15 @@ class AdaptionPromptModel(nn.Module):
                 f"Config specifies more adapter layers '{config.adapter_layers}'"
                 f" than the model has '{len(parents)}'."
             )
-        # Note that if the target modules are not in Sequential, ModuleList, or
+        # Note that if the target module are not in Sequential, ModuleList, or
         # some other PyTorch ordered container, the behavior is undefined as we
-        # assume here that the order of the modules is the same as the order of
+        # assume here that the order of the module is the same as the order of
         # the transformer decoder layers.
         parents = parents[-config.adapter_layers :]
         self._parents[adapter_name] = parents
 
         # It is only None during initialization.
-        # If it is disabled, we don't have to remove the modules.
+        # If it is disabled, we don't have to remove the module.
         if self._active_adapter is not None and self._enabled:
             self._remove_adapted_attentions(self._active_adapter)
         self._active_adapter = adapter_name
@@ -216,17 +216,17 @@ class AdaptionPromptModel(nn.Module):
         self._active_adapter = adapter_name
 
     def enable_adapter_layers(self):
-        """Enable adapter layers by swapping in cached AdaptedAttention modules."""
+        """Enable adapter layers by swapping in cached AdaptedAttention module."""
         self._enabled = True
         self._set_adapted_attentions(self._active_adapter)
 
     def disable_adapter_layers(self):
-        """Disable adapter layers by swapping out AdaptedAttention modules."""
+        """Disable adapter layers by swapping out AdaptedAttention module."""
         self._enabled = False
         self._remove_adapted_attentions(self._active_adapter)
 
     def _create_adapted_attentions(self, config: AdaptionPromptConfig, parents: List[nn.Module]) -> None:
-        """Wrap LlamaAttention modules with newly created AdaptedAttention modules."""
+        """Wrap LlamaAttention module with newly created AdaptedAttention module."""
         for par in parents:
             attn = AdaptedAttention(
                 model_type=self.model.config.model_type,
@@ -236,7 +236,7 @@ class AdaptionPromptModel(nn.Module):
             setattr(par, config.target_modules, attn)
 
     def _set_adapted_attentions(self, adapter_name: str) -> None:
-        """Replace LlamaAttention modules with cached AdaptedAttention modules."""
+        """Replace LlamaAttention module with cached AdaptedAttention module."""
         cached = self._cached_adapters[adapter_name]
         del self._cached_adapters[adapter_name]
         config = self._configs[adapter_name]
@@ -244,7 +244,7 @@ class AdaptionPromptModel(nn.Module):
             setattr(par, config.target_modules, cached[i])
 
     def _remove_adapted_attentions(self, adapter_name: str) -> None:
-        """Remove AdaptedAttention modules from the model and store them in the cache."""
+        """Remove AdaptedAttention module from the model and store them in the cache."""
         config = self._configs[adapter_name]
         adapted_attentions = []
         for par in self._parents[adapter_name]:
@@ -264,7 +264,7 @@ class AdaptionPromptModel(nn.Module):
         try:
             return super().__getattr__(name)  # defer to nn.Module's logic
         except AttributeError:
-            # This is necessary as e.g. causal models have various methods that we
+            # This is necessary as e.g. causal model have various methods that we
             # don't want to re-implement here.
             return getattr(self.model, name)
 

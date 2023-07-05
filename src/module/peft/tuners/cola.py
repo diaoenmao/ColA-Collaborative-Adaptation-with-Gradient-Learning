@@ -60,13 +60,13 @@ class ColaConfig(PeftConfig):
 
     Args:
         r (`int`): Cola attention dimension.
-        target_modules (`Union[List[str],str]`): The names of the modules to apply Cola to.
+        target_modules (`Union[List[str],str]`): The names of the module to apply Cola to.
         cola_alpha (`int`): The alpha parameter for Cola scaling.
         cola_dropout (`float`): The dropout probability for Cola layers.
         fan_in_fan_out (`bool`): Set this to True if the layer to replace stores weight like (fan_in, fan_out).
         For example, gpt-2 uses `Conv1D` which stores weights like (fan_in, fan_out) and hence this should be set to `True`.:
         bias (`str`): Bias type for Cola. Can be 'none', 'all' or 'cola_only'
-        modules_to_save (`List[str]`):List of modules apart from LoRA layers to be set as trainable
+        modules_to_save (`List[str]`):List of module apart from LoRA layers to be set as trainable
             and saved in the final checkpoint.
         layers_to_transform (`Union[List[int],int]`):
             The layer indexes to transform, if this argument is specified, it will apply the LoRA transformations on
@@ -95,7 +95,7 @@ class ColaConfig(PeftConfig):
     modules_to_save: Optional[List[str]] = field(
         default=None,
         metadata={
-            "help": "List of modules apart from LoRA layers to be set as trainable and saved in the final checkpoint. "
+            "help": "List of module apart from LoRA layers to be set as trainable and saved in the final checkpoint. "
                     "For example, in Sequence Classification or Token Classification tasks, "
                     "the final layer `classifier/score` are randomly initialized and as such need to be trainable and saved."
         },
@@ -143,7 +143,7 @@ class ColaModel(torch.nn.Module):
 
         ```py
         >>> from transformers import AutoModelForSeq2SeqLM, ColaConfig
-        >>> from peft import ColaModel, ColaConfig
+        >>> from module.peft import ColaModel, ColaConfig
 
         >>> config = ColaConfig(
         ...     peft_type="LORA",
@@ -160,7 +160,7 @@ class ColaModel(torch.nn.Module):
 
         ```py
         >>> import transformers
-        >>> from peft import ColaConfig, PeftModel, get_peft_model, prepare_model_for_int8_training
+        >>> from module.peft import ColaConfig, PeftModel, get_peft_model, prepare_model_for_int8_training
 
         >>> target_modules = ["q_proj", "k_proj", "v_proj", "out_proj", "fc_in", "fc_out", "wte"]
         >>> config = ColaConfig(
@@ -358,8 +358,8 @@ class ColaModel(torch.nn.Module):
                     #     self.hook_module(new_module, 'backward')
         if not is_target_modules_in_base_model:
             raise ValueError(
-                f"Target modules {cola_config.target_modules} not found in the base model. "
-                f"Please check the target modules and try again."
+                f"Target module {cola_config.target_modules} not found in the base model. "
+                f"Please check the target module and try again."
             )
 
     def _replace_module(self, parent_module, child_name, new_module, old_module):
@@ -437,7 +437,7 @@ class ColaModel(torch.nn.Module):
         as a standalone model.
         """
         if getattr(self.config, "model_type", None) == "gpt2":
-            raise ValueError("GPT2 models are not supported for merging LORA layers")
+            raise ValueError("GPT2 model are not supported for merging LORA layers")
 
         if getattr(self.model, "is_loaded_in_8bit", False) or getattr(self.model, "is_loaded_in_4bit", False):
             raise ValueError("Cannot merge LORA layers when the model is loaded in 8-bit mode")
@@ -457,7 +457,7 @@ class ColaModel(torch.nn.Module):
                 target.merge()
                 self._replace_module(parent, target_name, new_module, target)
 
-            # save any additional trainable modules part of `modules_to_save`
+            # save any additional trainable module part of `modules_to_save`
             if isinstance(target, ModulesToSaveWrapper):
                 setattr(parent, target_name, target.modules_to_save[target.active_adapter])
 
@@ -580,7 +580,7 @@ def create_gradient_boosting_datasets(peft_config):
     task_type = peft_config.task_type.value
     dataset_name = peft_config.dataset_name
 
-    # Return a dictionary of gradient boosting models where the key is the name of the found layers.
+    # Return a dictionary of gradient boosting model where the key is the name of the found layers.
     gradient_boosting_datasets = {}
     intermediate_info = load_intermediate_info(
         model_name=model_name,
@@ -625,7 +625,7 @@ class GradientBoosting(nn.Module):
 
 
 def create_gradient_boosting_models(peft_config, model):
-    # Return a dictionary of gradient boosting models where the key is the name of the found layers.
+    # Return a dictionary of gradient boosting model where the key is the name of the found layers.
     adapter_name = model.active_adapter
     gradient_boosting_models = {}
     model = model.base_model.model

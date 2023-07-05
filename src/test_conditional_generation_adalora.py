@@ -1,4 +1,4 @@
-# environments: pip install -q transformers datasets evaluate seqeval accelerate
+# environments: pip install -q transformers dataset evaluate seqeval accelerate
 
 import os
 import torch
@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, default_data_collator, get_linear_schedule_with_warmup
 
-from peft import AdaLoraConfig, PeftConfig, PeftModel, TaskType, get_peft_model
+from module.peft import AdaLoraConfig, PeftConfig, PeftModel, TaskType, get_peft_model
 
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"

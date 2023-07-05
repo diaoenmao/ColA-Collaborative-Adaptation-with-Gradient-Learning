@@ -79,7 +79,7 @@ class AdaLoraModel(LoraModel):
 
     Example::
 
-        >>> from transformers import AutoModelForSeq2SeqLM, LoraConfig >>> from peft import AdaLoraModel, AdaLoraConfig
+        >>> from transformers import AutoModelForSeq2SeqLM, LoraConfig >>> from module.peft import AdaLoraModel, AdaLoraConfig
         >>> config = AdaLoraConfig(
                 peft_type="ADALORA", task_type="SEQ_2_SEQ_LM", r=8, lora_alpha=32, target_modules=["q", "v"],
                 lora_dropout=0.01,
@@ -202,8 +202,8 @@ class AdaLoraModel(LoraModel):
                     self._replace_module(parent, target_name, new_module, target)
         if not is_target_modules_in_base_model:
             raise ValueError(
-                f"Target modules {lora_config.target_modules} not found in the base model. "
-                f"Please check the target modules and try again."
+                f"Target module {lora_config.target_modules} not found in the base model. "
+                f"Please check the target module and try again."
             )
 
     def __getattr__(self, name: str):

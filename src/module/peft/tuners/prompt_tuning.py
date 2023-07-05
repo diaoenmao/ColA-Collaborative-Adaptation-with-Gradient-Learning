@@ -76,7 +76,7 @@ class PromptEmbedding(torch.nn.Module):
     Example:
 
     ```py
-    >>> from peft import PromptEmbedding, PromptTuningConfig
+    >>> from module.peft import PromptEmbedding, PromptTuningConfig
 
     >>> config = PromptTuningConfig(
     ...     peft_type="PROMPT_TUNING",

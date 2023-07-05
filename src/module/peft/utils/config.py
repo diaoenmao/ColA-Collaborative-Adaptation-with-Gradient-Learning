@@ -44,8 +44,8 @@ class TaskType(str, enum.Enum):
 @dataclass
 class PeftConfigMixin(PushToHubMixin):
     r"""
-    This is the base configuration class for PEFT adapter models. It contains all the methods that are common to all
-    PEFT adapter models. This class inherits from [`~transformers.utils.PushToHubMixin`] which contains the methods to
+    This is the base configuration class for PEFT adapter model. It contains all the methods that are common to all
+    PEFT adapter model. This class inherits from [`~transformers.utils.PushToHubMixin`] which contains the methods to
     push your model to the Hub. The method `save_pretrained` will save the configuration of your adapter model in a
     directory. The method `from_pretrained` will load the configuration of your adapter model from a directory.
 

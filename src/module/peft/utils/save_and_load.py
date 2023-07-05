@@ -141,7 +141,7 @@ def load_gradient_boosting_models(peft_config):
     # path = os.path.join(task_type, model_name, dataset_name, 'intermediate_info', 'gradient_boosting_models')
     path = os.path.join(task_type, model_name, dataset_name, 'intermediate_info')
     if len(os.listdir(path)) == 0:
-        raise ValueError('No gradient boosting models found')
+        raise ValueError('No gradient boosting model found')
     # Iterate over the files in the directory
     for filename in os.listdir(path):
         file_path = os.path.join(path, filename)

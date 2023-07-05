@@ -1,4 +1,4 @@
-# environments: pip install -q transformers datasets evaluate seqeval accelerate
+# environments: pip install -q transformers dataset evaluate seqeval accelerate
 
 import os
 import torch
@@ -7,11 +7,9 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, default_data_collator, get_linear_schedule_with_warmup
 
-from peft import (
-    ColaConfig, 
-    PeftConfig, 
-    PeftModel, 
-    TaskType, 
+from module.peft import (
+    ColaConfig,
+    TaskType,
     Metric,
     get_peft_model, 
     save_intermediate_info, 
@@ -165,7 +163,7 @@ for epoch in range(num_epochs):
     gradient_boosting_models = create_gradient_boosting_models(peft_config, model)
     gradient_boosting_datasets = create_gradient_boosting_datasets(peft_config)
 
-    # train gradient boosting models
+    # train gradient boosting model
     for key, model in gradient_boosting_models.items():
         data_loader = make_data_loader(
             {'train': gradient_boosting_datasets[key]}, 
@@ -189,7 +187,7 @@ for epoch in range(num_epochs):
                 output
             )
 
-    # save gradient boosting models
+    # save gradient boosting model
     save_gradient_boosting_models( 
         peft_config=peft_config,
         models=gradient_boosting_models,
