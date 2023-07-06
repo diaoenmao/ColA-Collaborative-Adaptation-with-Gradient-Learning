@@ -3,6 +3,7 @@
 control:
   data_name: MNIST
   model_name: bart
+  task_name: seq2seq
 # experiment
 num_workers: 0
 init_seed: 0
