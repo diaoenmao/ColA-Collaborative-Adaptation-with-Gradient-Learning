@@ -1,9 +1,8 @@
 import os
 import torch
-import dataset
 from torchvision import transforms
 from config import cfg
-from data import fetch_dataset, make_data_loader
+from dataset.dataset import fetch_dataset, make_data_loader
 from utils import save, collate, Stats, makedir_exist_ok, process_control, process_dataset
 
 if __name__ == "__main__":

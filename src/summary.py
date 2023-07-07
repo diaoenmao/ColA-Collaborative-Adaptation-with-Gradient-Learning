@@ -1,6 +1,5 @@
 import argparse
 from collections import OrderedDict
-import model
 import os
 from config import cfg, process_args
 from tabulate import tabulate
@@ -8,7 +7,7 @@ import torch
 import torch.nn as nn
 import torch.backends.cudnn as cudnn
 import numpy as np
-from data import fetch_dataset, make_data_loader
+from dataset.dataset import fetch_dataset, make_data_loader
 from utils import save, makedir_exist_ok, to_device, process_control, process_dataset, collate
 
 cudnn.benchmark = True
