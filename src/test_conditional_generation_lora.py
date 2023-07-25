@@ -20,6 +20,7 @@ tokenizer_name_or_path = "facebook/bart-base"
 text_column = "sentence"
 label_column = "text_label"
 max_length = 128
+
 lr = 1e-3
 num_epochs = 8
 batch_size = 8
@@ -148,6 +149,9 @@ accuracy = correct / total * 100
 print(f"{accuracy=} % on the evaluation dataset")
 print(f"{eval_preds[:10]=}")
 print(f"{dataset['validation']['text_label'][:10]=}")
+
+
+
 
 
 # saving model

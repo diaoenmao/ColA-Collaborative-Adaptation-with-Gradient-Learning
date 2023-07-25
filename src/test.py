@@ -8,7 +8,7 @@ import torch.backends.cudnn as cudnn
 from config import cfg, process_args
 from dataset import make_dataset, make_data_loader
 from metric import make_metric, make_logger
-from model import make_model, make_optimizer, make_scheduler
+from model import make_model, make_optimizer, make_scheduler, make_model_ft
 from module import save, to_device, process_control, process_dataset, resume, collate
 
 cudnn.benchmark = True
@@ -38,13 +38,15 @@ def runExperiment():
     torch.manual_seed(cfg['seed'])
     torch.cuda.manual_seed(cfg['seed'])
     model_path = os.path.join('output', 'model')
-    checkpoint_path = os.path.join(
-        model_path, '{}_{}.pt'.format(cfg['model_tag'], 'checkpoint'))
+    checkpoint_path = os.path.join(model_path, '{}_{}.pt'.format(cfg['model_tag'], 'checkpoint'))
+    model_checkpoint_path = os.path.join(model_path, '{}_{}.pt'.format(cfg['model_tag'], 'model_checkpoint'))
     best_path = os.path.join(model_path, '{}_{}.pt'.format(cfg['model_tag'], 'best'))
+    model_best_path = os.path.join(model_path, '{}_{}.pt'.format(cfg['model_tag'], 'model_best'))
     dataset = make_dataset(cfg['data_name'])
+    model, tokenizer = make_model(cfg['model_name'])
     process_dataset(dataset)
     data_loader = make_data_loader(dataset, cfg['model_name'])
-    model = make_model(cfg['model_name'])
+    model = make_ft_model(model)
     optimizer = make_optimizer(model.parameters(), cfg['model_name'])
     scheduler = make_scheduler(optimizer, cfg['model_name'])
     metric = make_metric(
@@ -64,13 +66,15 @@ def runExperiment():
         train(data_loader['train'], model, optimizer, metric, logger, epoch)
         test(data_loader['test'], model, metric, logger, epoch)
         scheduler.step()
-        result = {'cfg': cfg, 'epoch': epoch + 1, 'model_state_dict': model.state_dict(),
+        result = {'cfg': cfg, 'epoch': epoch + 1,
                   'optimizer_state_dict': optimizer.state_dict(), 'scheduler_state_dict': scheduler.state_dict(),
                   'metric_state_dict': metric.state_dict(), 'logger_state_dict': logger.state_dict()}
         save(result, checkpoint_path)
+        model.save_pretrained(model_checkpoint_path)
         if metric.compare(logger.mean['test/{}'.format(metric.pivot_name)]):
             metric.update(logger.mean['test/{}'.format(metric.pivot_name)])
             shutil.copy(checkpoint_path, best_path)
+            shutil.copy(model_checkpoint_path, model_best_path)
         logger.save(True)
         logger.reset()
     return

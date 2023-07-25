@@ -6,6 +6,7 @@ import torch
 from torchvision import transforms
 from torch.utils.data import DataLoader, Dataset
 from torch.utils.data.dataloader import default_collate
+from transformer import default_data_collator
 from config import cfg
 
 data_stats = {'MNIST': ((0.1307,), (0.3081,)), 'FashionMNIST': ((0.2860,), (0.3530,)),
@@ -21,9 +22,9 @@ def make_dataset(data_name, verbose=True):
     root = os.path.join('data', data_name)
     if data_name in ['MNIST', 'FashionMNIST']:
         dataset_['train'] = eval('dataset.{}(root=root, split="train", '
-                                'transform=dataset.Compose([transforms.ToTensor()]))'.format(data_name))
+                                 'transform=dataset.Compose([transforms.ToTensor()]))'.format(data_name))
         dataset_['test'] = eval('dataset.{}(root=root, split="test", '
-                               'transform=dataset.Compose([transforms.ToTensor()]))'.format(data_name))
+                                'transform=dataset.Compose([transforms.ToTensor()]))'.format(data_name))
         dataset_['train'].transform = dataset.Compose([
             transforms.ToTensor(),
             transforms.Normalize(*data_stats[data_name])])
@@ -32,9 +33,9 @@ def make_dataset(data_name, verbose=True):
             transforms.Normalize(*data_stats[data_name])])
     elif data_name in ['CIFAR10', 'CIFAR100']:
         dataset_['train'] = eval('dataset.{}(root=root, split="train", '
-                                'transform=dataset.Compose([transforms.ToTensor()]))'.format(data_name))
+                                 'transform=dataset.Compose([transforms.ToTensor()]))'.format(data_name))
         dataset_['test'] = eval('dataset.{}(root=root, split="test", '
-                               'transform=dataset.Compose([transforms.ToTensor()]))'.format(data_name))
+                                'transform=dataset.Compose([transforms.ToTensor()]))'.format(data_name))
         dataset_['train'].transform = dataset.Compose([
             transforms.RandomHorizontalFlip(),
             transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
@@ -45,9 +46,9 @@ def make_dataset(data_name, verbose=True):
             transforms.Normalize(*data_stats[data_name])])
     elif data_name in ['SVHN']:
         dataset_['train'] = eval('dataset.{}(root=root, split="train", '
-                                'transform=dataset.Compose([transforms.ToTensor()]))'.format(data_name))
+                                 'transform=dataset.Compose([transforms.ToTensor()]))'.format(data_name))
         dataset_['test'] = eval('dataset.{}(root=root, split="test", '
-                               'transform=dataset.Compose([transforms.ToTensor()]))'.format(data_name))
+                                'transform=dataset.Compose([transforms.ToTensor()]))'.format(data_name))
         dataset_['train'].transform = dataset.Compose([
             transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
             transforms.ToTensor(),
@@ -55,6 +56,16 @@ def make_dataset(data_name, verbose=True):
         dataset_['test'].transform = dataset.Compose([
             transforms.ToTensor(),
             transforms.Normalize(*data_stats[data_name])])
+    elif data_name in ['FPB']:
+        dataset_ = load_dataset('financial_phrasebank', 'sentences_allagree')
+        dataset_ = dataset_['train'].train_test_split(test_size=0.1)
+        del dataset_['validation']
+        classes = dataset_['train'].features['label'].names
+        dataset_ = dataset_.map(
+            lambda x: {"text_label": [classes[label] for label in x["label"]]},
+            batched=True,
+            num_proc=1,
+        )
     else:
         raise ValueError('Not valid dataset name')
     if verbose:
@@ -63,10 +74,18 @@ def make_dataset(data_name, verbose=True):
 
 
 def input_collate(batch):
-    if isinstance(batch[0], dict):
-        return {key: [b[key] for b in batch] for key in batch[0]}
+    return {key: [b[key] for b in batch] for key in batch[0]}
+
+
+def make_data_collate(collate_mode):
+    if collate_mode == 'dict':
+        return input_collate
+    elif collate_mode == 'default':
+        return default_collate
+    elif collate_mode == 'transformer':
+        return default_data_collator
     else:
-        return default_collate(batch)
+        raise ValueError('Not valid collate mode')
 
 
 def make_data_loader(dataset, tag, batch_size=None, shuffle=None, sampler=None):
@@ -76,12 +95,15 @@ def make_data_loader(dataset, tag, batch_size=None, shuffle=None, sampler=None):
         _shuffle = cfg[tag]['shuffle'][k] if shuffle is None else shuffle[k]
         if sampler is None:
             data_loader[k] = DataLoader(dataset=dataset[k], batch_size=_batch_size, shuffle=_shuffle,
-                                        pin_memory=True, num_workers=cfg['num_workers'], collate_fn=input_collate,
+                                        pin_memory=cfg['pin_memory'], num_workers=cfg['num_workers'],
+                                        collate_fn=make_data_collate(cfg['collate_mode']),
                                         worker_init_fn=np.random.seed(cfg['seed']))
         else:
             data_loader[k] = DataLoader(dataset=dataset[k], batch_size=_batch_size, sampler=sampler[k],
-                                        pin_memory=True, num_workers=cfg['num_workers'], collate_fn=input_collate,
+                                        pin_memory=cfg['pin_memory'], num_workers=cfg['num_workers'],
+                                        collate_fn=make_data_collate(cfg['collate_mode']),
                                         worker_init_fn=np.random.seed(cfg['seed']))
+        cfg['num_steps'][k] = len(data_loader[k])
     return data_loader
 
 
@@ -89,3 +111,34 @@ def collate(input):
     for k in input:
         input[k] = torch.stack(input[k], 0)
     return input
+
+
+def process_dataset(dataset):
+    text_column = cfg['text_column']
+    label_column = cfg['label_column']
+    max_length = cfg[cfg['model_name']]['max_length']
+    cfg['data_size'] = {'train': len(dataset['train']), 'test': len(dataset['test'])}
+
+    # cfg['target_size'] = dataset['train'].target_size
+
+    def preprocess_function(examples):
+        inputs = examples[text_column]
+        targets = examples[label_column]
+        model_inputs = tokenizer(inputs, max_length=max_length, padding="max_length", truncation=True,
+                                 return_tensors="pt")
+        labels = tokenizer(targets, max_length=3, padding="max_length", truncation=True, return_tensors="pt")
+        labels = labels["input_ids"]
+        labels[labels == tokenizer.pad_token_id] = -100
+        model_inputs["labels"] = labels
+        return model_inputs
+
+    processed_dataset = dataset.map(
+        preprocess_function,
+        batched=True,
+        num_proc=1,
+        remove_columns=dataset["train"].column_names,
+        load_from_cache_file=False,
+        desc="Running tokenizer on dataset",
+    )
+
+    return processed_dataset
