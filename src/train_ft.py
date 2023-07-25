@@ -8,25 +8,29 @@ import torch.backends.cudnn as cudnn
 from config import cfg, process_args
 from dataset import make_dataset, make_data_loader
 from metric import make_metric, make_logger
-from model import make_model
-from utils import save, to_device, process_control, process_dataset, make_optimizer, make_scheduler, resume, collate
+from model import make_model, make_optimizer, make_scheduler
+from module import save, to_device, process_control, process_dataset, resume, collate
 
 # from datasets import load_dataset
 # from torch.utils.data import DataLoader
 # from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, default_data_collator, get_linear_schedule_with_warmup
 # from module.peft import LoraConfig, PeftConfig, PeftModel, TaskType, get_peft_model
 
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 cudnn.benchmark = True
 parser = argparse.ArgumentParser(description='cfg')
 for k in cfg:
-    exec('parser.add_argument(\'--{0}\', default=cfg[\'{0}\'], type=type(cfg[\'{0}\']))'.format(k))
+    exec(
+        'parser.add_argument(\'--{0}\', default=cfg[\'{0}\'], type=type(cfg[\'{0}\']))'.format(k))
 parser.add_argument('--control_name', default=None, type=str)
 args = vars(parser.parse_args())
 process_args(args)
 
+
 def main():
     process_control()
-    seeds = list(range(cfg['init_seed'], cfg['init_seed'] + cfg['num_experiments']))
+    seeds = list(
+        range(cfg['init_seed'], cfg['init_seed'] + cfg['num_experiments']))
     for i in range(cfg['num_experiments']):
         model_tag_list = [str(seeds[i]), cfg['control_name']]
         cfg['model_tag'] = '_'.join([x for x in model_tag_list if x])
@@ -40,43 +44,42 @@ def runExperiment():
     torch.manual_seed(cfg['seed'])
     torch.cuda.manual_seed(cfg['seed'])
     model_path = os.path.join('output', 'model')
-    checkpoint_path = os.path.join(model_path, '{}_{}.pt'.format(cfg['model_tag'], 'checkpoint'))
+    checkpoint_path = os.path.join(
+        model_path, '{}_{}.pt'.format(cfg['model_tag'], 'checkpoint'))
     best_path = os.path.join(model_path, '{}_{}.pt'.format(cfg['model_tag'], 'best'))
-    dataset = fetch_dataset(cfg['data_name'])
+    dataset = make_dataset(cfg['data_name'])
     process_dataset(dataset)
     data_loader = make_data_loader(dataset, cfg['model_name'])
     model = make_model(cfg['model_name'])
     optimizer = make_optimizer(model.parameters(), cfg['model_name'])
     scheduler = make_scheduler(optimizer, cfg['model_name'])
-    metric = make_metric({'train': ['Loss', 'Accuracy'], 'test': ['Loss', 'Accuracy']})
+    metric = make_metric(
+        {'train': ['Loss', 'Accuracy'], 'test': ['Loss', 'Accuracy']})
+    logger = make_logger(os.path.join('output', 'runs', 'train_{}'.format(cfg['model_tag'])))
     result = resume(checkpoint_path, resume_mode=cfg['resume_mode'])
     if result is None:
         last_epoch = 1
-        logger = make_logger(os.path.join('output', 'runs', 'train_{}'.format(cfg['model_tag'])))
     else:
         last_epoch = result['epoch']
         model.load_state_dict(result['model_state_dict'])
         optimizer.load_state_dict(result['optimizer_state_dict'])
         scheduler.load_state_dict(result['scheduler_state_dict'])
         metric.load_state_dict(result['metric_state_dict'])
-        logger = result['logger']
+        logger.load_state_dict(result['logger_state_dict'])
     for epoch in range(last_epoch, cfg[cfg['model_name']]['num_epochs'] + 1):
-        logger.save(True)
         train(data_loader['train'], model, optimizer, metric, logger, epoch)
         test(data_loader['test'], model, metric, logger, epoch)
-        logger.save(False)
         scheduler.step()
         result = {'cfg': cfg, 'epoch': epoch + 1, 'model_state_dict': model.state_dict(),
                   'optimizer_state_dict': optimizer.state_dict(), 'scheduler_state_dict': scheduler.state_dict(),
-                  'metric_state_dict': metric.state_dict(), 'logger': logger}
+                  'metric_state_dict': metric.state_dict(), 'logger_state_dict': logger.state_dict()}
         save(result, checkpoint_path)
         if metric.compare(logger.mean['test/{}'.format(metric.pivot_name)]):
             metric.update(logger.mean['test/{}'.format(metric.pivot_name)])
             shutil.copy(checkpoint_path, best_path)
+        logger.save(True)
         logger.reset()
     return
-
-
 
 
 def train(data_loader, model, optimizer, metric, logger, epoch):
@@ -89,7 +92,7 @@ def train(data_loader, model, optimizer, metric, logger, epoch):
         optimizer.zero_grad()
         output = model(input)
         output['loss'].backward()
-        # torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
         optimizer.step()
         evaluation = metric.evaluate(metric.metric_name['train'], input, output)
         logger.append(evaluation, 'train', n=input_size)
@@ -103,7 +106,7 @@ def train(data_loader, model, optimizer, metric, logger, epoch):
                              'Train Epoch: {}({:.0f}%)'.format(epoch, 100. * i / len(data_loader)),
                              'Learning rate: {:.6f}'.format(lr), 'Epoch Finished Time: {}'.format(epoch_finished_time),
                              'Experiment Finished Time: {}'.format(exp_finished_time)]}
-            logger.append(info, 'train', mean=False)
+            logger.append(info, 'train')
             print(logger.write('train', metric.metric_name['train']))
     return
 
@@ -119,48 +122,13 @@ def test(data_loader, model, metric, logger, epoch):
             evaluation = metric.evaluate(metric.metric_name['test'], input, output)
             logger.append(evaluation, 'test', input_size)
         info = {'info': ['Model: {}'.format(cfg['model_tag']), 'Test Epoch: {}({:.0f}%)'.format(epoch, 100.)]}
-        logger.append(info, 'test', mean=False)
+        logger.append(info, 'test')
         print(logger.write('test', metric.metric_name['test']))
     return
 
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 # device = "cuda"
 # device = "cuda"
@@ -202,7 +170,6 @@ dataset = dataset.map(
     num_proc=1,
 )
 
-
 # data preprocessing
 tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
 
@@ -235,7 +202,6 @@ train_dataloader = DataLoader(
 )
 eval_dataloader = DataLoader(eval_dataset, collate_fn=default_data_collator, batch_size=batch_size, pin_memory=True)
 
-
 # optimizer and lr scheduler
 optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
 lr_scheduler = get_linear_schedule_with_warmup(
@@ -246,7 +212,6 @@ lr_scheduler = get_linear_schedule_with_warmup(
 
 b = model.base_model
 model.base_model.peft_config['default'].total_step = len(train_dataloader) * num_epochs
-
 
 # training and evaluation
 model = model.to(device)
@@ -287,7 +252,6 @@ for epoch in range(num_epochs):
     train_ppl = torch.exp(train_epoch_loss)
     print(f"{epoch=}: {train_ppl=} {train_epoch_loss=} {eval_ppl=} {eval_epoch_loss=}")
 
-
 # print accuracy
 correct = 0
 total = 0
@@ -300,11 +264,9 @@ print(f"{accuracy=} % on the evaluation dataset")
 print(f"{eval_preds[:10]=}")
 print(f"{dataset['validation']['text_label'][:10]=}")
 
-
 # saving model
 peft_model_id = f"{model_name_or_path}_{peft_config.peft_type}_{peft_config.task_type}"
 model.save_pretrained(peft_model_id)
-
 
 ckpt = f"{peft_model_id}/adapter_model.bin"
 # get_ipython().system('du -h $ckpt')
@@ -315,7 +277,6 @@ peft_model_id = f"{model_name_or_path}_{peft_config.peft_type}_{peft_config.task
 config = PeftConfig.from_pretrained(peft_model_id)
 model = AutoModelForSeq2SeqLM.from_pretrained(config.base_model_name_or_path)
 model = PeftModel.from_pretrained(model, peft_model_id)
-
 
 model.eval()
 i = 13

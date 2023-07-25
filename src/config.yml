@@ -2,7 +2,7 @@
 # control
 control:
   data_name: MNIST
-  model_name: bart
+  model_name: linear
   ft_name: lora
 # experiment
 num_workers: 0

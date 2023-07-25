@@ -1,7 +1,18 @@
 import torch
 import torch.nn.functional as F
 from config import cfg
-from utils import recur
+from module import recur
+
+
+def make_metric(metric_name):
+    if cfg['data_name'] in ['MNIST', 'FashionMNIST', 'SVHN', 'CIFAR10', 'CIFAR100']:
+        pivot = -float('inf')
+        pivot_direction = 'up'
+        pivot_name = 'Accuracy'
+    else:
+        raise ValueError('Not valid data name')
+    metric = Metric(metric_name, pivot, pivot_direction, pivot_name)
+    return metric
 
 
 def Accuracy(output, target, topk=1):
@@ -22,25 +33,15 @@ def RMSE(output, target):
 
 
 class Metric(object):
-    def __init__(self, metric_name):
+    def __init__(self, metric_name, pivot, pivot_direction, pivot_name):
+        self.pivot, self.pivot_name, self.pivot_direction = pivot, pivot_name, pivot_direction
         self.metric_name = self.make_metric_name(metric_name)
         self.metric = {'Loss': (lambda input, output: output['loss'].item()),
                        'Accuracy': (lambda input, output: recur(Accuracy, output['target'], input['target'])),
                        'RMSE': (lambda input, output: recur(RMSE, output['target'], input['target']))}
-        self.reset()
 
     def make_metric_name(self, metric_name):
         return metric_name
-
-    def reset(self):
-        if cfg['data_name'] in ['MNIST', 'FashionMNIST', 'SVHN', 'CIFAR10', 'CIFAR100']:
-            pivot = -float('inf')
-            pivot_direction = 'up'
-            pivot_name = 'Accuracy'
-        else:
-            raise ValueError('Not valid data name')
-        self.pivot, self.pivot_name, self.pivot_direction = pivot, pivot_name, pivot_direction
-        return
 
     def evaluate(self, metric_names, input, output):
         evaluation = {}

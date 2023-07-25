@@ -4,7 +4,7 @@ import os
 import pickle
 import torch
 from torchvision.utils import save_image
-from .core import recur
+from .utils import recur
 
 
 def check_exists(path):
