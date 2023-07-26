@@ -1,12 +1,12 @@
 import dataset
-import datasets
 import numpy as np
 import os
 import torch
+from datasets import load_dataset
 from torchvision import transforms
 from torch.utils.data import DataLoader, Dataset
 from torch.utils.data.dataloader import default_collate
-from transformer import default_data_collator
+from transformers import default_data_collator
 from config import cfg
 
 data_stats = {'MNIST': ((0.1307,), (0.3081,)), 'FashionMNIST': ((0.2860,), (0.3530,)),
@@ -57,9 +57,8 @@ def make_dataset(data_name, verbose=True):
             transforms.ToTensor(),
             transforms.Normalize(*data_stats[data_name])])
     elif data_name in ['FPB']:
-        dataset_ = load_dataset('financial_phrasebank', 'sentences_allagree')
+        dataset_ = load_dataset('financial_phrasebank', 'sentences_allagree', cache_dir=root)
         dataset_ = dataset_['train'].train_test_split(test_size=0.1)
-        del dataset_['validation']
         classes = dataset_['train'].features['label'].names
         dataset_ = dataset_.map(
             lambda x: {"text_label": [classes[label] for label in x["label"]]},
@@ -90,6 +89,7 @@ def make_data_collate(collate_mode):
 
 def make_data_loader(dataset, tag, batch_size=None, shuffle=None, sampler=None):
     data_loader = {}
+    cfg['num_steps'] = {}
     for k in dataset:
         _batch_size = cfg[tag]['batch_size'][k] if batch_size is None else batch_size[k]
         _shuffle = cfg[tag]['shuffle'][k] if shuffle is None else shuffle[k]
@@ -113,13 +113,10 @@ def collate(input):
     return input
 
 
-def process_dataset(dataset):
+def process_dataset(dataset, tokenizer):
     text_column = cfg['text_column']
     label_column = cfg['label_column']
     max_length = cfg[cfg['model_name']]['max_length']
-    cfg['data_size'] = {'train': len(dataset['train']), 'test': len(dataset['test'])}
-
-    # cfg['target_size'] = dataset['train'].target_size
 
     def preprocess_function(examples):
         inputs = examples[text_column]
@@ -140,5 +137,6 @@ def process_dataset(dataset):
         load_from_cache_file=False,
         desc="Running tokenizer on dataset",
     )
-
+    cfg['data_size'] = {'train': len(processed_dataset['train']), 'test': len(processed_dataset['test'])}
+    cfg['target_size'] = len(tokenizer)
     return processed_dataset

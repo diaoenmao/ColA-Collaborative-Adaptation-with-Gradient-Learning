@@ -22,7 +22,7 @@ def makedir_exist_ok(path):
     return
 
 
-def save(input, path, mode='torch'):
+def save(input, path, mode='pickle'):
     dirname = os.path.dirname(path)
     makedir_exist_ok(dirname)
     if mode == 'torch':
@@ -36,7 +36,7 @@ def save(input, path, mode='torch'):
     return
 
 
-def load(path, mode='torch'):
+def load(path, mode='pickle'):
     if mode == 'torch':
         return torch.load(path, map_location=lambda storage, loc: storage)
     elif mode == 'np':

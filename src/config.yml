@@ -1,8 +1,8 @@
 ---
 # control
 control:
-  data_name: MNIST
-  model_name: linear
+  data_name: FPB
+  model_name: bart
   ft_name: lora
 # experiment
 pin_memory: True

@@ -11,7 +11,7 @@ from module.peft import LoraConfig, PeftConfig, PeftModel, TaskType, get_peft_mo
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-# device = "cuda"
+device = "cuda"
 # device = "cuda"
 model_name_or_path = "facebook/bart-base"
 tokenizer_name_or_path = "facebook/bart-base"
@@ -52,7 +52,6 @@ dataset = dataset.map(
     num_proc=1,
 )
 
-
 # data preprocessing
 tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
 
@@ -79,6 +78,7 @@ processed_datasets = dataset.map(
 
 train_dataset = processed_datasets["train"]
 eval_dataset = processed_datasets["validation"]
+
 
 train_dataloader = DataLoader(
     train_dataset, shuffle=True, collate_fn=default_data_collator, batch_size=batch_size, pin_memory=True

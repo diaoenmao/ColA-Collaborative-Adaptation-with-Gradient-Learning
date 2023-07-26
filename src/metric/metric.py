@@ -9,6 +9,10 @@ def make_metric(metric_name):
         pivot = -float('inf')
         pivot_direction = 'up'
         pivot_name = 'Accuracy'
+    elif cfg['data_name'] in ['FPB']:
+        pivot = -float('inf')
+        pivot_direction = 'up'
+        pivot_name = 'Accuracy'
     else:
         raise ValueError('Not valid data name')
     metric = Metric(metric_name, pivot, pivot_direction, pivot_name)
@@ -18,10 +22,10 @@ def make_metric(metric_name):
 def Accuracy(output, target, topk=1):
     with torch.no_grad():
         if target.dtype != torch.int64:
-            target = (target.topk(1, 1, True, True)[1]).view(-1)
-        batch_size = target.size(0)
-        pred_k = output.topk(topk, 1, True, True)[1]
-        correct_k = pred_k.eq(target.view(-1, 1).expand_as(pred_k)).float().sum()
+            target = (target.topk(1, -1, True, True)[1]).view(-1)
+        batch_size = torch.numel(target)
+        pred_k = output.topk(topk, -1, True, True)[1]
+        correct_k = pred_k.eq(target.unsqueeze(-1).expand_as(pred_k)).float().sum()
         acc = (correct_k * (100.0 / batch_size)).item()
     return acc
 
