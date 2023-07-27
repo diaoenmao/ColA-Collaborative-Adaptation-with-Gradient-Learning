@@ -4,7 +4,7 @@ import os
 import torch
 from datasets import load_dataset
 from torchvision import transforms
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader
 from torch.utils.data.dataloader import default_collate
 from transformers import default_data_collator
 from config import cfg
