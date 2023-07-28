@@ -58,7 +58,7 @@ def make_dataset(data_name, verbose=True):
             transforms.Normalize(*data_stats[data_name])])
     elif data_name in ['FPB']:
         dataset_ = load_dataset('financial_phrasebank', 'sentences_allagree', cache_dir=root)
-        dataset_ = dataset_['train'].train_test_split(test_size=0.1)
+        dataset_ = dataset_['train'].train_test_split(test_size=0.1, seed=cfg['seed'])
         classes = dataset_['train'].features['label'].names
         dataset_ = dataset_.map(
             lambda x: {"text_label": [classes[label] for label in x["label"]]},

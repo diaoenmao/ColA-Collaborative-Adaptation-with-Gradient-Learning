@@ -6,6 +6,7 @@ def process_control():
     cfg['bart'] = {'max_length': 128}
     cfg['data_name'] = cfg['control']['data_name']
     cfg['model_name'] = cfg['control']['model_name']
+    cfg['ft_name'] = cfg['control']['ft_name']
     cfg['text_column'] = 'sentence'
     cfg['label_column'] = 'text_label'
     model_name = cfg['model_name']

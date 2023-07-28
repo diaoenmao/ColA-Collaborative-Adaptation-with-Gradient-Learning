@@ -48,11 +48,13 @@ def runExperiment():
     result = resume(os.path.join(checkpoint_path, 'model'), resume_mode=cfg['resume_mode'])
     if result is None:
         last_epoch = 1
+        cfg['global_step'] = 0
         model = make_ft_model(model)
         optimizer = make_optimizer(model.parameters(), cfg['model_name'])
         scheduler = make_scheduler(optimizer, cfg['model_name'])
     else:
         last_epoch = result['epoch']
+        cfg['global_step'] = result['global_step']
         model = PeftModel.from_pretrained(model, os.path.join(checkpoint_path, 'adapter'), is_trainable=True)
         optimizer = make_optimizer(model.parameters(), cfg['model_name'])
         optimizer.load_state_dict(result['optimizer_state_dict'])
@@ -63,7 +65,7 @@ def runExperiment():
     for epoch in range(last_epoch, cfg[cfg['model_name']]['num_epochs'] + 1):
         train(data_loader['train'], model, optimizer, scheduler, metric, logger, epoch)
         test(data_loader['test'], model, metric, logger, epoch)
-        result = {'cfg': cfg, 'epoch': epoch + 1,
+        result = {'cfg': cfg, 'epoch': epoch + 1, 'global_step': cfg['global_step'],
                   'optimizer_state_dict': optimizer.state_dict(), 'scheduler_state_dict': scheduler.state_dict(),
                   'metric_state_dict': metric.state_dict(), 'logger_state_dict': logger.state_dict()}
         save(result, os.path.join(checkpoint_path, 'model'))
@@ -92,7 +94,10 @@ def train(data_loader, model, optimizer, scheduler, metric, logger, epoch):
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
         optimizer.step()
         scheduler.step()
+        if cfg['ft_name'] in ['adalora']:
+            model.base_model.update_and_allocate(cfg['global_step'])
         optimizer.zero_grad()
+        cfg['global_step'] += 1
         evaluation = metric.evaluate(metric.metric_name['train'], input_, output_)
         logger.append(evaluation, 'train', n=input_size)
         if i % int((len(data_loader) * cfg['log_interval']) + 1) == 0:
