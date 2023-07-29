@@ -47,25 +47,29 @@ def runExperiment():
     logger = make_logger(os.path.join('output', 'runs', 'train_{}'.format(cfg['model_tag'])))
     result = resume(os.path.join(checkpoint_path, 'model'), resume_mode=cfg['resume_mode'])
     if result is None:
-        last_epoch = 1
-        cfg['global_step'] = 0
+        cfg['epoch'] = 1
+        cfg['step'] = 0
         model = make_ft_model(model)
+        model.print_trainable_parameters()
         optimizer = make_optimizer(model.parameters(), cfg['model_name'])
         scheduler = make_scheduler(optimizer, cfg['model_name'])
     else:
-        last_epoch = result['epoch']
-        cfg['global_step'] = result['global_step']
+        cfg['epoch'] = result['epoch']
+        cfg['step'] = result['step']
         model = PeftModel.from_pretrained(model, os.path.join(checkpoint_path, 'adapter'), is_trainable=True)
+        model.print_trainable_parameters()
         optimizer = make_optimizer(model.parameters(), cfg['model_name'])
-        optimizer.load_state_dict(result['optimizer_state_dict'])
+        if cfg['ft_name'] not in ['adalora']:
+            optimizer.load_state_dict(result['optimizer_state_dict'])
         scheduler = make_scheduler(optimizer, cfg['model_name'])
         scheduler.load_state_dict(result['scheduler_state_dict'])
         metric.load_state_dict(result['metric_state_dict'])
         logger.load_state_dict(result['logger_state_dict'])
-    for epoch in range(last_epoch, cfg[cfg['model_name']]['num_epochs'] + 1):
-        train(data_loader['train'], model, optimizer, scheduler, metric, logger, epoch)
-        test(data_loader['test'], model, metric, logger, epoch)
-        result = {'cfg': cfg, 'epoch': epoch + 1, 'global_step': cfg['global_step'],
+    for epoch in range(cfg['epoch'], cfg[cfg['model_name']]['num_epochs'] + 1):
+        cfg['epoch'] = epoch
+        train(data_loader['train'], model, optimizer, scheduler, metric, logger)
+        test(data_loader['test'], model, metric, logger)
+        result = {'cfg': cfg, 'epoch': cfg['epoch'] + 1, 'step': cfg['step'],
                   'optimizer_state_dict': optimizer.state_dict(), 'scheduler_state_dict': scheduler.state_dict(),
                   'metric_state_dict': metric.state_dict(), 'logger_state_dict': logger.state_dict()}
         save(result, os.path.join(checkpoint_path, 'model'))
@@ -81,7 +85,7 @@ def runExperiment():
     return
 
 
-def train(data_loader, model, optimizer, scheduler, metric, logger, epoch):
+def train(data_loader, model, optimizer, scheduler, metric, logger):
     model.train(True)
     start_time = time.time()
     for i, input in enumerate(data_loader):
@@ -95,9 +99,9 @@ def train(data_loader, model, optimizer, scheduler, metric, logger, epoch):
         optimizer.step()
         scheduler.step()
         if cfg['ft_name'] in ['adalora']:
-            model.base_model.update_and_allocate(cfg['global_step'])
+            model.base_model.update_and_allocate(cfg['step'])
         optimizer.zero_grad()
-        cfg['global_step'] += 1
+        cfg['step'] += 1
         evaluation = metric.evaluate(metric.metric_name['train'], input_, output_)
         logger.append(evaluation, 'train', n=input_size)
         if i % int((len(data_loader) * cfg['log_interval']) + 1) == 0:
@@ -105,9 +109,9 @@ def train(data_loader, model, optimizer, scheduler, metric, logger, epoch):
             lr = optimizer.param_groups[0]['lr']
             epoch_finished_time = datetime.timedelta(seconds=round(batch_time * (len(data_loader) - i - 1)))
             exp_finished_time = epoch_finished_time + datetime.timedelta(
-                seconds=round((cfg[cfg['model_name']]['num_epochs'] - epoch) * batch_time * len(data_loader)))
+                seconds=round((cfg[cfg['model_name']]['num_epochs'] - cfg['epoch']) * batch_time * len(data_loader)))
             info = {'info': ['Model: {}'.format(cfg['model_tag']),
-                             'Train Epoch: {}({:.0f}%)'.format(epoch, 100. * i / len(data_loader)),
+                             'Train Epoch: {}({:.0f}%)'.format(cfg['epoch'], 100. * i / len(data_loader)),
                              'Learning rate: {:.6f}'.format(lr), 'Epoch Finished Time: {}'.format(epoch_finished_time),
                              'Experiment Finished Time: {}'.format(exp_finished_time)]}
             logger.append(info, 'train')
@@ -115,7 +119,7 @@ def train(data_loader, model, optimizer, scheduler, metric, logger, epoch):
     return
 
 
-def test(data_loader, model, metric, logger, epoch):
+def test(data_loader, model, metric, logger):
     with torch.no_grad():
         model.train(False)
         for i, input in enumerate(data_loader):
@@ -126,7 +130,7 @@ def test(data_loader, model, metric, logger, epoch):
             output_ = {'target': output['logits'], 'loss': output['loss']}
             evaluation = metric.evaluate(metric.metric_name['test'], input_, output_)
             logger.append(evaluation, 'test', input_size)
-        info = {'info': ['Model: {}'.format(cfg['model_tag']), 'Test Epoch: {}({:.0f}%)'.format(epoch, 100.)]}
+        info = {'info': ['Model: {}'.format(cfg['model_tag']), 'Test Epoch: {}({:.0f}%)'.format(cfg['epoch'], 100.)]}
         logger.append(info, 'test')
         print(logger.write('test', metric.metric_name['test']))
     return

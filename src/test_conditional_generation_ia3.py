@@ -7,39 +7,25 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, default_data_collator, get_linear_schedule_with_warmup
 
-from module.peft import AdaLoraConfig, PeftConfig, PeftModel, TaskType, get_peft_model
-
+from module.peft import IA3Config, PeftConfig, PeftModel, TaskType, get_peft_model
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-# device = "cuda"
 device = "cuda"
+# device = "cuda"
 model_name_or_path = "facebook/bart-base"
 tokenizer_name_or_path = "facebook/bart-base"
 
-checkpoint_name = "financial_sentiment_analysis_lora_v1.pt"
+# checkpoint_name = "financial_sentiment_analysis_lora_v1.pt"
 text_column = "sentence"
 label_column = "text_label"
 max_length = 128
+
 lr = 1e-3
 num_epochs = 8
 batch_size = 8
 
-
-# creating model
-peft_config = AdaLoraConfig(
-    init_r=12,
-    target_r=8,
-    beta1=0.85,
-    beta2=0.85,
-    tinit=200,
-    tfinal=1000,
-    deltaT=10,
-    lora_alpha=32,
-    lora_dropout=0.1,
-    task_type=TaskType.SEQ_2_SEQ_LM,
-    inference_mode=False,
-)
+peft_config = IA3Config(task_type=TaskType.SEQ_2_SEQ_LM, inference_mode=False, feedforward_modules=[])
 
 cache_model_path = os.path.join('output', 'model', 'bart-base')
 cache_tokenizer_path = os.path.join('output', 'tokenizer', 'bart-base')
@@ -62,9 +48,9 @@ dataset = dataset.map(
     num_proc=1,
 )
 
-
 # data preprocessing
-# tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
+tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
+
 
 def preprocess_function(examples):
     inputs = examples[text_column]
@@ -88,6 +74,7 @@ processed_datasets = dataset.map(
 
 train_dataset = processed_datasets["train"]
 eval_dataset = processed_datasets["validation"]
+
 
 train_dataloader = DataLoader(
     train_dataset, shuffle=True, collate_fn=default_data_collator, batch_size=batch_size, pin_memory=True
@@ -123,7 +110,7 @@ for epoch in range(num_epochs):
         lr_scheduler.step()
         # Update the importance of low-rank matrices
         # and allocate the budget accordingly.
-        model.base_model.update_and_allocate(global_step)
+        # model.base_model.update_and_allocate(global_step)
         optimizer.zero_grad()
         global_step += 1
 
@@ -158,6 +145,9 @@ accuracy = correct / total * 100
 print(f"{accuracy=} % on the evaluation dataset")
 print(f"{eval_preds[:10]=}")
 print(f"{dataset['validation']['text_label'][:10]=}")
+
+
+
 
 
 # saving model

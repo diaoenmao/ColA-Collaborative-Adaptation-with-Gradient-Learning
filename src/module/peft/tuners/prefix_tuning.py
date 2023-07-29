@@ -56,7 +56,7 @@ class PrefixEncoder(torch.nn.Module):
     Example:
 
     ```py
-    >>> from module.peft import PrefixEncoder, PrefixTuningConfig
+    >>> from peft import PrefixEncoder, PrefixTuningConfig
 
     >>> config = PrefixTuningConfig(
     ...     peft_type="PREFIX_TUNING",

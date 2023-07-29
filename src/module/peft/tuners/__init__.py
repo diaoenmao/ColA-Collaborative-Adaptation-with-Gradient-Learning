@@ -20,6 +20,7 @@
 from .adaption_prompt import AdaptionPromptConfig, AdaptionPromptModel
 from .cola import ColaConfig, ColaModel, create_gradient_boosting_models, create_gradient_boosting_datasets
 from .lora import LoraConfig, LoraModel
+from .ia3 import IA3Config, IA3Model
 from .adalora import AdaLoraConfig, AdaLoraModel
 from .p_tuning import PromptEncoder, PromptEncoderConfig, PromptEncoderReparameterizationType
 from .prefix_tuning import PrefixEncoder, PrefixTuningConfig

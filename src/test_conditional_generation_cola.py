@@ -1,4 +1,4 @@
-# environments: pip install -q transformers dataset evaluate seqeval accelerate
+# environments: pip install -q transformers dataset evaluate seqeval accelerate safetensors
 
 import os
 import torch
@@ -66,7 +66,10 @@ peft_config = ColaConfig(
     get_delta_h=True
 )
 
-model = AutoModelForSeq2SeqLM.from_pretrained(model_name_or_path)
+cache_model_path = os.path.join('output', 'model', 'bart-base')
+cache_tokenizer_path = os.path.join('output', 'tokenizer', 'bart-base')
+model = AutoModelForSeq2SeqLM.from_pretrained(model_name_or_path, cache_dir=cache_model_path)
+tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, cache_dir=cache_model_path)
 model = get_peft_model(model, peft_config)
 model.print_trainable_parameters()
 
@@ -87,7 +90,7 @@ dataset = dataset.map(
 
 
 # data preprocessing
-tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
+# tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
 
 
 def preprocess_function(examples):
