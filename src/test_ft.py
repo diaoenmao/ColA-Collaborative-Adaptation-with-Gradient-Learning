@@ -44,6 +44,7 @@ def runExperiment():
     metric = make_metric({'train': ['Loss', 'Accuracy'], 'test': ['Loss', 'Accuracy']})
     result = resume(os.path.join(best_path, 'model'))
     model = PeftModel.from_pretrained(model, os.path.join(best_path, 'adapter'))
+    model = model.to(cfg['device'])
     cfg['epoch'] = result['epoch']
     test_logger = make_logger(os.path.join('output', 'runs', 'test_{}'.format(cfg['model_tag'])))
     test(data_loader['test'], model, metric, test_logger)

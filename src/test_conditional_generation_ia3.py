@@ -49,7 +49,7 @@ dataset = dataset.map(
 )
 
 # data preprocessing
-tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
+# tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
 
 
 def preprocess_function(examples):

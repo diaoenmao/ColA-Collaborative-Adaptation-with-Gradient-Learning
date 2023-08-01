@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, default_data_collator, get_linear_schedule_with_warmup
 
-from module.peft import LoraConfig, PeftConfig, PeftModel, TaskType, get_peft_model
+from module.peft import PrefixTuningConfig, PeftConfig, PeftModel, TaskType, get_peft_model
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
@@ -25,14 +25,7 @@ lr = 1e-3
 num_epochs = 8
 batch_size = 8
 
-peft_config = LoraConfig(
-    task_type=TaskType.SEQ_2_SEQ_LM,
-    r=64,
-    lora_alpha=32,
-    target_modules=["q_proj", "v_proj"],
-    lora_dropout=0.01,
-    bias="none",
-)
+peft_config = PrefixTuningConfig(task_type=TaskType.SEQ_2_SEQ_LM, inference_mode=False, num_virtual_tokens=20)
 
 cache_model_path = os.path.join('output', 'model', 'bart-base')
 cache_tokenizer_path = os.path.join('output', 'tokenizer', 'bart-base')
@@ -98,7 +91,7 @@ lr_scheduler = get_linear_schedule_with_warmup(
 )
 
 b = model.base_model
-model.base_model.peft_config['default'].total_step = len(train_dataloader) * num_epochs
+# model.base_model.peft_config['default'].total_step = len(train_dataloader) * num_epochs
 
 
 # training and evaluation

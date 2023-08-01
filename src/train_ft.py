@@ -50,6 +50,7 @@ def runExperiment():
         cfg['epoch'] = 1
         cfg['step'] = 0
         model = make_ft_model(model)
+        model = model.to(cfg['device'])
         model.print_trainable_parameters()
         optimizer = make_optimizer(model.parameters(), cfg['model_name'])
         scheduler = make_scheduler(optimizer, cfg['model_name'])
@@ -57,6 +58,7 @@ def runExperiment():
         cfg['epoch'] = result['epoch']
         cfg['step'] = result['step']
         model = PeftModel.from_pretrained(model, os.path.join(checkpoint_path, 'adapter'), is_trainable=True)
+        model = model.to(cfg['device'])
         model.print_trainable_parameters()
         optimizer = make_optimizer(model.parameters(), cfg['model_name'])
         if cfg['ft_name'] not in ['adalora']:

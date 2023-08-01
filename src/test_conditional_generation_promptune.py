@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, default_data_collator, get_linear_schedule_with_warmup
 
-from module.peft import LoraConfig, PeftConfig, PeftModel, TaskType, get_peft_model
+from module.peft import PromptTuningInit, PromptTuningConfig, PeftConfig, PeftModel, TaskType, get_peft_model
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
@@ -25,13 +25,14 @@ lr = 1e-3
 num_epochs = 8
 batch_size = 8
 
-peft_config = LoraConfig(
+peft_config = PromptTuningConfig(
     task_type=TaskType.SEQ_2_SEQ_LM,
-    r=64,
-    lora_alpha=32,
-    target_modules=["q_proj", "v_proj"],
-    lora_dropout=0.01,
-    bias="none",
+    prompt_tuning_init=PromptTuningInit.TEXT,
+    num_virtual_tokens=20,
+    # prompt_tuning_init_text="What is the sentiment of this article?\n",
+    prompt_tuning_init_text="",
+    inference_mode=False,
+    tokenizer_name_or_path=model_name_or_path,
 )
 
 cache_model_path = os.path.join('output', 'model', 'bart-base')
@@ -58,7 +59,7 @@ dataset = dataset.map(
 # data preprocessing
 # tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
 
-
+# target_max_length = max([len(tokenizer(class_label)["input_ids"]) for class_label in classes])
 def preprocess_function(examples):
     inputs = examples[text_column]
     targets = examples[label_column]
@@ -98,7 +99,7 @@ lr_scheduler = get_linear_schedule_with_warmup(
 )
 
 b = model.base_model
-model.base_model.peft_config['default'].total_step = len(train_dataloader) * num_epochs
+# model.base_model.peft_config['default'].total_step = len(train_dataloader) * num_epochs
 
 
 # training and evaluation
