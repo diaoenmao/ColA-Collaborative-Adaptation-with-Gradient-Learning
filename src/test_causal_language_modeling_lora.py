@@ -5,7 +5,7 @@ import torch
 from datasets import load_dataset
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, default_data_collator, get_linear_schedule_with_warmup
+from transformers import AutoModelForCausalLM, AutoTokenizer, default_data_collator, get_linear_schedule_with_warmup
 
 from module.peft import LoraConfig, PeftConfig, PeftModel, TaskType, get_peft_model
 
@@ -13,60 +13,81 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 device = "cuda"
 # device = "cuda"
-model_name_or_path = "facebook/bart-base"
-tokenizer_name_or_path = "facebook/bart-base"
+model_name_or_path = "bigscience/bloomz-560m"
+tokenizer_name_or_path = "bigscience/bloomz-560m"
 
 # checkpoint_name = "financial_sentiment_analysis_lora_v1.pt"
-text_column = "sentence"
+# text_column = "sentence"
+# label_column = "text_label"
+text_column = "Tweet text"
 label_column = "text_label"
-max_length = 128
+max_length = 64
 
-lr = 1e-3
-num_epochs = 8
+lr = 3e-2
+num_epochs = 50
 batch_size = 8
 
-peft_config = LoraConfig(
-    task_type=TaskType.SEQ_2_SEQ_LM,
-    r=64,
-    lora_alpha=32,
-    target_modules=["q_proj", "v_proj"],
-    lora_dropout=0.01,
-    bias="none",
-)
+peft_config = LoraConfig(task_type=TaskType.CAUSAL_LM, inference_mode=False, r=8, lora_alpha=32, lora_dropout=0.1)
 
-cache_model_path = os.path.join('output', 'model', 'bart-base')
-cache_tokenizer_path = os.path.join('output', 'tokenizer', 'bart-base')
-model = AutoModelForSeq2SeqLM.from_pretrained(model_name_or_path, cache_dir=cache_model_path)
-tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, cache_dir=cache_model_path)
-model = get_peft_model(model, peft_config)
-model.print_trainable_parameters()
 
-a = model.base_model
+# a = model.base_model
 # loading dataset
-dataset = load_dataset("financial_phrasebank", "sentences_allagree")
+dataset = load_dataset("ought/raft", "twitter_complaints")
+classes = [k.replace("_", " ") for k in dataset["train"].features["Label"].names]
+print(classes)
+dataset = dataset.map(
+    lambda x: {"text_label": [classes[label] for label in x["Label"]]},
+    batched=True,
+    num_proc=1,
+)
+print(dataset)
+print(dataset["train"].column_names)
 dataset = dataset["train"].train_test_split(test_size=0.1)
 dataset["validation"] = dataset["test"]
 del dataset["test"]
 
-classes = dataset["train"].features["label"].names
-dataset = dataset.map(
-    lambda x: {"text_label": [classes[label] for label in x["label"]]},
-    batched=True,
-    num_proc=1,
-)
+cache_model_path = os.path.join('output', 'model', 'bart-base')
+cache_tokenizer_path = os.path.join('output', 'tokenizer', 'bart-base')
+model = AutoModelForCausalLM.from_pretrained(model_name_or_path, cache_dir=cache_model_path)
+tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, cache_dir=cache_model_path)
+if tokenizer.pad_token_id is None:
+    tokenizer.pad_token_id = tokenizer.eos_token_id
+target_max_length = max([len(tokenizer(class_label)["input_ids"]) for class_label in classes])
+print(target_max_length)
+
+model = get_peft_model(model, peft_config)
+model.print_trainable_parameters()
+
+# classes = dataset["train"].features["label"].names
+
 
 # data preprocessing
 # tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
-
-
+# tokenizer.pad_token_id = 3
 def preprocess_function(examples):
-    inputs = examples[text_column]
-    targets = examples[label_column]
-    model_inputs = tokenizer(inputs, max_length=max_length, padding="max_length", truncation=True, return_tensors="pt")
-    labels = tokenizer(targets, max_length=3, padding="max_length", truncation=True, return_tensors="pt")
-    labels = labels["input_ids"]
-    labels[labels == tokenizer.pad_token_id] = -100
-    model_inputs["labels"] = labels
+    batch_size = len(examples[text_column])
+    inputs = [f"{text_column} : {x} Label : " for x in examples[text_column]]
+    targets = [str(x) for x in examples[label_column]]
+    model_inputs = tokenizer(inputs)
+    labels = tokenizer(targets)
+    for i in range(batch_size):
+        sample_input_ids = model_inputs["input_ids"][i]
+        label_input_ids = labels["input_ids"][i] + [tokenizer.pad_token_id]
+        model_inputs["input_ids"][i] = sample_input_ids + label_input_ids
+        labels["input_ids"][i] = [-100] * len(sample_input_ids) + label_input_ids
+        model_inputs["attention_mask"][i] = [1] * len(model_inputs["input_ids"][i])
+    for i in range(batch_size):
+        sample_input_ids = model_inputs["input_ids"][i]
+        label_input_ids = labels["input_ids"][i]
+        model_inputs["input_ids"][i] = [tokenizer.pad_token_id] * (
+            max_length - len(sample_input_ids)) + sample_input_ids
+        model_inputs["attention_mask"][i] = [0] * (max_length - len(sample_input_ids)) + model_inputs[
+            "attention_mask"][i]
+        labels["input_ids"][i] = [-100] * (max_length - len(sample_input_ids)) + label_input_ids
+        model_inputs["input_ids"][i] = torch.tensor(model_inputs["input_ids"][i][:max_length])
+        model_inputs["attention_mask"][i] = torch.tensor(model_inputs["attention_mask"][i][:max_length])
+        labels["input_ids"][i] = torch.tensor(labels["input_ids"][i][:max_length])
+    model_inputs["labels"] = labels["input_ids"]
     return model_inputs
 
 
@@ -97,8 +118,8 @@ lr_scheduler = get_linear_schedule_with_warmup(
     num_training_steps=(len(train_dataloader) * num_epochs),
 )
 
-b = model.base_model
-model.base_model.peft_config['default'].total_step = len(train_dataloader) * num_epochs
+# b = model.base_model
+# model.base_model.peft_config['default'].total_step = len(train_dataloader) * num_epochs
 
 
 # training and evaluation
@@ -142,16 +163,16 @@ for epoch in range(num_epochs):
 
 
 # print accuracy
-correct = 0
-total = 0
-for pred, true in zip(eval_preds, dataset["validation"]["text_label"]):
-    if pred.strip() == true.strip():
-        correct += 1
-    total += 1
-accuracy = correct / total * 100
-print(f"{accuracy=} % on the evaluation dataset")
-print(f"{eval_preds[:10]=}")
-print(f"{dataset['validation']['text_label'][:10]=}")
+# correct = 0
+# total = 0
+# for pred, true in zip(eval_preds, dataset["validation"]["text_label"]):
+#     if pred.strip() == true.strip():
+#         correct += 1
+#     total += 1
+# accuracy = correct / total * 100
+# print(f"{accuracy=} % on the evaluation dataset")
+# print(f"{eval_preds[:10]=}")
+# print(f"{dataset['validation']['text_label'][:10]=}")
 
 
 
@@ -169,17 +190,20 @@ ckpt = f"{peft_model_id}/adapter_model.bin"
 peft_model_id = f"{model_name_or_path}_{peft_config.peft_type}_{peft_config.task_type}"
 
 config = PeftConfig.from_pretrained(peft_model_id)
-model = AutoModelForSeq2SeqLM.from_pretrained(config.base_model_name_or_path)
+model = AutoModelForCausalLM.from_pretrained(config.base_model_name_or_path)
 model = PeftModel.from_pretrained(model, peft_model_id)
 
 
 model.eval()
-i = 13
-inputs = tokenizer(dataset["validation"][text_column][i], return_tensors="pt")
+i = 4
+# inputs = tokenizer(dataset["validation"][text_column][i], return_tensors="pt")
+inputs = tokenizer(f'{text_column} : {dataset["validation"][i]["Tweet text"]} Label : ', return_tensors="pt")
 print(dataset["validation"][text_column][i])
 print(inputs)
 
 with torch.no_grad():
-    outputs = model.generate(input_ids=inputs["input_ids"], max_new_tokens=10)
+    # outputs = model.generate(input_ids=inputs["input_ids"], max_new_tokens=10)
+    outputs = model.generate(input_ids=inputs["input_ids"], attention_mask=inputs["attention_mask"],
+                             max_new_tokens=10, eos_token_id=3)
     print(outputs)
     print(tokenizer.batch_decode(outputs.detach().cpu().numpy(), skip_special_tokens=True))
