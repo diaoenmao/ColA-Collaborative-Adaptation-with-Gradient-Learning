@@ -31,7 +31,7 @@ peft_config = PromptTuningConfig(
     task_type=TaskType.CAUSAL_LM,
     prompt_tuning_init=PromptTuningInit.TEXT,
     num_virtual_tokens=8,
-    prompt_tuning_init_text="Classify if the tweet is a complaint or not:",
+    prompt_tuning_init_text=" ",
     tokenizer_name_or_path=model_name_or_path,
 )
 
@@ -53,8 +53,8 @@ dataset = dataset["train"].train_test_split(test_size=0.1)
 dataset["validation"] = dataset["test"]
 del dataset["test"]
 
-cache_model_path = os.path.join('output', 'model', 'bart-base')
-cache_tokenizer_path = os.path.join('output', 'tokenizer', 'bart-base')
+cache_model_path = os.path.join('output', 'model', 'bloomz')
+cache_tokenizer_path = os.path.join('output', 'tokenizer', 'bloomz')
 model = AutoModelForCausalLM.from_pretrained(model_name_or_path, cache_dir=cache_model_path)
 tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, cache_dir=cache_model_path)
 if tokenizer.pad_token_id is None:

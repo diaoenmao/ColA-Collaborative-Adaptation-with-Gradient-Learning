@@ -56,12 +56,20 @@ def make_dataset(data_name, verbose=True):
         dataset_['test'].transform = dataset.Compose([
             transforms.ToTensor(),
             transforms.Normalize(*data_stats[data_name])])
-    elif data_name in ['FPB']:
-        dataset_ = load_dataset('financial_phrasebank', 'sentences_allagree', cache_dir=root)
+    elif data_name in ['fpb']:
+        dataset_ = load_dataset(cfg['hf_data_name'], cfg['hf_subset_name'], cache_dir=root)
         dataset_ = dataset_['train'].train_test_split(test_size=0.1, seed=cfg['seed'])
         classes = dataset_['train'].features['label'].names
         dataset_ = dataset_.map(
             lambda x: {"text_label": [classes[label] for label in x["label"]]},
+            batched=True,
+            num_proc=1,
+        )
+    elif data_name in ['raft']:
+        dataset_ = load_dataset(cfg['hf_data_name'], cfg['hf_subset_name'], cache_dir=root)
+        classes = [k.replace("_", " ") for k in dataset_["train"].features["Label"].names]
+        dataset_ = dataset_.map(
+            lambda x: {"text_label": [classes[label] for label in x["Label"]]},
             batched=True,
             num_proc=1,
         )
@@ -117,26 +125,64 @@ def process_dataset(dataset, tokenizer):
     text_column = cfg['text_column']
     label_column = cfg['label_column']
     max_length = cfg[cfg['model_name']]['max_length']
+    if cfg['data_name'] == 'fpb':
+        def preprocess_function(examples):
+            inputs = examples[text_column]
+            targets = examples[label_column]
+            model_inputs = tokenizer(inputs, max_length=max_length, padding="max_length", truncation=True,
+                                     return_tensors="pt")
+            labels = tokenizer(targets, max_length=3, padding="max_length", truncation=True, return_tensors="pt")
+            labels = labels["input_ids"]
+            labels[labels == tokenizer.pad_token_id] = -100
+            model_inputs["labels"] = labels
+            return model_inputs
 
-    def preprocess_function(examples):
-        inputs = examples[text_column]
-        targets = examples[label_column]
-        model_inputs = tokenizer(inputs, max_length=max_length, padding="max_length", truncation=True,
-                                 return_tensors="pt")
-        labels = tokenizer(targets, max_length=3, padding="max_length", truncation=True, return_tensors="pt")
-        labels = labels["input_ids"]
-        labels[labels == tokenizer.pad_token_id] = -100
-        model_inputs["labels"] = labels
-        return model_inputs
+        processed_dataset = dataset.map(
+            preprocess_function,
+            batched=True,
+            num_proc=1,
+            remove_columns=dataset["train"].column_names,
+            load_from_cache_file=False,
+            desc="Running tokenizer on dataset",
+        )
+    elif cfg['data_name'] == 'raft':
+        def preprocess_function(examples):
+            batch_size = len(examples[text_column[0]])
+            inputs = [(f"{' '.join([f'{col}: {examples[col][i]}' for col in text_column])} "
+                       f"Label: ") for i in range(batch_size)]
+            targets = [str(x) for x in examples[label_column]]
+            model_inputs = tokenizer(inputs)
+            labels = tokenizer(targets)
+            for i in range(batch_size):
+                sample_input_ids = model_inputs["input_ids"][i]
+                label_input_ids = labels["input_ids"][i] + [tokenizer.pad_token_id]
+                model_inputs["input_ids"][i] = sample_input_ids + label_input_ids
+                labels["input_ids"][i] = [-100] * len(sample_input_ids) + label_input_ids
+                model_inputs["attention_mask"][i] = [1] * len(model_inputs["input_ids"][i])
+            for i in range(batch_size):
+                sample_input_ids = model_inputs["input_ids"][i]
+                label_input_ids = labels["input_ids"][i]
+                model_inputs["input_ids"][i] = [tokenizer.pad_token_id] * (
+                        max_length - len(sample_input_ids)) + sample_input_ids
+                model_inputs["attention_mask"][i] = [0] * (max_length - len(sample_input_ids)) + model_inputs[
+                    "attention_mask"][i]
+                labels["input_ids"][i] = [-100] * (max_length - len(sample_input_ids)) + label_input_ids
+                model_inputs["input_ids"][i] = torch.tensor(model_inputs["input_ids"][i][:max_length])
+                model_inputs["attention_mask"][i] = torch.tensor(model_inputs["attention_mask"][i][:max_length])
+                labels["input_ids"][i] = torch.tensor(labels["input_ids"][i][:max_length])
+            model_inputs["labels"] = labels["input_ids"]
+            return model_inputs
 
-    processed_dataset = dataset.map(
-        preprocess_function,
-        batched=True,
-        num_proc=1,
-        remove_columns=dataset["train"].column_names,
-        load_from_cache_file=False,
-        desc="Running tokenizer on dataset",
-    )
+        processed_dataset = dataset.map(
+            preprocess_function,
+            batched=True,
+            num_proc=1,
+            remove_columns=dataset["train"].column_names,
+            load_from_cache_file=False,
+            desc="Running tokenizer on dataset",
+        )
+    else:
+        raise ValueError('Not valid data name')
     cfg['data_size'] = {'train': len(processed_dataset['train']), 'test': len(processed_dataset['test'])}
     cfg['target_size'] = len(tokenizer)
     return processed_dataset

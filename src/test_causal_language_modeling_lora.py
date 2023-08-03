@@ -46,8 +46,8 @@ dataset = dataset["train"].train_test_split(test_size=0.1)
 dataset["validation"] = dataset["test"]
 del dataset["test"]
 
-cache_model_path = os.path.join('output', 'model', 'bart-base')
-cache_tokenizer_path = os.path.join('output', 'tokenizer', 'bart-base')
+cache_model_path = os.path.join('output', 'model', 'bloomz')
+cache_tokenizer_path = os.path.join('output', 'tokenizer', 'bloomz')
 model = AutoModelForCausalLM.from_pretrained(model_name_or_path, cache_dir=cache_model_path)
 tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, cache_dir=cache_model_path)
 if tokenizer.pad_token_id is None:

@@ -9,14 +9,33 @@ def make_metric(metric_name):
         pivot = -float('inf')
         pivot_direction = 'up'
         pivot_name = 'Accuracy'
-    elif cfg['data_name'] in ['FPB']:
-        pivot = -float('inf')
-        pivot_direction = 'up'
-        pivot_name = 'Accuracy'
+    if cfg['task_name'] == 'clm':
+        if cfg['data_name'] in ['raft']:
+            pivot = float('inf')
+            pivot_direction = 'down'
+            pivot_name = 'Perplexity'
+            for k in metric_name:
+                metric_name[k].extend(['Perplexity'])
+        else:
+            raise ValueError('Not valid data name')
+    elif cfg['task_name'] == 's2s':
+        if cfg['data_name'] in ['fpb']:
+            pivot = -float('inf')
+            pivot_direction = 'up'
+            pivot_name = 'Accuracy'
+            for k in metric_name:
+                metric_name[k].extend(['Accuracy'])
+        else:
+            raise ValueError('Not valid data name')
     else:
-        raise ValueError('Not valid data name')
+        raise ValueError('Not valid task name')
     metric = Metric(metric_name, pivot, pivot_direction, pivot_name)
     return metric
+
+
+def Perplexity(output):
+    ppl = output.exp().item()
+    return ppl
 
 
 def Accuracy(output, target, topk=1):
@@ -41,6 +60,7 @@ class Metric(object):
         self.pivot, self.pivot_name, self.pivot_direction = pivot, pivot_name, pivot_direction
         self.metric_name = self.make_metric_name(metric_name)
         self.metric = {'Loss': (lambda input, output: output['loss'].item()),
+                       'Perplexity': (lambda input, output: recur(Perplexity, output['loss'])),
                        'Accuracy': (lambda input, output: recur(Accuracy, output['target'], input['target'])),
                        'RMSE': (lambda input, output: recur(RMSE, output['target'], input['target']))}
 
