@@ -76,7 +76,7 @@ from .utils import (
 
     create_scheduler,
     create_optimizer,
-    to_device,
+    # to_device,
     make_data_loader,
     collate,
     save_intermediate_info,

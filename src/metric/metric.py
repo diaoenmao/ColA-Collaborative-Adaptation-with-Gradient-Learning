@@ -9,6 +9,8 @@ def make_metric(metric_name):
         pivot = -float('inf')
         pivot_direction = 'up'
         pivot_name = 'Accuracy'
+        for k in metric_name:
+            metric_name[k].extend(['Accuracy'])
     if cfg['task_name'] == 'clm':
         if cfg['data_name'] in ['raft']:
             pivot = float('inf')
@@ -25,6 +27,15 @@ def make_metric(metric_name):
             pivot_name = 'Accuracy'
             for k in metric_name:
                 metric_name[k].extend(['Accuracy'])
+        else:
+            raise ValueError('Not valid data name')
+    elif cfg['task_name'] == 'sc':
+        if cfg['data_name'] in ['glue']:
+            pivot = float('inf')
+            pivot_direction = 'down'
+            pivot_name = 'Loss'
+            # for k in metric_name:
+            #     metric_name[k].extend(['Rouge'])
         else:
             raise ValueError('Not valid data name')
     else:

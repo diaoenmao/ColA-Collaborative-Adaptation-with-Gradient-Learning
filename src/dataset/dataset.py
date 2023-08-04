@@ -2,6 +2,7 @@ import dataset
 import numpy as np
 import os
 import torch
+from functools import partial
 from datasets import load_dataset
 from torchvision import transforms
 from torch.utils.data import DataLoader
@@ -73,6 +74,10 @@ def make_dataset(data_name, verbose=True):
             batched=True,
             num_proc=1,
         )
+    elif data_name in ['glue']:
+        dataset_ = load_dataset(cfg['hf_data_name'], cfg['hf_subset_name'], cache_dir=root)
+        dataset_['test'] = dataset_['validation']
+        del dataset_['validation']
     else:
         raise ValueError('Not valid dataset name')
     if verbose:
@@ -84,18 +89,24 @@ def input_collate(batch):
     return {key: [b[key] for b in batch] for key in batch[0]}
 
 
-def make_data_collate(collate_mode):
+def pad_collate(batch, tokenizer):
+    return tokenizer.pad(batch, padding="longest", return_tensors="pt")
+
+
+def make_data_collate(collate_mode, tokenizer):
     if collate_mode == 'dict':
         return input_collate
     elif collate_mode == 'default':
         return default_collate
     elif collate_mode == 'transformer':
         return default_data_collator
+    elif collate_mode == 'pad':
+        return partial(pad_collate, tokenizer=tokenizer)
     else:
         raise ValueError('Not valid collate mode')
 
 
-def make_data_loader(dataset, tag, batch_size=None, shuffle=None, sampler=None):
+def make_data_loader(dataset, tokenizer, tag, batch_size=None, shuffle=None, sampler=None):
     data_loader = {}
     cfg['num_steps'] = {}
     for k in dataset:
@@ -104,12 +115,12 @@ def make_data_loader(dataset, tag, batch_size=None, shuffle=None, sampler=None):
         if sampler is None:
             data_loader[k] = DataLoader(dataset=dataset[k], batch_size=_batch_size, shuffle=_shuffle,
                                         pin_memory=cfg['pin_memory'], num_workers=cfg['num_workers'],
-                                        collate_fn=make_data_collate(cfg['collate_mode']),
+                                        collate_fn=make_data_collate(cfg['collate_mode'], tokenizer),
                                         worker_init_fn=np.random.seed(cfg['seed']))
         else:
             data_loader[k] = DataLoader(dataset=dataset[k], batch_size=_batch_size, sampler=sampler[k],
                                         pin_memory=cfg['pin_memory'], num_workers=cfg['num_workers'],
-                                        collate_fn=make_data_collate(cfg['collate_mode']),
+                                        collate_fn=make_data_collate(cfg['collate_mode'], tokenizer),
                                         worker_init_fn=np.random.seed(cfg['seed']))
         cfg['num_steps'][k] = len(data_loader[k])
     return data_loader
@@ -124,8 +135,9 @@ def collate(input):
 def process_dataset(dataset, tokenizer):
     text_column = cfg['text_column']
     label_column = cfg['label_column']
-    max_length = cfg[cfg['model_name']]['max_length']
     if cfg['data_name'] == 'fpb':
+        max_length = cfg[cfg['model_name']]['max_length']
+
         def preprocess_function(examples):
             inputs = examples[text_column]
             targets = examples[label_column]
@@ -146,6 +158,8 @@ def process_dataset(dataset, tokenizer):
             desc="Running tokenizer on dataset",
         )
     elif cfg['data_name'] == 'raft':
+        max_length = cfg[cfg['model_name']]['max_length']
+
         def preprocess_function(examples):
             batch_size = len(examples[text_column[0]])
             inputs = [(f"{' '.join([f'{col}: {examples[col][i]}' for col in text_column])} "
@@ -181,8 +195,23 @@ def process_dataset(dataset, tokenizer):
             load_from_cache_file=False,
             desc="Running tokenizer on dataset",
         )
+    elif cfg['data_name'] == 'glue':
+        def tokenize_function(examples):
+            # max_length=None => use the model max length (it's actually the default)
+            text_inputs = [examples[k] for k in cfg['text_column']]
+            model_inputs = tokenizer(*text_inputs, truncation=True, max_length=None)
+            model_inputs["labels"] = examples["label"]
+            return model_inputs
+
+        processed_dataset = dataset.map(
+            tokenize_function,
+            batched=True,
+            remove_columns=dataset["train"].column_names,
+            load_from_cache_file=False,
+            desc="Running tokenizer on dataset",
+        )
     else:
         raise ValueError('Not valid data name')
-    cfg['data_size'] = {'train': len(processed_dataset['train']), 'test': len(processed_dataset['test'])}
+    cfg['data_size'] = {k: len(processed_dataset[k]) for k in processed_dataset}
     cfg['target_size'] = len(tokenizer)
     return processed_dataset

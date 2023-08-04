@@ -45,7 +45,7 @@ from .other import (
     _freeze_boosting_model,
     create_scheduler,
     create_optimizer,
-    to_device,
+    # to_device,
     make_data_loader,
     collate,
     Metric

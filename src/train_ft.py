@@ -42,7 +42,7 @@ def runExperiment():
     dataset = make_dataset(cfg['data_name'])
     model, tokenizer = make_model(cfg['model_name'])
     dataset = process_dataset(dataset, tokenizer)
-    data_loader = make_data_loader(dataset, cfg['model_name'])
+    data_loader = make_data_loader(dataset, tokenizer, cfg['model_name'])
     metric = make_metric({'train': ['Loss'], 'test': ['Loss']})
     logger = make_logger(os.path.join('output', 'runs', 'train_{}'.format(cfg['model_tag'])))
     result = resume(os.path.join(checkpoint_path, 'model'), resume_mode=cfg['resume_mode'])
@@ -100,10 +100,10 @@ def train(data_loader, model, optimizer, scheduler, metric, logger):
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
         optimizer.step()
         scheduler.step()
-        if cfg['ft_name'] in ['adalora']:
-            model.base_model.update_and_allocate(cfg['step'])
+        # if cfg['ft_name'] in ['adalora']:
+        #     model.base_model.update_and_allocate(cfg['step'])
         optimizer.zero_grad()
-        cfg['step'] += 1
+        # cfg['step'] += 1
         evaluation = metric.evaluate(metric.metric_name['train'], input_, output_)
         logger.append(evaluation, 'train', n=input_size)
         if i % int((len(data_loader) * cfg['log_interval']) + 1) == 0:

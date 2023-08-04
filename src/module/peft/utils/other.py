@@ -141,13 +141,14 @@ def recur(fn, input, *args):
     elif input is None:
         output = None
     else:
+        print(type(input))
         raise ValueError('Not valid input type')
     return output
 
 
-def to_device(input, device):
-    output = recur(lambda x, y: x.to(y), input, device)
-    return output
+# def to_device(input, device):
+#     output = recur(lambda x, y: x.to(y), input, device)
+#     return output
 
 
 def input_collate(batch):
