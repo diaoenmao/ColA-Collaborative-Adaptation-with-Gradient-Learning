@@ -50,7 +50,7 @@ def runExperiment():
     test(data_loader['test'], model, metric, test_logger)
     result = resume(os.path.join(checkpoint_path, 'model'))
     result = {'cfg': cfg, 'epoch': cfg['epoch'], 'logger_state_dict': {'train': result['logger_state_dict'],
-                                                                     'test': test_logger.state_dict()}}
+                                                                       'test': test_logger.state_dict()}}
     save(result, os.path.join(result_path, cfg['model_tag']))
     return
 
@@ -64,8 +64,11 @@ def test(data_loader, model, metric, logger):
             output = model(**input)
             input_ = {'target': input['labels']}
             output_ = {'target': output['logits'], 'loss': output['loss']}
-            evaluation = metric.evaluate(metric.metric_name['test'], input_, output_)
+            metric.add('test', input_, output_)
+            evaluation = metric.evaluate('test', 'batch', input_, output_)
             logger.append(evaluation, 'test', input_size)
+        evaluation = metric.evaluate('test', 'full')
+        logger.append(evaluation, 'test')
         info = {'info': ['Model: {}'.format(cfg['model_tag']), 'Test Epoch: {}({:.0f}%)'.format(cfg['epoch'], 100.)]}
         logger.append(info, 'test')
         print(logger.write('test', metric.metric_name['test']))

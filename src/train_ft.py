@@ -48,7 +48,6 @@ def runExperiment():
     result = resume(os.path.join(checkpoint_path, 'model'), resume_mode=cfg['resume_mode'])
     if result is None:
         cfg['epoch'] = 1
-        cfg['step'] = 0
         model = make_ft_model(model)
         model = model.to(cfg['device'])
         model.print_trainable_parameters()
@@ -56,7 +55,6 @@ def runExperiment():
         scheduler = make_scheduler(optimizer, cfg['model_name'])
     else:
         cfg['epoch'] = result['epoch']
-        cfg['step'] = result['step']
         model = PeftModel.from_pretrained(model, os.path.join(checkpoint_path, 'adapter'), is_trainable=True)
         model = model.to(cfg['device'])
         model.print_trainable_parameters()
@@ -71,7 +69,7 @@ def runExperiment():
         cfg['epoch'] = epoch
         train(data_loader['train'], model, optimizer, scheduler, metric, logger)
         test(data_loader['test'], model, metric, logger)
-        result = {'cfg': cfg, 'epoch': cfg['epoch'] + 1, 'step': cfg['step'],
+        result = {'cfg': cfg, 'epoch': cfg['epoch'] + 1,
                   'optimizer_state_dict': optimizer.state_dict(), 'scheduler_state_dict': scheduler.state_dict(),
                   'metric_state_dict': metric.state_dict(), 'logger_state_dict': logger.state_dict()}
         save(result, os.path.join(checkpoint_path, 'model'))
@@ -100,11 +98,8 @@ def train(data_loader, model, optimizer, scheduler, metric, logger):
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
         optimizer.step()
         scheduler.step()
-        # if cfg['ft_name'] in ['adalora']:
-        #     model.base_model.update_and_allocate(cfg['step'])
         optimizer.zero_grad()
-        # cfg['step'] += 1
-        evaluation = metric.evaluate(metric.metric_name['train'], input_, output_)
+        evaluation = metric.evaluate('train', 'batch', input_, output_)
         logger.append(evaluation, 'train', n=input_size)
         if i % int((len(data_loader) * cfg['log_interval']) + 1) == 0:
             batch_time = (time.time() - start_time) / (i + 1)
@@ -130,8 +125,11 @@ def test(data_loader, model, metric, logger):
             output = model(**input)
             input_ = {'target': input['labels']}
             output_ = {'target': output['logits'], 'loss': output['loss']}
-            evaluation = metric.evaluate(metric.metric_name['test'], input_, output_)
+            metric.add('test', input_, output_)
+            evaluation = metric.evaluate('test', 'batch', input_, output_)
             logger.append(evaluation, 'test', input_size)
+        evaluation = metric.evaluate('test', 'full')
+        logger.append(evaluation, 'test')
         info = {'info': ['Model: {}'.format(cfg['model_tag']), 'Test Epoch: {}({:.0f}%)'.format(cfg['epoch'], 100.)]}
         logger.append(info, 'test')
         print(logger.write('test', metric.metric_name['test']))

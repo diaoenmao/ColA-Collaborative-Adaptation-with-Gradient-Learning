@@ -56,7 +56,7 @@ def make_data_name():
                                                     'qnli': {'subset_name': 'qnli',
                                                              'text_column': ['question', 'sentence'],
                                                              'label_column': 'label'},
-                                                    'qqp': {'subset_name': 'cola',
+                                                    'qqp': {'subset_name': 'qqp',
                                                             'text_column': ['question1', 'question2'],
                                                             'label_column': 'label'},
                                                     'rte': {'subset_name': 'rte',
