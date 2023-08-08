@@ -1,17 +1,3 @@
-# coding=utf-8
-# Copyright 2023-present the HuggingFace Inc. team.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 import math
 import re
 import os
@@ -29,7 +15,7 @@ import torch.nn.functional as F
 from torch.utils.data import Dataset
 from transformers.pytorch_utils import Conv1D
 
-from ..import_utils import is_bnb_4bit_available, is_bnb_available
+# from ..import_utils import is_bnb_4bit_available, is_bnb_available
 from ..utils import (
     COMMON_LAYERS_PATTERN,
     TRANSFORMERS_MODELS_TO_COLA_TARGET_MODULES_MAPPING,
@@ -48,9 +34,9 @@ from ..utils import (
     # to_device,
     load_gradient_boosting_models
 )
-
-if is_bnb_available():
-    import bitsandbytes as bnb
+#
+# if is_bnb_available():
+#     import bitsandbytes as bnb
 
 
 @dataclass
@@ -66,18 +52,18 @@ class ColaConfig(PeftConfig):
         fan_in_fan_out (`bool`): Set this to True if the layer to replace stores weight like (fan_in, fan_out).
         For example, gpt-2 uses `Conv1D` which stores weights like (fan_in, fan_out) and hence this should be set to `True`.:
         bias (`str`): Bias type for Cola. Can be 'none', 'all' or 'cola_only'
-        modules_to_save (`List[str]`):List of module apart from LoRA layers to be set as trainable
+        modules_to_save (`List[str]`):List of module apart from ColA layers to be set as trainable
             and saved in the final checkpoint.
         layers_to_transform (`Union[List[int],int]`):
-            The layer indexes to transform, if this argument is specified, it will apply the LoRA transformations on
-            the layer indexes that are specified in this list. If a single integer is passed, it will apply the LoRA
+            The layer indexes to transform, if this argument is specified, it will apply the ColA transformations on
+            the layer indexes that are specified in this list. If a single integer is passed, it will apply the ColA
             transformations on the layer at this index.
         layers_pattern (`str`):
             The layer pattern name, used only if `layers_to_transform` is different from `None` and if the layer
             pattern is not in the common layers pattern.
     """
 
-    r: int = field(default=8, metadata={"help": "Cola attention dimension"})
+    # r: int = field(default=8, metadata={"help": "Cola attention dimension"})
     target_modules: Optional[Union[List[str], str]] = field(
         default=None,
         metadata={
@@ -86,16 +72,16 @@ class ColaConfig(PeftConfig):
         },
     )
     cola_alpha: int = field(default=None, metadata={"help": "Cola alpha"})
-    cola_dropout: float = field(default=None, metadata={"help": "Cola dropout"})
-    fan_in_fan_out: bool = field(
-        default=False,
-        metadata={"help": "Set this to True if the layer to replace stores weight like (fan_in, fan_out)"},
-    )
+    # cola_dropout: float = field(default=None, metadata={"help": "Cola dropout"})
+    # fan_in_fan_out: bool = field(
+    #     default=False,
+    #     metadata={"help": "Set this to True if the layer to replace stores weight like (fan_in, fan_out)"},
+    # )
     bias: str = field(default="none", metadata={"help": "Bias type for Cola. Can be 'none', 'all' or 'cola_only'"})
     modules_to_save: Optional[List[str]] = field(
         default=None,
         metadata={
-            "help": "List of module apart from LoRA layers to be set as trainable and saved in the final checkpoint. "
+            "help": "List of module apart from ColA layers to be set as trainable and saved in the final checkpoint. "
                     "For example, in Sequence Classification or Token Classification tasks, "
                     "the final layer `classifier/score` are randomly initialized and as such need to be trainable and saved."
         },
@@ -146,7 +132,7 @@ class ColaModel(torch.nn.Module):
         >>> from module.peft import ColaModel, ColaConfig
 
         >>> config = ColaConfig(
-        ...     peft_type="LORA",
+        ...     peft_type="ColA",
         ...     task_type="SEQ_2_SEQ_LM",
         ...     r=8,
         ...     cola_alpha=32,
@@ -200,10 +186,10 @@ class ColaModel(torch.nn.Module):
             config = self._prepare_cola_config(config, model_config)
             self.peft_config[adapter_name] = config
         self._find_and_replace(adapter_name)
-        if len(self.peft_config) > 1 and self.peft_config[adapter_name].bias != "none":
-            raise ValueError(
-                "ColaModel supports only 1 adapter with bias. When using multiple adapters, set bias to 'none' for all adapters."
-            )
+        # if len(self.peft_config) > 1 and self.peft_config[adapter_name].bias != "none":
+        #     raise ValueError(
+        #         "ColaModel supports only 1 adapter with bias. When using multiple adapters, set bias to 'none' for all adapters."
+        #     )
         cola_config = self.peft_config[adapter_name]
         get_delta_h = cola_config.get_delta_h
         if get_delta_h == True:
@@ -217,20 +203,20 @@ class ColaModel(torch.nn.Module):
 
     def _find_and_replace(self, adapter_name):
         cola_config = self.peft_config[adapter_name]
-        loaded_in_4bit = getattr(self.model, "is_loaded_in_4bit", False)
-        loaded_in_8bit = getattr(self.model, "is_loaded_in_8bit", False)
-        if (loaded_in_4bit or loaded_in_8bit) and not is_bnb_available():
-            raise ImportError(
-                "To use Cola with 8-bit or 4-bit quantization, please install the `bitsandbytes` package. "
-                "You can install it with `pip install bitsandbytes`."
-            )
+        # loaded_in_4bit = getattr(self.model, "is_loaded_in_4bit", False)
+        # loaded_in_8bit = getattr(self.model, "is_loaded_in_8bit", False)
+        # if (loaded_in_4bit or loaded_in_8bit) and not is_bnb_available():
+        #     raise ImportError(
+        #         "To use Cola with 8-bit or 4-bit quantization, please install the `bitsandbytes` package. "
+        #         "You can install it with `pip install bitsandbytes`."
+        #     )
         is_target_modules_in_base_model = False
         kwargs = {
-            "r": cola_config.r,
+            # "r": cola_config.r,
             "cola_alpha": cola_config.cola_alpha,
-            "cola_dropout": cola_config.cola_dropout,
-            "fan_in_fan_out": cola_config.fan_in_fan_out,
-            "init_cola_weights": cola_config.init_cola_weights,
+            # "cola_dropout": cola_config.cola_dropout,
+            # "fan_in_fan_out": cola_config.fan_in_fan_out,
+            # "init_cola_weights": cola_config.init_cola_weights,
         }
         key_list = [key for key, _ in self.model.named_modules()]
         is_using_layer_indexes = getattr(cola_config, "layers_to_transform", None) is not None
@@ -273,49 +259,24 @@ class ColaModel(torch.nn.Module):
                 if isinstance(target, ColaLayer):
                     target.update_layer(
                         adapter_name,
-                        cola_config.r,
+                        # cola_config.r,
                         cola_config.cola_alpha,
-                        cola_config.cola_dropout,
-                        cola_config.init_cola_weights,
+                        # cola_config.cola_dropout,
+                        # cola_config.init_cola_weights,
                     )
                 else:
 
                     kwargs = {
-                        "r": cola_config.r,
+                        # "r": cola_config.r,
                         "cola_alpha": cola_config.cola_alpha,
-                        "cola_dropout": cola_config.cola_dropout,
-                        "fan_in_fan_out": cola_config.fan_in_fan_out,
+                        # "cola_dropout": cola_config.cola_dropout,
+                        # "fan_in_fan_out": cola_config.fan_in_fan_out,
                         "key": key,
                         "get_delta_h": cola_config.get_delta_h,
                         "init_cola_weights": cola_config.init_cola_weights,
                     }
 
-                    if loaded_in_8bit and isinstance(target, bnb.nn.Linear8bitLt):
-                        eightbit_kwargs = kwargs.copy()
-                        eightbit_kwargs.update(
-                            {
-                                "has_fp16_weights": target.state.has_fp16_weights,
-                                "memory_efficient_backward": target.state.memory_efficient_backward,
-                                "threshold": target.state.threshold,
-                                "index": target.index,
-                            }
-                        )
-                        new_module = Linear8bitLt(
-                            adapter_name, target.in_features, target.out_features, bias=bias, **eightbit_kwargs
-                        )
-                    elif loaded_in_4bit and is_bnb_4bit_available() and isinstance(target, bnb.nn.Linear4bit):
-                        fourbit_kwargs = kwargs.copy()
-                        fourbit_kwargs.update(
-                            {
-                                "compute_dtype": target.compute_dtype,
-                                "compress_statistics": target.weight.compress_statistics,
-                                "quant_type": target.weight.quant_type,
-                            }
-                        )
-                        new_module = Linear4bit(
-                            adapter_name, target.in_features, target.out_features, bias=bias, **fourbit_kwargs
-                        )
-                    elif isinstance(target, torch.nn.Embedding):
+                    if isinstance(target, torch.nn.Embedding):
                         embedding_kwargs = kwargs.copy()
                         embedding_kwargs.pop("fan_in_fan_out", None)
                         in_features, out_features = target.num_embeddings, target.embedding_dim
@@ -323,22 +284,22 @@ class ColaModel(torch.nn.Module):
                     else:
                         if isinstance(target, torch.nn.Linear):
                             in_features, out_features = target.in_features, target.out_features
-                            if kwargs["fan_in_fan_out"]:
-                                warnings.warn(
-                                    "fan_in_fan_out is set to True but the target module is `torch.nn.Linear`. "
-                                    "Setting fan_in_fan_out to False."
-                                )
-                                kwargs["fan_in_fan_out"] = cola_config.fan_in_fan_out = False
+                            # if kwargs["fan_in_fan_out"]:
+                            #     warnings.warn(
+                            #         "fan_in_fan_out is set to True but the target module is `torch.nn.Linear`. "
+                            #         "Setting fan_in_fan_out to False."
+                            #     )
+                            #     kwargs["fan_in_fan_out"] = cola_config.fan_in_fan_out = False
                         elif isinstance(target, Conv1D):
                             in_features, out_features = (
                                 target.weight.ds_shape if hasattr(target.weight, "ds_shape") else target.weight.shape
                             )
-                            if not kwargs["fan_in_fan_out"]:
-                                warnings.warn(
-                                    "fan_in_fan_out is set to False but the target module is `Conv1D`. "
-                                    "Setting fan_in_fan_out to True."
-                                )
-                                kwargs["fan_in_fan_out"] = cola_config.fan_in_fan_out = True
+                            # if not kwargs["fan_in_fan_out"]:
+                            #     warnings.warn(
+                            #         "fan_in_fan_out is set to False but the target module is `Conv1D`. "
+                            #         "Setting fan_in_fan_out to True."
+                            #     )
+                            #     kwargs["fan_in_fan_out"] = cola_config.fan_in_fan_out = True
                         else:
                             raise ValueError(
                                 f"Target module {target} is not supported. "
@@ -426,21 +387,18 @@ class ColaModel(torch.nn.Module):
     @staticmethod
     def _prepare_cola_config(peft_config, model_config):
         if peft_config.target_modules is None:
-            if model_config["model_type"] not in TRANSFORMERS_MODELS_TO_LORA_TARGET_MODULES_MAPPING:
+            if model_config["model_type"] not in TRANSFORMERS_MODELS_TO_COLA_TARGET_MODULES_MAPPING:
                 raise ValueError("Please specify `target_modules` in `peft_config`")
-            peft_config.target_modules = TRANSFORMERS_MODELS_TO_LORA_TARGET_MODULES_MAPPING[model_config["model_type"]]
+            peft_config.target_modules = TRANSFORMERS_MODELS_TO_COLA_TARGET_MODULES_MAPPING[model_config["model_type"]]
         return peft_config
 
     def merge_and_unload(self):
         r"""
-        This method merges the LoRa layers into the base model. This is needed if someone wants to use the base model
+        This method merges the ColA layers into the base model. This is needed if someone wants to use the base model
         as a standalone model.
         """
-        if getattr(self.config, "model_type", None) == "gpt2":
-            raise ValueError("GPT2 model are not supported for merging LORA layers")
-
-        if getattr(self.model, "is_loaded_in_8bit", False) or getattr(self.model, "is_loaded_in_4bit", False):
-            raise ValueError("Cannot merge LORA layers when the model is loaded in 8-bit mode")
+        # if getattr(self.config, "model_type", None) == "gpt2":
+        #     raise ValueError("GPT2 model are not supported for merging ColA layers")
 
         key_list = [key for key, _ in self.model.named_modules() if "cola" not in key]
         for key in key_list:
@@ -464,8 +422,8 @@ class ColaModel(torch.nn.Module):
         return self.model
 
     def add_weighted_adapter(self, adapters, weights, adapter_name):
-        if len({self.peft_config[adapter].r for adapter in adapters}) != 1:
-            raise ValueError("All adapters must have the same r value")
+        # if len({self.peft_config[adapter].r for adapter in adapters}) != 1:
+        #     raise ValueError("All adapters must have the same r value")
         self.peft_config[adapter_name] = self.peft_config[adapters[0]]
         self.peft_config[adapter_name].cola_alpha = self.peft_config[adapters[0]].r
         self._find_and_replace(adapter_name)
@@ -498,7 +456,7 @@ class ColaModel(torch.nn.Module):
                         target.cola_embedding_B[adapter_name].data += target.cola_embedding_B[adapter].data * weight
 
 
-# Below code is based on https://github.com/microsoft/LoRA/blob/main/colalib/layers.py
+# Below code is based on https://github.com/microsoft/ColA/blob/main/colalib/layers.py
 # and modified to work with PyTorch FSDP
 
 
@@ -731,7 +689,7 @@ class Linear(nn.Linear, ColaLayer):
             r: int = 0,
             cola_alpha: int = 1,
             cola_dropout: float = 0.0,
-            fan_in_fan_out: bool = False,
+            # fan_in_fan_out: bool = False,
             # Set this to True if the layer to replace stores weight like (fan_in, fan_out),
             key: str = None,  # key of current layer
             get_delta_h: bool = False,
@@ -744,9 +702,9 @@ class Linear(nn.Linear, ColaLayer):
         # Freezing the pre-trained weight matrix
         self.weight.requires_grad = False
 
-        self.fan_in_fan_out = fan_in_fan_out
-        if fan_in_fan_out:
-            self.weight.data = self.weight.data.T
+        # self.fan_in_fan_out = fan_in_fan_out
+        # if fan_in_fan_out:
+        #     self.weight.data = self.weight.data.T
 
         self.key = key
         self.get_delta_h = get_delta_h
@@ -768,14 +726,14 @@ class Linear(nn.Linear, ColaLayer):
         if self.merged:
             warnings.warn("Already merged. Nothing to do.")
             return
-        if self.r[self.active_adapter] > 0:
-            self.weight.data += (
-                    transpose(
-                        self.cola_B[self.active_adapter].weight @ self.cola_A[self.active_adapter].weight,
-                        self.fan_in_fan_out,
-                    )
-                    * self.scaling[self.active_adapter]
-            )
+        # if self.r[self.active_adapter] > 0:
+        #     self.weight.data += (
+        #             transpose(
+        #                 self.cola_B[self.active_adapter].weight @ self.cola_A[self.active_adapter].weight,
+        #                 self.fan_in_fan_out,
+        #             )
+        #             * self.scaling[self.active_adapter]
+        #     )
             self.merged = True
 
     def unmerge(self):
@@ -785,13 +743,13 @@ class Linear(nn.Linear, ColaLayer):
             warnings.warn("Already unmerged. Nothing to do.")
             return
         if self.r[self.active_adapter] > 0:
-            self.weight.data -= (
-                    transpose(
-                        self.cola_B[self.active_adapter].weight @ self.cola_A[self.active_adapter].weight,
-                        self.fan_in_fan_out,
-                    )
-                    * self.scaling[self.active_adapter]
-            )
+            # self.weight.data -= (
+            #         transpose(
+            #             self.cola_B[self.active_adapter].weight @ self.cola_A[self.active_adapter].weight,
+            #             self.fan_in_fan_out,
+            #         )
+            #         * self.scaling[self.active_adapter]
+            # )
             self.merged = False
 
     def forward_hook_fn(self, module, input, output):
@@ -833,7 +791,8 @@ class Linear(nn.Linear, ColaLayer):
         #     )
         # else:
         #     result = F.linear(x, transpose(self.weight, self.fan_in_fan_out), bias=self.bias)
-        result = F.linear(x, transpose(self.weight, self.fan_in_fan_out), bias=self.bias)
+        # result = F.linear(x, transpose(self.weight, self.fan_in_fan_out), bias=self.bias)
+        result = F.linear(x, self.weight, bias=self.bias)
         if self.gradient_boosting_model is not None:
             # inference mode
             result += self.gradient_boosting_model({'data': x})['target']
@@ -843,201 +802,83 @@ class Linear(nn.Linear, ColaLayer):
         return result
 
 
-class Embedding(nn.Embedding, ColaLayer):
-    # LoRA implemented in a Embedding layer
-    def __init__(
-            self,
-            adapter_name: str,
-            num_embeddings: int,
-            embedding_dim: int,
-            r: int = 0,
-            cola_alpha: int = 1,
-            cola_dropout: float = 0.0,
-            **kwargs,
-    ):
-        init_cola_weights = kwargs.pop("init_cola_weights", True)
+# class Embedding(nn.Embedding, ColaLayer):
+#     # ColA implemented in a Embedding layer
+#     def __init__(
+#             self,
+#             adapter_name: str,
+#             num_embeddings: int,
+#             embedding_dim: int,
+#             r: int = 0,
+#             cola_alpha: int = 1,
+#             cola_dropout: float = 0.0,
+#             **kwargs,
+#     ):
+#         init_cola_weights = kwargs.pop("init_cola_weights", True)
+#
+#         nn.Embedding.__init__(self, num_embeddings, embedding_dim, **kwargs)
+#         ColaLayer.__init__(self, in_features=num_embeddings, out_features=embedding_dim)
+#
+#         self.weight.requires_grad = False
+#
+#         nn.Embedding.reset_parameters(self)
+#         self.update_layer_embedding(adapter_name, r, cola_alpha, cola_dropout, init_cola_weights)
+#         self.active_adapter = adapter_name
+#
+#     def unmerge(self, mode: bool = True):
+#         if not self.merged:
+#             warnings.warn("Already unmerged. Nothing to do.")
+#             return
+#         # if self.r[self.active_adapter] > 0:
+#         #     self.weight.data -= (
+#         #             transpose(
+#         #                 self.cola_embedding_B[self.active_adapter] @ self.cola_embedding_A[self.active_adapter], True
+#         #             )
+#         #             * self.scaling[self.active_adapter]
+#         #     )
+#         #     self.merged = False
+#
+#     def merge(self):
+#         if self.merged:
+#             warnings.warn("Already merged. Nothing to do.")
+#             return
+#         # if self.r[self.active_adapter] > 0:
+#         #     self.weight.data += (
+#         #             transpose(
+#         #                 self.cola_embedding_B[self.active_adapter] @ self.cola_embedding_A[self.active_adapter], True
+#         #             )
+#         #             * self.scaling[self.active_adapter]
+#         #     )
+#         #     self.merged = True
+#
+#     def forward(self, x: torch.Tensor):
+#         if self.disable_adapters:
+#             if self.r[self.active.adapter] > 0 and self.merged:
+#                 self.weight.data -= (
+#                         transpose(
+#                             self.cola_embedding_B[self.active_adapter].weight
+#                             @ self.cola_embedding_A[self.active_adapter].weight,
+#                             True,
+#                         )
+#                         * self.scaling[self.active_adapter]
+#                 )
+#                 self.merged = False
+#             return nn.Embedding.forward(self, x)
+#
+#         elif self.r[self.active_adapter] > 0 and not self.merged:
+#             result = nn.Embedding.forward(self, x)
+#             if self.r[self.active_adapter] > 0:
+#                 after_A = F.embedding(
+#                     x,
+#                     self.cola_embedding_A[self.active_adapter].T,
+#                     self.padding_idx,
+#                     self.max_norm,
+#                     self.norm_type,
+#                     self.scale_grad_by_freq,
+#                     self.sparse,
+#                 )
+#                 result += (after_A @ self.cola_embedding_B[self.active_adapter].T) * self.scaling[self.active_adapter]
+#             return result
+#         else:
+#             return nn.Embedding.forward(self, x)
 
-        nn.Embedding.__init__(self, num_embeddings, embedding_dim, **kwargs)
-        ColaLayer.__init__(self, in_features=num_embeddings, out_features=embedding_dim)
-
-        self.weight.requires_grad = False
-
-        nn.Embedding.reset_parameters(self)
-        self.update_layer_embedding(adapter_name, r, cola_alpha, cola_dropout, init_cola_weights)
-        self.active_adapter = adapter_name
-
-    def unmerge(self, mode: bool = True):
-        if not self.merged:
-            warnings.warn("Already unmerged. Nothing to do.")
-            return
-        if self.r[self.active_adapter] > 0:
-            self.weight.data -= (
-                    transpose(
-                        self.cola_embedding_B[self.active_adapter] @ self.cola_embedding_A[self.active_adapter], True
-                    )
-                    * self.scaling[self.active_adapter]
-            )
-            self.merged = False
-
-    def merge(self):
-        if self.merged:
-            warnings.warn("Already merged. Nothing to do.")
-            return
-        if self.r[self.active_adapter] > 0:
-            self.weight.data += (
-                    transpose(
-                        self.cola_embedding_B[self.active_adapter] @ self.cola_embedding_A[self.active_adapter], True
-                    )
-                    * self.scaling[self.active_adapter]
-            )
-            self.merged = True
-
-    def forward(self, x: torch.Tensor):
-        if self.disable_adapters:
-            if self.r[self.active.adapter] > 0 and self.merged:
-                self.weight.data -= (
-                        transpose(
-                            self.cola_embedding_B[self.active_adapter].weight
-                            @ self.cola_embedding_A[self.active_adapter].weight,
-                            True,
-                        )
-                        * self.scaling[self.active_adapter]
-                )
-                self.merged = False
-            return nn.Embedding.forward(self, x)
-
-        elif self.r[self.active_adapter] > 0 and not self.merged:
-            result = nn.Embedding.forward(self, x)
-            if self.r[self.active_adapter] > 0:
-                after_A = F.embedding(
-                    x,
-                    self.cola_embedding_A[self.active_adapter].T,
-                    self.padding_idx,
-                    self.max_norm,
-                    self.norm_type,
-                    self.scale_grad_by_freq,
-                    self.sparse,
-                )
-                result += (after_A @ self.cola_embedding_B[self.active_adapter].T) * self.scaling[self.active_adapter]
-            return result
-        else:
-            return nn.Embedding.forward(self, x)
-
-
-if is_bnb_available():
-
-    class Linear8bitLt(bnb.nn.Linear8bitLt, ColaLayer):
-        # Cola implemented in a dense layer
-        def __init__(
-                self,
-                adapter_name,
-                in_features,
-                out_features,
-                r: int = 0,
-                cola_alpha: int = 1,
-                cola_dropout: float = 0.0,
-                **kwargs,
-        ):
-            bnb.nn.Linear8bitLt.__init__(
-                self,
-                in_features,
-                out_features,
-                bias=kwargs.get("bias", True),
-                has_fp16_weights=kwargs.get("has_fp16_weights", True),
-                memory_efficient_backward=kwargs.get("memory_efficient_backward", False),
-                threshold=kwargs.get("threshold", 0.0),
-                index=kwargs.get("index", None),
-            )
-            ColaLayer.__init__(self, in_features=in_features, out_features=out_features)
-
-            # Freezing the pre-trained weight matrix
-            self.weight.requires_grad = False
-            init_cola_weights = kwargs.pop("init_cola_weights", True)
-            self.update_layer(adapter_name, r, cola_alpha, cola_dropout, init_cola_weights)
-            self.active_adapter = adapter_name
-
-        def forward(self, x: torch.Tensor):
-            result = super().forward(x)
-
-            if self.disable_adapters or self.active_adapter not in self.cola_A.keys():
-                return result
-            elif self.r[self.active_adapter] > 0:
-                if not torch.is_autocast_enabled():
-                    expected_dtype = result.dtype
-
-                    if x.dtype != torch.float32:
-                        x = x.float()
-                    output = (
-                            self.cola_B[self.active_adapter](
-                                self.cola_A[self.active_adapter](self.cola_dropout[self.active_adapter](x))
-                            ).to(expected_dtype)
-                            * self.scaling[self.active_adapter]
-                    )
-                else:
-                    output = (
-                            self.cola_B[self.active_adapter](
-                                self.cola_A[self.active_adapter](self.cola_dropout[self.active_adapter](x))
-                            )
-                            * self.scaling[self.active_adapter]
-                    )
-                result += output
-            return result
-
-
-    if is_bnb_4bit_available():
-
-        class Linear4bit(bnb.nn.Linear4bit, ColaLayer):
-            # Cola implemented in a dense layer
-            def __init__(
-                    self,
-                    adapter_name,
-                    in_features,
-                    out_features,
-                    r: int = 0,
-                    cola_alpha: int = 1,
-                    cola_dropout: float = 0.0,
-                    **kwargs,
-            ):
-                bnb.nn.Linear4bit.__init__(
-                    self,
-                    in_features,
-                    out_features,
-                    bias=kwargs.get("bias", True),
-                    compute_dtype=kwargs.get("compute_dtype", torch.float32),
-                    compress_statistics=kwargs.get("compress_statistics", True),
-                    quant_type=kwargs.get("quant_type", "nf4"),
-                )
-                ColaLayer.__init__(self, in_features=in_features, out_features=out_features)
-
-                # Freezing the pre-trained weight matrix
-                self.weight.requires_grad = False
-
-                init_cola_weights = kwargs.pop("init_cola_weights", True)
-                self.update_layer(adapter_name, r, cola_alpha, cola_dropout, init_cola_weights)
-                self.active_adapter = adapter_name
-
-            def forward(self, x: torch.Tensor):
-                result = super().forward(x)
-
-                if self.disable_adapters or self.active_adapter not in self.cola_A.keys():
-                    return result
-                elif self.r[self.active_adapter] > 0:
-                    result = result.clone()
-                    if not torch.is_autocast_enabled():
-                        expected_dtype = result.dtype
-                        x = x.to(self.cola_A[self.active_adapter].weight.dtype)
-                        output = (
-                                self.cola_B[self.active_adapter](
-                                    self.cola_A[self.active_adapter](self.cola_dropout[self.active_adapter](x))
-                                ).to(expected_dtype)
-                                * self.scaling[self.active_adapter]
-                        )
-                    else:
-                        output = (
-                                self.cola_B[self.active_adapter](
-                                    self.cola_A[self.active_adapter](self.cola_dropout[self.active_adapter](x))
-                                )
-                                * self.scaling[self.active_adapter]
-                        )
-                    result += output
-                return result
