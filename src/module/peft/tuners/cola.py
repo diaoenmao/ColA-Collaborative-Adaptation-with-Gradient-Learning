@@ -15,7 +15,6 @@ import torch.nn.functional as F
 from torch.utils.data import Dataset
 from transformers.pytorch_utils import Conv1D
 
-# from ..import_utils import is_bnb_4bit_available, is_bnb_available
 from ..utils import (
     COMMON_LAYERS_PATTERN,
     TRANSFORMERS_MODELS_TO_COLA_TARGET_MODULES_MAPPING,
@@ -34,9 +33,6 @@ from ..utils import (
     # to_device,
     load_gradient_boosting_models
 )
-#
-# if is_bnb_available():
-#     import bitsandbytes as bnb
 
 
 @dataclass
@@ -63,7 +59,6 @@ class ColaConfig(PeftConfig):
             pattern is not in the common layers pattern.
     """
 
-    # r: int = field(default=8, metadata={"help": "Cola attention dimension"})
     target_modules: Optional[Union[List[str], str]] = field(
         default=None,
         metadata={
@@ -72,11 +67,6 @@ class ColaConfig(PeftConfig):
         },
     )
     cola_alpha: int = field(default=None, metadata={"help": "Cola alpha"})
-    # cola_dropout: float = field(default=None, metadata={"help": "Cola dropout"})
-    # fan_in_fan_out: bool = field(
-    #     default=False,
-    #     metadata={"help": "Set this to True if the layer to replace stores weight like (fan_in, fan_out)"},
-    # )
     bias: str = field(default="none", metadata={"help": "Bias type for Cola. Can be 'none', 'all' or 'cola_only'"})
     modules_to_save: Optional[List[str]] = field(
         default=None,
@@ -173,6 +163,8 @@ class ColaModel(torch.nn.Module):
 
     def __init__(self, model, config, adapter_name):
         super().__init__()
+        print(model)
+        exit()
         self.model = model
         self.forward = self.model.forward
         self.peft_config = config
@@ -203,13 +195,6 @@ class ColaModel(torch.nn.Module):
 
     def _find_and_replace(self, adapter_name):
         cola_config = self.peft_config[adapter_name]
-        # loaded_in_4bit = getattr(self.model, "is_loaded_in_4bit", False)
-        # loaded_in_8bit = getattr(self.model, "is_loaded_in_8bit", False)
-        # if (loaded_in_4bit or loaded_in_8bit) and not is_bnb_available():
-        #     raise ImportError(
-        #         "To use Cola with 8-bit or 4-bit quantization, please install the `bitsandbytes` package. "
-        #         "You can install it with `pip install bitsandbytes`."
-        #     )
         is_target_modules_in_base_model = False
         kwargs = {
             # "r": cola_config.r,
