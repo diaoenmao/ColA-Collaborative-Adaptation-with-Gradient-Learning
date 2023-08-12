@@ -19,7 +19,7 @@ import os
 import re
 import pickle
 import torch
-import collections
+from collections import defaultdict
 from .config import PeftType, PromptLearningConfig
 from .other import _get_submodules
 
@@ -39,7 +39,7 @@ def makedir_exist_ok(path):
     return
 
 
-def load(path, mode='torch'):
+def load(path, mode='pickle'):
     if mode == 'torch':
         return torch.load(path, map_location=lambda storage, loc: storage)
     elif mode == 'np':
@@ -51,7 +51,7 @@ def load(path, mode='torch'):
     return
 
 
-def save(input, path, mode='torch'):
+def save(input, path, mode='pickle'):
     dirname = os.path.dirname(path)
     makedir_exist_ok(dirname)
     if mode == 'torch':
@@ -109,7 +109,7 @@ def save_intermediate_info(peft_config, model, save_mode='overwrite_mode'):
 
 
 def load_intermediate_info(task_type, model_name, dataset_name):
-    intermediate_info = collections.defaultdict(dict)
+    intermediate_info = defaultdict(dict)
     for sub_path in ['inputs', 'grad_outputs']:
         path = os.path.join(task_type, model_name, dataset_name, 'intermediate_info', sub_path)
         # Iterate over the files in the directory
@@ -132,25 +132,12 @@ def save_gradient_boosting_models(peft_config, models):
     save(models, path, mode='pickle')
     return
 
-def load_gradient_boosting_models(peft_config):
-    model_name = peft_config.base_model_name_or_path
-    task_type = peft_config.task_type.value
-    dataset_name = peft_config.dataset_name
 
-    gradient_boosting_models = collections.defaultdict(list)
-    # path = os.path.join(task_type, model_name, dataset_name, 'intermediate_info', 'gradient_boosting_models')
-    path = os.path.join(task_type, model_name, dataset_name, 'intermediate_info')
-    if len(os.listdir(path)) == 0:
-        raise ValueError('No gradient boosting model found')
-    # Iterate over the files in the directory
-    for filename in os.listdir(path):
-        file_path = os.path.join(path, filename)
-        # Check if the current item is a file
-        if os.path.isfile(file_path):
-            # Load the file
-            gradient_boosting_models = load(file_path, mode='pickle')
-            break
-    return gradient_boosting_models
+def load_cola_base(peft_config):
+    cola_path = peft_config.cola_path
+    cola_fmt = peft_config.cola_fmt
+    cola = load(cola_path)
+    return cola
 
 
 def get_peft_model_state_dict(model, state_dict=None, adapter_name="default"):

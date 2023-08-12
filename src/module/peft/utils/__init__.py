@@ -42,7 +42,6 @@ from .other import (
     _freeze_adapter,
     ModulesToSaveWrapper,
     _prepare_prompt_learning_config,
-    _freeze_boosting_model,
     create_scheduler,
     create_optimizer,
     # to_device,
@@ -54,14 +53,13 @@ from .hub_utils import hub_file_exists
 # from .save_and_load import get_peft_model_state_dict, set_peft_model_state_dict
 
 from .save_and_load import (
-    check_exists,
     makedir_exist_ok,
     save,
     load,
     save_intermediate_info,
     load_intermediate_info,
     save_gradient_boosting_models,
-    load_gradient_boosting_models,
+    load_cola_base,
     get_peft_model_state_dict, 
     set_peft_model_state_dict
 )

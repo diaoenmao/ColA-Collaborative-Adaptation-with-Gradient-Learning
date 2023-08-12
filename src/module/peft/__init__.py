@@ -82,5 +82,5 @@ from .utils import (
     save_intermediate_info,
     load_intermediate_info,
     save_gradient_boosting_models,
-    load_gradient_boosting_models,
+    load_cola_base,
 )
