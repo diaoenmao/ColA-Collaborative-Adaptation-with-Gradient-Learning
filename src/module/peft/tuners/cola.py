@@ -42,7 +42,7 @@ class ColaConfig(PeftConfig):
                     "For example, ['q', 'v'] or '.*decoder.*(SelfAttention|EncDecAttention).*(q|v)$' "
         },
     )
-    cola_alpha: int = field(default=1, metadata={"help": "Cola alpha"})
+    cola_alpha: float = field(default=1., metadata={"help": "Cola alpha"})
     fan_in_fan_out: bool = field(
         default=False,
         metadata={"help": "Set this to True if the layer to replace stores weight like (fan_in, fan_out)"},
@@ -93,7 +93,6 @@ class ColaModel(torch.nn.Module):
         # transformers models have a .config attribute, whose presence is assumed later on
         if not hasattr(self, "config"):
             self.config = {"model_type": "custom"}
-        exit()
 
     def _check_quantization_dependency(self):
         loaded_in_4bit = getattr(self.model, "is_loaded_in_4bit", False)
@@ -113,10 +112,9 @@ class ColaModel(torch.nn.Module):
             config = self._prepare_cola_config(config, model_config)
             self.peft_config[adapter_name] = config
         self._find_and_replace(adapter_name)
-        mark_only_cola_as_trainable(self.model, self.peft_config[adapter_name].bias)
+        mark_only_cola_as_trainable(self.model)
         if self.peft_config[adapter_name].inference_mode:
             _freeze_adapter(self.model, adapter_name)
-        exit()
 
     def _check_target_module_exists(self, cola_config, key):
         if isinstance(cola_config.target_modules, str):
@@ -500,22 +498,11 @@ class ColaModel(torch.nn.Module):
 
 
 # had to adapt it for `cola_only` to work
-def mark_only_cola_as_trainable(model: nn.Module, bias: str = "none") -> None:
+def mark_only_cola_as_trainable(model: nn.Module) -> None:
     for n, p in model.named_parameters():
         if "cola_" not in n:
             p.requires_grad = False
-    if bias == "none":
-        return
-    elif bias == "all":
-        for n, p in model.named_parameters():
-            if "bias" in n:
-                p.requires_grad = True
-    elif bias == "cola_only":
-        for m in model.modules():
-            if isinstance(m, ColaLayer) and hasattr(m, "bias") and m.bias is not None:
-                m.bias.requires_grad = True
-    else:
-        raise NotImplementedError
+    return
 
 
 # class IntermediateInfo(Dataset):
@@ -620,151 +607,28 @@ def mark_only_cola_as_trainable(model: nn.Module, bias: str = "none") -> None:
 
 
 class ColaLayer:
-    def __init__(
-            self,
-            in_features: int,
-            out_features: int,
-    ):
-        self.r = {}
+    def __init__(self, in_features: int, out_features: int, **kwargs):
         self.cola_alpha = {}
-        self.scaling = {}
-        # self.cola_dropout = nn.ModuleDict({})
-        # self.cola_A = nn.ModuleDict({})
-        # self.cola_B = nn.ModuleDict({})
-
-        # For Embedding layer
-        # self.cola_embedding_A = nn.ParameterDict({})
-        # self.cola_embedding_B = nn.ParameterDict({})
+        self.cola_base = {}
         # Mark the weight as unmerged
         self.merged = False
         self.disable_adapters = False
         self.in_features = in_features
         self.out_features = out_features
+        self.kwargs = kwargs
 
-    def update_layer(self, adapter_name, r, cola_alpha, cola_dropout, init_cola_weights):
-        self.r[adapter_name] = r
-        self.cola_alpha[adapter_name] = cola_alpha
-        # if cola_dropout > 0.0:
-        #     cola_dropout_layer = nn.Dropout(p=cola_dropout)
-        # else:
-        #     cola_dropout_layer = nn.Identity()
-
-        # self.cola_dropout.update(nn.ModuleDict({adapter_name: cola_dropout_layer}))
-        # Actual trainable parameters
-        if r > 0:
-            # self.cola_A.update(nn.ModuleDict({adapter_name: nn.Linear(self.in_features, r, bias=False)}))
-            # self.cola_B.update(nn.ModuleDict({adapter_name: nn.Linear(r, self.out_features, bias=False)}))
-            # self.scaling[adapter_name] = cola_alpha / r
-            pass
-        # if init_cola_weights:
-        #     self.reset_cola_parameters(adapter_name)
-        self.to(self.weight.device)
-
-    def update_layer_embedding(self, adapter_name, r, cola_alpha, cola_dropout, init_cola_weights):
-        self.r[adapter_name] = r
-        self.cola_alpha[adapter_name] = cola_alpha
-        if cola_dropout > 0.0:
-            cola_dropout_layer = nn.Dropout(p=cola_dropout)
-        else:
-            cola_dropout_layer = nn.Identity()
-
-        self.cola_dropout.update(nn.ModuleDict({adapter_name: cola_dropout_layer}))
-        # Actual trainable parameters
-        if r > 0:
-            self.cola_embedding_A.update(
-                nn.ParameterDict({adapter_name: nn.Parameter(self.weight.new_zeros((r, self.in_features)))})
-            )
-            self.cola_embedding_B.update(
-                nn.ParameterDict({adapter_name: nn.Parameter(self.weight.new_zeros((self.out_features, r)))})
-            )
-            self.scaling[adapter_name] = cola_alpha / r
-        if init_cola_weights:
-            self.reset_cola_parameters(adapter_name)
-        self.to(self.weight.device)
-
-    def reset_cola_parameters(self, adapter_name):
-        if adapter_name in self.cola_A.keys():
-            # initialize A the same way as the default for nn.Linear and B to zero
-            nn.init.kaiming_uniform_(self.cola_A[adapter_name].weight, a=math.sqrt(5))
-            nn.init.zeros_(self.cola_B[adapter_name].weight)
-        if adapter_name in self.cola_embedding_A.keys():
-            # initialize a the same way as the default for nn.linear and b to zero
-            nn.init.zeros_(self.cola_embedding_A[adapter_name])
-            nn.init.normal_(self.cola_embedding_B[adapter_name])
-
-
-class Linear(nn.Linear, ColaLayer):
-    # Cola implemented in a dense layer
-    def __init__(
-            self,
-            adapter_name: str,
-            in_features: int,
-            out_features: int,
-            r: int = 0,
-            cola_alpha: int = 1,
-            cola_dropout: float = 0.0,
-            fan_in_fan_out: bool = False,
-            # Set this to True if the layer to replace stores weight like (fan_in, fan_out),
-            key: str = None,  # key of current layer
-            get_delta_h: bool = False,
-            **kwargs,
-    ):
-        init_cola_weights = kwargs.pop("init_cola_weights", True)
-
-        nn.Linear.__init__(self, in_features, out_features, **kwargs)
-        ColaLayer.__init__(self, in_features=in_features, out_features=out_features)
-        # Freezing the pre-trained weight matrix
-        self.weight.requires_grad = False
-
-        # self.fan_in_fan_out = fan_in_fan_out
-        # if fan_in_fan_out:
-        #     self.weight.data = self.weight.data.T
-
-        self.key = key
-        self.get_delta_h = get_delta_h
-        nn.Linear.reset_parameters(self)
-        self.update_layer(adapter_name, r, cola_alpha, cola_dropout, init_cola_weights)
-        self.active_adapter = adapter_name
-
-        self.gradient_boosting_model = None
         self.inputs = []
         self.grad_outputs = []
 
-        if self.get_delta_h:
+        if self.training:
             self.hook_module(self, 'forward')
             self.hook_module(self, 'backward')
 
-    def merge(self):
-        if self.active_adapter not in self.cola_A.keys():
-            return
-        if self.merged:
-            warnings.warn("Already merged. Nothing to do.")
-            return
-            # if self.r[self.active_adapter] > 0:
-            #     self.weight.data += (
-            #             transpose(
-            #                 self.cola_B[self.active_adapter].weight @ self.cola_A[self.active_adapter].weight,
-            #                 self.fan_in_fan_out,
-            #             )
-            #             * self.scaling[self.active_adapter]
-            #     )
-            self.merged = True
-
-    def unmerge(self):
-        if self.active_adapter not in self.cola_A.keys():
-            return
-        if not self.merged:
-            warnings.warn("Already unmerged. Nothing to do.")
-            return
-        if self.r[self.active_adapter] > 0:
-            # self.weight.data -= (
-            #         transpose(
-            #             self.cola_B[self.active_adapter].weight @ self.cola_A[self.active_adapter].weight,
-            #             self.fan_in_fan_out,
-            #         )
-            #         * self.scaling[self.active_adapter]
-            # )
-            self.merged = False
+    def update_layer(self, adapter_name, cola_alpha, cola_base=None):
+        self.cola_alpha[adapter_name] = cola_alpha
+        if cola_base is not None:
+            self.cola_base[adapter_name] = cola_base
+        self.to(self.weight.device)
 
     def forward_hook_fn(self, module, input, output):
         self.inputs.append(to_device(input[0].detach(), 'cpu'))
@@ -783,33 +647,87 @@ class Linear(nn.Linear, ColaLayer):
             raise ValueError('type must be forward or backward')
         return
 
+
+class Linear(nn.Linear, ColaLayer):
+    # Cola implemented in a dense layer
+    def __init__(
+            self,
+            adapter_name: str,
+            in_features: int,
+            out_features: int,
+            cola_alpha: float = 1.,
+            fan_in_fan_out: bool = False,
+            # Set this to True if the layer to replace stores weight like (fan_in, fan_out),
+            key: str = None,  # key of current layer
+            **kwargs,
+    ):
+        nn.Linear.__init__(self, in_features, out_features, **kwargs)
+        ColaLayer.__init__(self, in_features=in_features, out_features=out_features)
+        # Freezing the pre-trained weight matrix
+        self.weight.requires_grad = False
+
+        self.fan_in_fan_out = fan_in_fan_out
+        if fan_in_fan_out:
+            self.weight.data = self.weight.data.T
+
+        nn.Linear.reset_parameters(self)
+        self.update_layer(adapter_name, cola_alpha)
+        self.active_adapter = adapter_name
+
+    def merge(self):
+        # if self.active_adapter:
+        #     return
+        # if self.merged:
+        #     warnings.warn("Already merged. Nothing to do.")
+        #     return
+        # if self.r[self.active_adapter] > 0:
+        #     self.weight.data += self.get_delta_weight(self.active_adapter)
+        #     self.merged = True
+        # TODO: need implementation
+        pass
+
+    def unmerge(self):
+        # if self.active_adapter not in self.lora_A.keys():
+        #     return
+        # if not self.merged:
+        #     warnings.warn("Already unmerged. Nothing to do.")
+        #     return
+        # if self.r[self.active_adapter] > 0:
+        #     self.weight.data -= self.get_delta_weight(self.active_adapter)
+        #     self.merged = False
+        # TODO: need implementation
+        pass
+
+    def get_delta_weight(self, adapter):
+        # return (
+        #         transpose(
+        #             self.lora_B[adapter].weight @ self.lora_A[adapter].weight,
+        #             self.fan_in_fan_out,
+        #         )
+        #         * self.scaling[adapter]
+        # )
+        # TODO: need implementation
+        pass
+
     def forward(self, x: torch.Tensor):
         previous_dtype = x.dtype
+        if self.active_adapter not in self.cola_base.keys():
+            return F.linear(x, transpose(self.weight, self.fan_in_fan_out), bias=self.bias)
+        if self.disable_adapters:
+            if self.merged:
+                self.unmerge()
+            result = F.linear(x, transpose(self.weight, self.fan_in_fan_out), bias=self.bias)
+        elif not self.merged:
+            result = F.linear(x, transpose(self.weight, self.fan_in_fan_out), bias=self.bias)
 
-        # if self.active_adapter not in self.cola_A.keys():
-        #     return F.linear(x, transpose(self.weight, self.fan_in_fan_out), bias=self.bias)
-        # if self.disable_adapters:
-        #     if self.r[self.active_adapter] > 0 and self.merged:
-        #         self.unmerge()
-        #     result = F.linear(x, transpose(self.weight, self.fan_in_fan_out), bias=self.bias)
-        # elif self.r[self.active_adapter] > 0 and not self.merged:
-        #     result = F.linear(x, transpose(self.weight, self.fan_in_fan_out), bias=self.bias)
+            x = x.to(self.cola_base[self.active_adapter]['dtype'])
 
-        #     x = x.to(self.cola_A[self.active_adapter].weight.dtype)
-
-        #     result += (
-        #         self.cola_B[self.active_adapter](
-        #             self.cola_A[self.active_adapter](self.cola_dropout[self.active_adapter](x))
-        #         )
-        #         * self.scaling[self.active_adapter]
-        #     )
-        # else:
-        #     result = F.linear(x, transpose(self.weight, self.fan_in_fan_out), bias=self.bias)
-        # result = F.linear(x, transpose(self.weight, self.fan_in_fan_out), bias=self.bias)
-        result = F.linear(x, self.weight, bias=self.bias)
-        if self.gradient_boosting_model is not None:
-            # inference mode
-            result += self.gradient_boosting_model({'data': x})['target']
+            result += (
+                    self.cola_base[self.active_adapter]['model'](x)
+                    * self.cola_alpha[self.active_adapter]
+            )
+        else:
+            result = F.linear(x, transpose(self.weight, self.fan_in_fan_out), bias=self.bias)
 
         result = result.to(previous_dtype)
 
@@ -823,75 +741,45 @@ class Embedding(nn.Embedding, ColaLayer):
             adapter_name: str,
             num_embeddings: int,
             embedding_dim: int,
-            r: int = 0,
-            cola_alpha: int = 1,
-            cola_dropout: float = 0.0,
+            cola_alpha: float = 1.,
             **kwargs,
     ):
-        init_cola_weights = kwargs.pop("init_cola_weights", True)
-
         nn.Embedding.__init__(self, num_embeddings, embedding_dim, **kwargs)
         ColaLayer.__init__(self, in_features=num_embeddings, out_features=embedding_dim)
 
         self.weight.requires_grad = False
 
         nn.Embedding.reset_parameters(self)
-        self.update_layer_embedding(adapter_name, r, cola_alpha, cola_dropout, init_cola_weights)
+        self.update_layer(adapter_name, cola_alpha)
         self.active_adapter = adapter_name
 
-    def unmerge(self, mode: bool = True):
-        if not self.merged:
-            warnings.warn("Already unmerged. Nothing to do.")
-            return
-        # if self.r[self.active_adapter] > 0:
-        #     self.weight.data -= (
-        #             transpose(
-        #                 self.cola_embedding_B[self.active_adapter] @ self.cola_embedding_A[self.active_adapter], True
-        #             )
-        #             * self.scaling[self.active_adapter]
-        #     )
-        #     self.merged = False
-
-    def merge(self):
-        if self.merged:
-            warnings.warn("Already merged. Nothing to do.")
-            return
-        # if self.r[self.active_adapter] > 0:
-        #     self.weight.data += (
-        #             transpose(
-        #                 self.cola_embedding_B[self.active_adapter] @ self.cola_embedding_A[self.active_adapter], True
-        #             )
-        #             * self.scaling[self.active_adapter]
-        #     )
-        #     self.merged = True
+    # def unmerge(self):
+    #     if not self.merged:
+    #         warnings.warn("Already unmerged. Nothing to do.")
+    #         return
+    #     if self.r[self.active_adapter] > 0:
+    #         self.weight.data -= self.get_delta_weight(self.active_adapter)
+    #         self.merged = False
+    #
+    # def merge(self):
+    #     if self.merged:
+    #         warnings.warn("Already merged. Nothing to do.")
+    #         return
+    #     if self.r[self.active_adapter] > 0:
+    #         self.weight.data += self.get_delta_weight(self.active_adapter)
+    #         self.merged = True
+    #
+    # def get_delta_weight(self, adapter):
+    #     return transpose(self.lora_embedding_B[adapter] @ self.lora_embedding_A[adapter], True) * self.scaling[adapter]
 
     def forward(self, x: torch.Tensor):
         if self.disable_adapters:
-            if self.r[self.active.adapter] > 0 and self.merged:
-                self.weight.data -= (
-                        transpose(
-                            self.cola_embedding_B[self.active_adapter].weight
-                            @ self.cola_embedding_A[self.active_adapter].weight,
-                            True,
-                        )
-                        * self.scaling[self.active_adapter]
-                )
-                self.merged = False
+            if self.merged:
+                self.unmerge()
             return nn.Embedding.forward(self, x)
-
-        elif self.r[self.active_adapter] > 0 and not self.merged:
+        elif not self.merged:
             result = nn.Embedding.forward(self, x)
-            if self.r[self.active_adapter] > 0:
-                after_A = F.embedding(
-                    x,
-                    self.cola_embedding_A[self.active_adapter].T,
-                    self.padding_idx,
-                    self.max_norm,
-                    self.norm_type,
-                    self.scale_grad_by_freq,
-                    self.sparse,
-                )
-                result += (after_A @ self.cola_embedding_B[self.active_adapter].T) * self.scaling[self.active_adapter]
+            result += self.cola_base[self.active_adapter] * self.cola_alpha[self.active_adapter]
             return result
         else:
             return nn.Embedding.forward(self, x)
@@ -907,15 +795,11 @@ class Conv2d(nn.Conv2d, ColaLayer):
             kernel_size: Union[int, Tuple[int]],
             stride: Union[int, Tuple[int]] = 1,
             padding: Union[int, Tuple[int]] = 0,
-            r: int = 0,
-            lora_alpha: int = 1,
-            lora_dropout: float = 0.0,
+            cola_alpha: float = 1.,
             **kwargs,
     ):
-        init_lora_weights = kwargs.pop("init_lora_weights", True)
-
         nn.Conv2d.__init__(self, in_channels, out_channels, kernel_size, stride, padding)
-        LoraLayer.__init__(
+        ColaLayer.__init__(
             self,
             in_features=in_channels,
             out_features=out_channels,
@@ -927,51 +811,51 @@ class Conv2d(nn.Conv2d, ColaLayer):
         self.weight.requires_grad = False
 
         nn.Conv2d.reset_parameters(self)
-        self.update_layer_conv2d(adapter_name, r, lora_alpha, lora_dropout, init_lora_weights)
+        self.update_layer(adapter_name, cola_alpha)
         self.active_adapter = adapter_name
 
-    def merge(self):
-        if self.active_adapter not in self.lora_A.keys():
-            return
-        if self.merged:
-            warnings.warn("Already merged. Nothing to do.")
-            return
-        if self.r[self.active_adapter] > 0:
-            self.weight.data += self.get_delta_weight(self.active_adapter)
-            self.merged = True
-
-    def unmerge(self):
-        if self.active_adapter not in self.lora_A.keys():
-            return
-        if not self.merged:
-            warnings.warn("Already unmerged. Nothing to do.")
-            return
-        if self.r[self.active_adapter] > 0:
-            self.weight.data -= self.get_delta_weight(self.active_adapter)
-            self.merged = False
-
-    def get_delta_weight(self, adapter):
-        # https://github.com/bmaltais/kohya_ss/blob/feb6728762a8f463d15ba936d189d4c3abfaa1ab/networks/lora.py#L117
-        if self.weight.size()[2:4] == (1, 1):
-            # conv2d 1x1
-            return (
-                    self.lora_B[adapter].weight.squeeze(3).squeeze(2) @ self.lora_A[adapter].weight.squeeze(3).squeeze(
-                2)
-            ).unsqueeze(2).unsqueeze(3) * self.scaling[adapter]
-        else:
-            # conv2d 3x3
-            return (
-                    F.conv2d(
-                        self.lora_A[adapter].weight.permute(1, 0, 2, 3),
-                        self.lora_B[adapter].weight,
-                    ).permute(1, 0, 2, 3)
-                    * self.scaling[adapter]
-            )
+    # def merge(self):
+    #     if self.active_adapter not in self.lora_A.keys():
+    #         return
+    #     if self.merged:
+    #         warnings.warn("Already merged. Nothing to do.")
+    #         return
+    #     if self.r[self.active_adapter] > 0:
+    #         self.weight.data += self.get_delta_weight(self.active_adapter)
+    #         self.merged = True
+    #
+    # def unmerge(self):
+    #     if self.active_adapter not in self.lora_A.keys():
+    #         return
+    #     if not self.merged:
+    #         warnings.warn("Already unmerged. Nothing to do.")
+    #         return
+    #     if self.r[self.active_adapter] > 0:
+    #         self.weight.data -= self.get_delta_weight(self.active_adapter)
+    #         self.merged = False
+    #
+    # def get_delta_weight(self, adapter):
+    #     # https://github.com/bmaltais/kohya_ss/blob/feb6728762a8f463d15ba936d189d4c3abfaa1ab/networks/lora.py#L117
+    #     if self.weight.size()[2:4] == (1, 1):
+    #         # conv2d 1x1
+    #         return (
+    #                 self.lora_B[adapter].weight.squeeze(3).squeeze(2) @ self.lora_A[adapter].weight.squeeze(3).squeeze(
+    #             2)
+    #         ).unsqueeze(2).unsqueeze(3) * self.scaling[adapter]
+    #     else:
+    #         # conv2d 3x3
+    #         return (
+    #                 F.conv2d(
+    #                     self.lora_A[adapter].weight.permute(1, 0, 2, 3),
+    #                     self.lora_B[adapter].weight,
+    #                 ).permute(1, 0, 2, 3)
+    #                 * self.scaling[adapter]
+    #         )
 
     def forward(self, x: torch.Tensor):
         previous_dtype = x.dtype
 
-        if self.active_adapter not in self.lora_A.keys():
+        if self.active_adapter not in self.cola_base.keys():
             return F.conv2d(
                 x,
                 self.weight,
@@ -982,7 +866,7 @@ class Conv2d(nn.Conv2d, ColaLayer):
                 groups=self.groups,
             )
         if self.disable_adapters:
-            if self.r[self.active_adapter] > 0 and self.merged:
+            if self.merged:
                 self.unmerge()
             result = F.conv2d(
                 x,
@@ -993,7 +877,7 @@ class Conv2d(nn.Conv2d, ColaLayer):
                 dilation=self.dilation,
                 groups=self.groups,
             )
-        elif self.r[self.active_adapter] > 0 and not self.merged:
+        elif not self.merged:
             result = F.conv2d(
                 x,
                 self.weight,
@@ -1004,13 +888,11 @@ class Conv2d(nn.Conv2d, ColaLayer):
                 groups=self.groups,
             )
 
-            x = x.to(self.lora_A[self.active_adapter].weight.dtype)
+            x = x.to(self.cola_base[self.active_adapter]['dtype'])
 
             result += (
-                    self.lora_B[self.active_adapter](
-                        self.lora_A[self.active_adapter](self.lora_dropout[self.active_adapter](x))
-                    )
-                    * self.scaling[self.active_adapter]
+                    self.cola_base[self.active_adapter]['model'](x)
+                    * self.cola_alpha[self.active_adapter]
             )
         else:
             result = F.conv2d(
@@ -1037,9 +919,7 @@ if is_bnb_available():
                 adapter_name,
                 in_features,
                 out_features,
-                r: int = 0,
-                lora_alpha: int = 1,
-                lora_dropout: float = 0.0,
+                cola_alpha: float = 1.,
                 **kwargs,
         ):
             bnb.nn.Linear8bitLt.__init__(
@@ -1052,37 +932,32 @@ if is_bnb_available():
                 threshold=kwargs.get("threshold", 0.0),
                 index=kwargs.get("index", None),
             )
-            LoraLayer.__init__(self, in_features=in_features, out_features=out_features)
+            ColaLayer.__init__(self, in_features=in_features, out_features=out_features)
 
             # Freezing the pre-trained weight matrix
             self.weight.requires_grad = False
-            init_lora_weights = kwargs.pop("init_lora_weights", True)
-            self.update_layer(adapter_name, r, lora_alpha, lora_dropout, init_lora_weights)
+            self.update_layer(adapter_name, cola_alpha)
             self.active_adapter = adapter_name
 
         def forward(self, x: torch.Tensor):
             result = super().forward(x)
 
-            if self.disable_adapters or self.active_adapter not in self.lora_A.keys():
+            if self.disable_adapters or self.active_adapter not in self.cola_base.keys():
                 return result
-            elif self.r[self.active_adapter] > 0:
+            else:
                 if not torch.is_autocast_enabled():
                     expected_dtype = result.dtype
 
                     if x.dtype != torch.float32:
                         x = x.float()
                     output = (
-                            self.lora_B[self.active_adapter](
-                                self.lora_A[self.active_adapter](self.lora_dropout[self.active_adapter](x))
-                            ).to(expected_dtype)
-                            * self.scaling[self.active_adapter]
+                            self.cola_base[self.active_adapter]['model'](x).to(expected_dtype)
+                            * self.cola_alpha[self.active_adapter]
                     )
                 else:
                     output = (
-                            self.lora_B[self.active_adapter](
-                                self.lora_A[self.active_adapter](self.lora_dropout[self.active_adapter](x))
-                            )
-                            * self.scaling[self.active_adapter]
+                            self.cola_base[self.active_adapter]['model'](x)
+                            * self.cola_alpha[self.active_adapter]
                     )
                 result += output
             return result
@@ -1097,9 +972,7 @@ if is_bnb_available():
                     adapter_name,
                     in_features,
                     out_features,
-                    r: int = 0,
-                    lora_alpha: int = 1,
-                    lora_dropout: float = 0.0,
+                    cola_alpha: float = 1.,
                     **kwargs,
             ):
                 bnb.nn.Linear4bit.__init__(
@@ -1111,37 +984,32 @@ if is_bnb_available():
                     compress_statistics=kwargs.get("compress_statistics", True),
                     quant_type=kwargs.get("quant_type", "nf4"),
                 )
-                LoraLayer.__init__(self, in_features=in_features, out_features=out_features)
+                ColaLayer.__init__(self, in_features=in_features, out_features=out_features)
 
                 # Freezing the pre-trained weight matrix
                 self.weight.requires_grad = False
 
-                init_lora_weights = kwargs.pop("init_lora_weights", True)
-                self.update_layer(adapter_name, r, lora_alpha, lora_dropout, init_lora_weights)
+                self.update_layer(adapter_name, cola_alpha)
                 self.active_adapter = adapter_name
 
             def forward(self, x: torch.Tensor):
                 result = super().forward(x)
 
-                if self.disable_adapters or self.active_adapter not in self.lora_A.keys():
+                if self.disable_adapters or self.active_adapter not in self.cola_base.keys():
                     return result
-                elif self.r[self.active_adapter] > 0:
+                else:
                     result = result.clone()
                     if not torch.is_autocast_enabled():
                         expected_dtype = result.dtype
-                        x = x.to(self.lora_A[self.active_adapter].weight.dtype)
+                        x = x.to(self.cola_base[self.active_adapter].weight.dtype)
                         output = (
-                                self.lora_B[self.active_adapter](
-                                    self.lora_A[self.active_adapter](self.lora_dropout[self.active_adapter](x))
-                                ).to(expected_dtype)
-                                * self.scaling[self.active_adapter]
+                                self.cola_base[self.active_adapter]['model'](x).to(expected_dtype)
+                                * self.cola_alpha[self.active_adapter]
                         )
                     else:
                         output = (
-                                self.lora_B[self.active_adapter](
-                                    self.lora_A[self.active_adapter](self.lora_dropout[self.active_adapter](x))
-                                )
-                                * self.scaling[self.active_adapter]
+                                self.cola_base[self.active_adapter]['model'](x)
+                                * self.cola_alpha[self.active_adapter]
                         )
                     result += output
                 return result
