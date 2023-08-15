@@ -25,7 +25,6 @@ from ..utils import (
     _freeze_adapter,
     _get_submodules,
     transpose,
-    load_intermediate_info,
     load_cola_base
 )
 

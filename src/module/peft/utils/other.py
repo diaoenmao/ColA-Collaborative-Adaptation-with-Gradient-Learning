@@ -22,187 +22,7 @@ import torch
 from accelerate.hooks import add_hook_to_module, remove_hook_from_module
 
 import numpy as np
-import torch.optim as optim
-from torch.utils.data import DataLoader
-from torch.utils.data.dataloader import default_collate
-import torch.nn.functional as F
 
-def MAD(output, target):
-    with torch.no_grad():
-        mad = F.l1_loss(output, target).item()
-    return mad
-
-
-class Metric(object):
-    def __init__(self, metric_name):
-        self.metric_name = self.make_metric_name(metric_name)
-        self.pivot, self.pivot_name, self.pivot_direction = self.make_pivot()
-        self.metric = {'Loss': (lambda input, output: output['loss'].item()),
-                       'MAD': (lambda input, output: recur(MAD, output['target'], input['target'])),
-                       }
-
-    def make_metric_name(self, metric_name):
-        return metric_name
-
-    def make_pivot(self):
-        # if cfg['data_name'] in ['CIFAR10', 'CIFAR100', 'FEMNIST', 'SVHN', 'STL10', 'MNIST']:
-        if True:
-            pivot = -float('inf')
-            pivot_direction = 'up'
-            pivot_name = 'Accuracy'
-        else:
-            raise ValueError('Not valid data name')
-        return pivot, pivot_name, pivot_direction
-
-    def evaluate(self, metric_names, input, output):
-        evaluation = {}
-        for metric_name in metric_names:
-            evaluation[metric_name] = self.metric[metric_name](input, output)
-        return evaluation
-
-    def compare(self, val):
-        if self.pivot_direction == 'down':
-            compared = self.pivot > val
-        elif self.pivot_direction == 'up':
-            compared = self.pivot < val
-        else:
-            raise ValueError('Not valid pivot direction')
-        return compared
-
-    def update(self, val):
-        self.pivot = val
-        return
-
-
-def create_optimizer(
-        model, cfg
-):
-    # print('optimizer ratio:', ratio)
-    if cfg['optimizer_name'] == 'SGD':
-        optimizer = optim.SGD(model.parameters(), lr=cfg['lr'], momentum=cfg['momentum'],
-                              weight_decay=cfg['weight_decay'], nesterov=cfg['nesterov'])
-    elif cfg['optimizer_name'] == 'Adam':
-        optimizer = optim.Adam(model.parameters(), lr=cfg['lr'], betas=cfg['betas'],
-                               weight_decay=cfg['weight_decay'])
-    elif cfg['optimizer_name'] == 'LBFGS':
-        optimizer = optim.LBFGS(model.parameters(), lr=cfg['lr'])
-    else:
-        raise ValueError('Not valid optimizer name')
-    return optimizer
-
-
-def create_scheduler(
-        optimizer, cfg
-):
-    if cfg['scheduler_name'] == 'None':
-        scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[65535])
-    elif cfg['scheduler_name'] == 'StepLR':
-        scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=cfg['step_size'], gamma=cfg['factor'])
-    elif cfg['scheduler_name'] == 'MultiStepLR':
-        scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=cfg['milestones'],
-                                                   gamma=cfg['factor'])
-    elif cfg['scheduler_name'] == 'ExponentialLR':
-        scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.99)
-    elif cfg['scheduler_name'] == 'CosineAnnealingLR':
-        scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cfg['num_epochs'], eta_min=1e-4)
-    elif cfg['scheduler_name'] == 'ReduceLROnPlateau':
-        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=cfg['factor'],
-                                                         patience=cfg['patience'], verbose=False,
-                                                         threshold=cfg['threshold'], threshold_mode='rel',
-                                                         min_lr=cfg['min_lr'])
-    elif cfg['scheduler_name'] == 'CyclicLR':
-        scheduler = optim.lr_scheduler.CyclicLR(optimizer, base_lr=cfg['lr'], max_lr=10 * cfg['lr'])
-    else:
-        raise ValueError('Not valid scheduler name')
-    return scheduler
-
-
-def recur(fn, input, *args):
-    if isinstance(input, torch.Tensor) or isinstance(input, np.ndarray):
-        output = fn(input, *args)
-    elif isinstance(input, list):
-        output = []
-        for i in range(len(input)):
-            output.append(recur(fn, input[i], *args))
-    elif isinstance(input, tuple):
-        output = []
-        for i in range(len(input)):
-            output.append(recur(fn, input[i], *args))
-        output = tuple(output)
-    elif isinstance(input, dict):
-        output = {}
-        for key in input:
-            output[key] = recur(fn, input[key], *args)
-    elif isinstance(input, str):
-        output = input
-    elif input is None:
-        output = None
-    else:
-        print(type(input))
-        raise ValueError('Not valid input type')
-    return output
-
-
-# def to_device(input, device):
-#     output = recur(lambda x, y: x.to(y), input, device)
-#     return output
-
-
-def input_collate(batch):
-    a = batch
-    if isinstance(batch[0], dict):
-        output = {key: [] for key in batch[0].keys()}
-        for b in batch:
-            for key in b:
-                output[key].append(b[key])
-        b = output
-        return output
-    else:
-        return default_collate(batch)
-
-
-def make_data_loader(dataset, cfg, batch_size=None, shuffle=None, sampler=None, batch_sampler=None):
-    data_loader = {}
-    for k in dataset:
-        _batch_size = cfg['batch_size'][k] if batch_size is None else batch_size[k]
-        _shuffle = cfg['shuffle'][k] if shuffle is None else shuffle[k]
-        if sampler is not None:
-            data_loader[k] = DataLoader(
-                dataset=dataset[k],
-                batch_size=_batch_size,
-                sampler=sampler[k],
-                pin_memory=cfg['pin_memory'],
-                num_workers=cfg['num_workers'],
-                collate_fn=input_collate,
-                worker_init_fn=np.random.seed(cfg['seed'])
-            )
-        elif batch_sampler is not None:
-            data_loader[k] = DataLoader(
-                dataset=dataset[k],
-                batch_sampler=batch_sampler[k],
-                pin_memory=cfg['pin_memory'],
-                num_workers=cfg['num_workers'],
-                collate_fn=input_collate,
-                worker_init_fn=np.random.seed(cfg['seed'])
-            )
-        else:
-            data_loader[k] = DataLoader(
-                dataset=dataset[k],
-                batch_size=_batch_size,
-                shuffle=_shuffle,
-                pin_memory=cfg['pin_memory'],
-                num_workers=cfg['num_workers'],
-                collate_fn=input_collate,
-                worker_init_fn=np.random.seed(cfg['seed'])
-            )
-
-    return data_loader
-
-
-def collate(input):
-    for k in input:
-        input[k] = torch.stack(input[k], 0)
-    return input
 
 # Add or edit model card to have `library_name: peft`
 def add_library_to_model_card(output_dir):
@@ -237,7 +57,7 @@ def bloom_model_postprocess_past_key_value(past_key_values):
     keys = keys.transpose(2, 3).reshape(
         total_layers // 2, batch_size * num_attention_heads, head_dim, num_virtual_tokens
     )
-    values = past_key_values[total_layers // 2 :]
+    values = past_key_values[total_layers // 2:]
     values = values.reshape(total_layers // 2, batch_size * num_attention_heads, num_virtual_tokens, head_dim)
 
     return tuple(zip(keys, values))
@@ -436,9 +256,9 @@ def fsdp_auto_wrap_policy(model):
 
     def lambda_policy_fn(module):
         if (
-            len(list(module.named_children())) == 0
-            and getattr(module, "weight", None) is not None
-            and module.weight.requires_grad
+                len(list(module.named_children())) == 0
+                and getattr(module, "weight", None) is not None
+                and module.weight.requires_grad
         ):
             return True
         return False
