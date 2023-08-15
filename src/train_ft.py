@@ -43,9 +43,9 @@ def runExperiment():
     model, tokenizer = make_model(cfg['model_name'])
     dataset = process_dataset(dataset, tokenizer)
     data_loader = make_data_loader(dataset, tokenizer, cfg['model_name'])
+    result = resume(os.path.join(checkpoint_path, 'model'), resume_mode=cfg['resume_mode'])
     metric = make_metric({'train': ['Loss'], 'test': ['Loss']})
     logger = make_logger(os.path.join('output', 'runs', 'train_{}'.format(cfg['model_tag'])))
-    result = resume(os.path.join(checkpoint_path, 'model'), resume_mode=cfg['resume_mode'])
     if result is None:
         cfg['epoch'] = 1
         model = make_ft_model(model)
@@ -68,6 +68,7 @@ def runExperiment():
     for epoch in range(cfg['epoch'], cfg[cfg['model_name']]['num_epochs'] + 1):
         cfg['epoch'] = epoch
         if cfg['ft_name'] == 'cola':
+            gradient = make_gradient(dataset, tokenizer, model)
             train_cola(data_loader['train'], model, optimizer, scheduler, metric, logger)
         else:
             train(data_loader['train'], model, optimizer, scheduler, metric, logger)
@@ -118,6 +119,21 @@ def train(data_loader, model, optimizer, scheduler, metric, logger):
             print(logger.write('train', metric.metric_name['train']))
     return
 
+
+def make_gradient(dataset, tokenizer, model):
+    model.train(True)
+    data_loader = make_data_loader(dataset, tokenizer, cfg['model_name'], shuffle={'train': False, 'test': False})
+    for i, input in enumerate(data_loader['train']):
+        input = to_device(input, cfg['device'])
+        output = model(**input)
+        output['loss'].backward()
+        input, gradient = model.flush()
+        print(input)
+        print(gradient)
+        exit()
+    return
+
+
 def train_cola(data_loader, model, optimizer, scheduler, metric, logger):
     model.train(True)
     gradient = model.gather_gradient(data_loader)
@@ -149,7 +165,6 @@ def train_cola(data_loader, model, optimizer, scheduler, metric, logger):
             logger.append(info, 'train')
             print(logger.write('train', metric.metric_name['train']))
     return
-
 
 
 def test(data_loader, model, metric, logger):

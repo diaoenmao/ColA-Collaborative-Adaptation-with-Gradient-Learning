@@ -68,14 +68,6 @@ class ColaConfig(PeftConfig):
         },
     )
 
-    # get_delta_h: bool = field(default=False, metadata={"help": "Get input embedding and gradients for boosting"})
-    # dataset_name: Optional[str] = field(
-    #     default=None,
-    #     metadata={
-    #         "help": "The name of the dataset to use"
-    #     },
-    # )
-
     def __post_init__(self):
         self.peft_type = PeftType.COLA
 
@@ -86,8 +78,6 @@ class ColaModel(torch.nn.Module):
         self.model = model
         self.forward = self.model.forward
         self.peft_config = config
-        self.inputs = collections.defaultdict(list)
-        self.grad_outputs = collections.defaultdict(list)
         self.add_adapter(adapter_name, self.peft_config[adapter_name])
 
         # transformers models have a .config attribute, whose presence is assumed later on
@@ -496,114 +486,25 @@ class ColaModel(torch.nn.Module):
     def unload(self):
         return self._unload_and_optionally_merge(merge=False)
 
+    def flush(self):
+        inputs = {}
+        output_grad = {}
+        for name, module in self.named_modules():
+            if isinstance(module, ColaLayer):
+                inputs[name] = torch.cat(module.input, dim=0)
+                output_grad[name] = torch.cat(module.output_grad, dim=0)
+                module.input = []
+                module.output_grad = []
+        return input, output_grad
 
 # had to adapt it for `cola_only` to work
 def mark_only_cola_as_trainable(model: nn.Module) -> None:
     for n, p in model.named_parameters():
         if "cola_" not in n:
             p.requires_grad = False
+        else:
+            p.requires_grad = True
     return
-
-
-# class IntermediateInfo(Dataset):
-#     data_name = 'IntermediateInfo'
-#
-#     def __init__(self, inputs_of_cur_key, grad_outputs_of_cur_key, transform=None):
-#         self.transform = transform
-#         self.id, self.data, self.target = self.make_data(train_data=inputs_of_cur_key,
-#                                                          train_target=grad_outputs_of_cur_key)
-#
-#     def __getitem__(self, index):
-#         id, data, target = torch.tensor(self.id[index]), torch.tensor(self.data[index]), torch.tensor(
-#             self.target[index])
-#         input = {'id': id, 'data': data, 'target': target}
-#         if self.transform is not None:
-#             input = self.transform(input)
-#         return input
-#
-#     def __len__(self):
-#         return len(self.data)
-#
-#     def __repr__(self):
-#         fmt_str = 'Dataset {}\nSize: {}\nRoot: {}\nSplit: {}\nTransforms: {}'.format(
-#             self.__class__.__name__, self.__len__(), self.root, self.split, self.transform.__repr__())
-#         return fmt_str
-#
-#     def make_data(self, train_data, train_target):
-#         train_id = np.arange(len(train_data)).astype(np.int64)
-#         return (train_id, train_data, train_target)
-#
-#
-# def create_gradient_boosting_datasets(peft_config):
-#     model_name = peft_config.base_model_name_or_path
-#     task_type = peft_config.task_type.value
-#     dataset_name = peft_config.dataset_name
-#
-#     # Return a dictionary of gradient boosting model where the key is the name of the found layers.
-#     gradient_boosting_datasets = {}
-#     intermediate_info = load_intermediate_info(
-#         model_name=model_name,
-#         task_type=task_type,
-#         dataset_name=dataset_name,
-#     )
-#
-#     key_list = [key for key, _ in intermediate_info['inputs'].items()]
-#     for key in key_list:
-#         inputs_of_cur_key = intermediate_info['inputs'][key]
-#         grad_outputs_of_cur_key = intermediate_info['grad_outputs'][key]
-#         gradient_boosting_datasets[key] = IntermediateInfo(inputs_of_cur_key, grad_outputs_of_cur_key)
-#
-#     return gradient_boosting_datasets
-#
-#
-# class GradientBoosting(nn.Module):
-#     def __init__(self, in_features, out_features, adapter_name):
-#         super(GradientBoosting, self).__init__()
-#         self.in_features = in_features
-#         self.out_features = out_features
-#         self.adapter_name = adapter_name
-#         # TODO: need to replace this with the actual implementation
-#         self.model = nn.Linear(in_features, out_features)
-#
-#     def loss_fn(self, output, target, reduction='mean'):
-#         loss = F.mse_loss(output, target, reduction=reduction)
-#         return loss
-#
-#     def f(self, x):
-#         # Pass the input through the model
-#         x = self.model(x)
-#         return x
-#
-#     def forward(self, input):
-#         output = {}
-#         output['target'] = self.f(input['data'])
-#         # training mode
-#         if 'target' in input:
-#             output['loss'] = self.loss_fn(output['target'], input['target'])
-#         return output
-
-
-# def create_gradient_boosting_models(peft_config, model):
-#     # Return a dictionary of gradient boosting model where the key is the name of the found layers.
-#     adapter_name = model.active_adapter
-#     gradient_boosting_models = {}
-#     model = model.base_model.model
-#     key_list = [key for key, _ in model.named_modules()]
-#     for key in key_list:
-#         if isinstance(peft_config.target_modules, str):
-#             target_module_found = re.fullmatch(peft_config.target_modules, key)
-#         else:
-#             target_module_found = any(key.endswith(target_key) for target_key in peft_config.target_modules)
-#
-#         if target_module_found:
-#             parent, target, target_name = _get_submodules(model, key)
-#             if isinstance(target, torch.nn.Linear):
-#                 in_features, out_features = target.in_features, target.out_features
-#             else:
-#                 raise ValueError('Invalid layer type. Currently, COLA only supports linear layers.')
-#             gradient_boosting_models[key] = GradientBoosting(in_features, out_features, adapter_name)
-#
-#     return gradient_boosting_models
 
 
 class ColaLayer:
@@ -617,34 +518,31 @@ class ColaLayer:
         self.out_features = out_features
         self.kwargs = kwargs
 
-        self.inputs = []
-        self.grad_outputs = []
+        self.input = []
+        self.output_grad = []
 
+        self.cola_tag = nn.Parameter(torch.zeros(0))
         if self.training:
-            self.hook_module(self, 'forward')
-            self.hook_module(self, 'backward')
+            self.register_forward_hook(self.forward_hook)
 
     def update_layer(self, adapter_name, cola_alpha, cola_base=None):
         self.cola_alpha[adapter_name] = cola_alpha
-        if cola_base is not None:
+        if cola_base is None:
+            self.cola_base[adapter_name] = {'dtype': torch.float32, 'model': nn.Identity()}
+        else:
             self.cola_base[adapter_name] = cola_base
         self.to(self.weight.device)
 
-    def forward_hook_fn(self, module, input, output):
-        self.inputs.append(to_device(input[0].detach(), 'cpu'))
+    def forward_hook(self, module, input, output):
+        input_ = input[0].detach().to('cpu')
+        self.input.append(input_)
+        output.requires_grad_(True)
+        output.register_hook(self.backward_hook)
         return
 
-    def backward_hook_fn(self, module, grad_input, grad_output):
-        self.grad_outputs.append(to_device(grad_output[0].detach(), 'cpu'))
-        return
-
-    def hook_module(self, module, type='forward'):
-        if type == 'forward':
-            module.register_forward_hook(self.forward_hook_fn)
-        elif type == 'backward':
-            module.register_full_backward_hook(self.backward_hook_fn)
-        else:
-            raise ValueError('type must be forward or backward')
+    def backward_hook(self, grad):
+        grad_ = grad.detach().to('cpu')
+        self.output_grad.append(grad_)
         return
 
 
@@ -721,7 +619,6 @@ class Linear(nn.Linear, ColaLayer):
             result = F.linear(x, transpose(self.weight, self.fan_in_fan_out), bias=self.bias)
 
             x = x.to(self.cola_base[self.active_adapter]['dtype'])
-
             result += (
                     self.cola_base[self.active_adapter]['model'](x)
                     * self.cola_alpha[self.active_adapter]

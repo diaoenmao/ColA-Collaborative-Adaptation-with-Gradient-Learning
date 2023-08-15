@@ -64,7 +64,6 @@ from .utils import (
     PeftType,
     PromptLearningConfig,
     TaskType,
-    Metric,
     bloom_model_postprocess_past_key_value,
     get_peft_model_state_dict,
     prepare_model_for_int8_training,
@@ -72,13 +71,5 @@ from .utils import (
     set_peft_model_state_dict,
     shift_tokens_right,
 
-    create_scheduler,
-    create_optimizer,
-    # to_device,
-    make_data_loader,
-    collate,
-    save_intermediate_info,
-    load_intermediate_info,
-    save_gradient_boosting_models,
     load_cola_base,
 )

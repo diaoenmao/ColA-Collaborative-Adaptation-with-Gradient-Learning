@@ -21,9 +21,9 @@ def process_control():
     cfg[model_name]['betas'] = (0.9, 0.999)
     cfg[model_name]['weight_decay'] = 5e-4
     cfg[model_name]['nesterov'] = True
-    cfg[model_name]['scheduler_name'] = 'LinearAnnealingLR'
     cfg[model_name]['num_epochs'] = 8
     cfg[model_name]['batch_size'] = {'train': 32, 'test': 32}
+    cfg[model_name]['scheduler_name'] = 'LinearAnnealingLR'
     return
 
 
