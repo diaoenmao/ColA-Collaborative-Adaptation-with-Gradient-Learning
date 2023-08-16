@@ -5,3 +5,4 @@ from .cnn import *
 from .resnet import *
 from .wresnet import *
 from .huggingface import *
+from .cola import *

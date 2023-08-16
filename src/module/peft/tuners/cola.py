@@ -486,23 +486,24 @@ class ColaModel(torch.nn.Module):
         return self._unload_and_optionally_merge(merge=False)
 
     def flush(self):
-        inputs = {}
+        input = {}
         output_grad = {}
         for name, module in self.named_modules():
             if isinstance(module, ColaLayer):
-                inputs[name] = torch.cat(module.input, dim=0)
+                input[name] = torch.cat(module.input, dim=0)
                 output_grad[name] = torch.cat(module.output_grad, dim=0)
                 module.input = []
                 module.output_grad = []
         return input, output_grad
 
-# had to adapt it for `cola_only` to work
 def mark_only_cola_as_trainable(model: nn.Module) -> None:
+    # for n, p in model.named_parameters():
+    #     if "cola_" not in n:
+    #         p.requires_grad = False
+    #     else:
+    #         p.requires_grad = True
     for n, p in model.named_parameters():
-        if "cola_" not in n:
-            p.requires_grad = False
-        else:
-            p.requires_grad = True
+        p.requires_grad = False
     return
 
 

@@ -5,10 +5,11 @@ import shutil
 import time
 import torch
 import torch.backends.cudnn as cudnn
+from itertools import chain
 from config import cfg, process_args
-from dataset import make_dataset, make_data_loader, process_dataset
+from dataset import make_dataset, make_data_loader, process_dataset, make_cola_data_loader
 from metric import make_metric, make_logger
-from model import make_model, make_optimizer, make_scheduler, make_ft_model
+from model import make_model, make_optimizer, make_scheduler, make_ft_model, make_cola
 from module import save, to_device, process_control, resume, makedir_exist_ok, PeftModel
 
 cudnn.benchmark = True
@@ -51,14 +52,28 @@ def runExperiment():
         model = make_ft_model(model)
         model = model.to(cfg['device'])
         model.print_trainable_parameters()
-        optimizer = make_optimizer(model.parameters(), cfg['model_name'])
+        cola_base = make_cola(model) if cfg['ft_name'] == 'cola' else None
+        if cfg['ft_name'] == 'cola':
+            cola_param = []
+            for k in cola_base:
+                cola_param.extend(list(cola_base[k].parameters()))
+            optimizer = make_optimizer(cola_param, cfg['model_name'])
+        else:
+            optimizer = make_optimizer(model.parameters(), cfg['model_name'])
         scheduler = make_scheduler(optimizer, cfg['model_name'])
     else:
         cfg['epoch'] = result['epoch']
         model = PeftModel.from_pretrained(model, os.path.join(checkpoint_path, 'adapter'), is_trainable=True)
         model = model.to(cfg['device'])
         model.print_trainable_parameters()
-        optimizer = make_optimizer(model.parameters(), cfg['model_name'])
+        cola_base = make_cola(model) if cfg['ft_name'] == 'cola' else None
+        if cfg['ft_name'] == 'cola':
+            cola_param = []
+            for k in cola_base:
+                cola_param.extend(list(cola_base[k].parameters()))
+            optimizer = make_optimizer(cola_param, cfg['model_name'])
+        else:
+            optimizer = make_optimizer(model.parameters(), cfg['model_name'])
         if cfg['ft_name'] not in ['adalora']:
             optimizer.load_state_dict(result['optimizer_state_dict'])
         scheduler = make_scheduler(optimizer, cfg['model_name'])
@@ -68,8 +83,9 @@ def runExperiment():
     for epoch in range(cfg['epoch'], cfg[cfg['model_name']]['num_epochs'] + 1):
         cfg['epoch'] = epoch
         if cfg['ft_name'] == 'cola':
-            gradient = make_gradient(dataset, tokenizer, model)
-            train_cola(data_loader['train'], model, optimizer, scheduler, metric, logger)
+            cola_data_loader = make_cola_data_loader(dataset, tokenizer, model)
+            train_cola(cola_data_loader, cola_base, optimizer, scheduler, metric, logger)
+            model.load_cola_base(cola_base)
         else:
             train(data_loader['train'], model, optimizer, scheduler, metric, logger)
         test(data_loader['test'], model, metric, logger)
@@ -120,23 +136,8 @@ def train(data_loader, model, optimizer, scheduler, metric, logger):
     return
 
 
-def make_gradient(dataset, tokenizer, model):
-    model.train(True)
-    data_loader = make_data_loader(dataset, tokenizer, cfg['model_name'], shuffle={'train': False, 'test': False})
-    for i, input in enumerate(data_loader['train']):
-        input = to_device(input, cfg['device'])
-        output = model(**input)
-        output['loss'].backward()
-        input, gradient = model.flush()
-        print(input)
-        print(gradient)
-        exit()
-    return
-
-
 def train_cola(data_loader, model, optimizer, scheduler, metric, logger):
     model.train(True)
-    gradient = model.gather_gradient(data_loader)
     exit()
     start_time = time.time()
     for i, input in enumerate(data_loader):

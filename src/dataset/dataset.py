@@ -3,12 +3,14 @@ import numpy as np
 import os
 import torch
 from functools import partial
+from collections import defaultdict
 from datasets import load_dataset
 from torchvision import transforms
-from torch.utils.data import DataLoader
+from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.dataloader import default_collate
 from transformers import default_data_collator
 from config import cfg
+from module import to_device
 
 data_stats = {'MNIST': ((0.1307,), (0.3081,)), 'FashionMNIST': ((0.2860,), (0.3530,)),
               'CIFAR10': ((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
@@ -93,7 +95,7 @@ def pad_collate(batch, tokenizer):
     return tokenizer.pad(batch, padding="longest", return_tensors="pt")
 
 
-def make_data_collate(collate_mode, tokenizer):
+def make_data_collate(collate_mode, tokenizer=None):
     if collate_mode == 'dict':
         return input_collate
     elif collate_mode == 'default':
@@ -110,15 +112,15 @@ def make_data_loader(dataset, tokenizer, tag, batch_size=None, shuffle=None, sam
     data_loader = {}
     cfg['num_steps'] = {}
     for k in dataset:
-        _batch_size = cfg[tag]['batch_size'][k] if batch_size is None else batch_size[k]
-        _shuffle = cfg[tag]['shuffle'][k] if shuffle is None else shuffle[k]
+        batch_size_ = cfg[tag]['batch_size'][k] if batch_size is None else batch_size[k]
+        shuffle_ = cfg[tag]['shuffle'][k] if shuffle is None else shuffle[k]
         if sampler is None:
-            data_loader[k] = DataLoader(dataset=dataset[k], batch_size=_batch_size, shuffle=_shuffle,
+            data_loader[k] = DataLoader(dataset=dataset[k], batch_size=batch_size_, shuffle=shuffle_,
                                         pin_memory=cfg['pin_memory'], num_workers=cfg['num_workers'],
                                         collate_fn=make_data_collate(cfg['collate_mode'], tokenizer),
                                         worker_init_fn=np.random.seed(cfg['seed']))
         else:
-            data_loader[k] = DataLoader(dataset=dataset[k], batch_size=_batch_size, sampler=sampler[k],
+            data_loader[k] = DataLoader(dataset=dataset[k], batch_size=batch_size_, sampler=sampler[k],
                                         pin_memory=cfg['pin_memory'], num_workers=cfg['num_workers'],
                                         collate_fn=make_data_collate(cfg['collate_mode'], tokenizer),
                                         worker_init_fn=np.random.seed(cfg['seed']))
@@ -215,3 +217,49 @@ def process_dataset(dataset, tokenizer):
     cfg['data_size'] = {k: len(processed_dataset[k]) for k in processed_dataset}
     cfg['target_size'] = len(tokenizer)
     return processed_dataset
+
+
+class TensorDataset(Dataset):
+    def __init__(self, data, target):
+        self.data = data
+        self.target = target
+        self.id = torch.arange(len(data))
+
+    def __getitem__(self, index):
+        data = self.data[index]
+        target = self.target[index]
+        id = self.id[index]
+        input = {'id': id, 'data': data, 'target': target}
+        return input
+
+    def __len__(self):
+        return len(self.data)
+
+
+def make_cola_data_loader(dataset, tokenizer, model, batch_size=None, shuffle=None):
+    for n, p in model.named_parameters():
+        p.requires_grad = False
+    model.train(True)
+    data_loader = make_data_loader(dataset, tokenizer, cfg['model_name'], shuffle={'train': False, 'test': False})
+    input = defaultdict(list)
+    output_gradient = defaultdict(list)
+    for i, input_ in enumerate(data_loader['train']):
+        input_ = to_device(input_, cfg['device'])
+        output = model(**input_)
+        output['loss'].backward()
+        input_i, output_gradient_i = model.flush()
+        for k in input_i:
+            input[k].append(input_i[k])
+            output_gradient[k].append(output_gradient_i[k])
+    batch_size_ = cfg[cfg['model_name']]['batch_size']['train'] if batch_size is None else batch_size
+    shuffle_ = cfg[cfg['model_name']]['shuffle']['train'] if shuffle is None else shuffle
+    cola_data_loader = {}
+    for k in input:
+        input[k] = torch.cat(input[k], dim=0)
+        output_gradient[k] = torch.cat(output_gradient[k], dim=0)
+        cola_dataset_k = TensorDataset(input[k], output_gradient[k])
+        cola_data_loader[k] = DataLoader(dataset=cola_dataset_k, batch_size=batch_size_, shuffle=shuffle_,
+                                         pin_memory=cfg['pin_memory'], num_workers=cfg['num_workers'],
+                                         collate_fn=make_data_collate('dict'),
+                                         worker_init_fn=np.random.seed(cfg['seed']))
+    return cola_data_loader

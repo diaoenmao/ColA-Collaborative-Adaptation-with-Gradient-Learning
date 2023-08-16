@@ -10,8 +10,8 @@ from module.peft import get_peft_model, TaskType, LoraConfig, AdaLoraConfig, IA3
 
 
 def make_model(model_name):
-    model_, tokenizer = make_hf_model(model_name)
-    return model_, tokenizer
+    model, tokenizer = make_hf_model(model_name)
+    return model, tokenizer
 
 
 def make_loss(output, input):
@@ -40,6 +40,11 @@ def cross_entropy_loss(output, target, reduction='mean'):
 def kld_loss(output, target, reduction='batchmean'):
     kld = F.kl_div(F.log_softmax(output, dim=-1), target, reduction=reduction)
     return kld
+
+
+def mse_loss(output, target, reduction='mean'):
+    mse = F.mse_loss(output, target, reduction=reduction)
+    return mse
 
 
 def init_param(m):
@@ -156,7 +161,7 @@ def make_config_clm():
             task_type=TaskType.CAUSAL_LM,
             prompt_tuning_init=PromptTuningInit.TEXT,
             num_virtual_tokens=20,
-            prompt_tuning_init_text=" ", #Classify if the tweet is a complaint or not:
+            prompt_tuning_init_text=" ",  # Classify if the tweet is a complaint or not:
             tokenizer_name_or_path=cfg['tokenizer_name_or_path'],
         )
     elif cfg['ft_name'] == 'prefixtune':
