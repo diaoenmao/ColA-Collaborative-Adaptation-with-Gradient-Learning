@@ -67,7 +67,6 @@ def save(input, path, mode='pickle'):
 
 def load_cola_base(peft_config):
     cola_path = peft_config.cola_path
-    cola_fmt = peft_config.cola_fmt
     cola = load(cola_path)
     return cola
 

@@ -12,6 +12,8 @@ def make_metric(metric_name):
         pivot_direction = 'up'
         pivot_name = 'Accuracy'
         for k in metric_name:
+            if cfg['ft_name'] == 'cola' and k =='train':
+                continue
             metric_name[k].extend(['Accuracy'])
     if cfg['task_name'] == 'clm':
         if cfg['data_name'] in ['raft']:
@@ -19,6 +21,8 @@ def make_metric(metric_name):
             pivot_direction = 'down'
             pivot_name = 'Perplexity'
             for k in metric_name:
+                if cfg['ft_name'] == 'cola' and k == 'train':
+                    continue
                 metric_name[k].extend(['Perplexity'])
         else:
             raise ValueError('Not valid data name')
@@ -28,6 +32,8 @@ def make_metric(metric_name):
             pivot_direction = 'up'
             pivot_name = 'Accuracy'
             for k in metric_name:
+                if cfg['ft_name'] == 'cola' and k == 'train':
+                    continue
                 metric_name[k].extend(['Accuracy'])
                 # metric_name[k].extend(['Rouge'])
         else:

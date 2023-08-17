@@ -496,6 +496,12 @@ class ColaModel(torch.nn.Module):
                 module.output_grad = []
         return input, output_grad
 
+    def load_cola_base(self, cola_base):
+        for name, module in self.named_modules():
+            if isinstance(module, ColaLayer):
+                if name in cola_base:
+                    module.update_layer(cola_base=cola_base[name])
+        return
 def mark_only_cola_as_trainable(model: nn.Module) -> None:
     # for n, p in model.named_parameters():
     #     if "cola_" not in n:
@@ -525,12 +531,10 @@ class ColaLayer:
         if self.training:
             self.register_forward_hook(self.forward_hook)
 
-    def update_layer(self, adapter_name, cola_alpha, cola_base=None):
-        self.cola_alpha[adapter_name] = cola_alpha
-        if cola_base is None:
-            self.cola_base[adapter_name] = {'dtype': torch.float32, 'model': nn.Identity()}
-        else:
-            self.cola_base[adapter_name] = cola_base
+    def update_layer(self, adapter_name="default", cola_alpha=None, cola_base=None):
+        if cola_alpha is not None:
+            self.cola_alpha[adapter_name] = cola_alpha
+        self.cola_base[adapter_name] = {'dtype': torch.float32, 'model': cola_base}
         self.to(self.weight.device)
 
     def forward_hook(self, module, input, output):
@@ -618,11 +622,12 @@ class Linear(nn.Linear, ColaLayer):
         elif not self.merged:
             result = F.linear(x, transpose(self.weight, self.fan_in_fan_out), bias=self.bias)
 
-            x = x.to(self.cola_base[self.active_adapter]['dtype'])
-            result += (
-                    self.cola_base[self.active_adapter]['model'](x)
-                    * self.cola_alpha[self.active_adapter]
-            )
+            if self.cola_base[self.active_adapter]['model'] is not None:
+                x = x.to(self.cola_base[self.active_adapter]['dtype'])
+                result += (
+                        self.cola_base[self.active_adapter]['model'](x)
+                        * self.cola_alpha[self.active_adapter]
+                )
         else:
             result = F.linear(x, transpose(self.weight, self.fan_in_fan_out), bias=self.bias)
 

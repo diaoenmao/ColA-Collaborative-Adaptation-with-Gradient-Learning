@@ -251,6 +251,7 @@ def make_cola_data_loader(dataset, tokenizer, model, batch_size=None, shuffle=No
         for k in input_i:
             input[k].append(input_i[k])
             output_gradient[k].append(output_gradient_i[k])
+            # break
     batch_size_ = cfg[cfg['model_name']]['batch_size']['train'] if batch_size is None else batch_size
     shuffle_ = cfg[cfg['model_name']]['shuffle']['train'] if shuffle is None else shuffle
     cola_data_loader = {}
