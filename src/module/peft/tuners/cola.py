@@ -624,9 +624,13 @@ class Linear(nn.Linear, ColaLayer):
 
             if self.cola_base[self.active_adapter]['model'] is not None:
                 x = x.to(self.cola_base[self.active_adapter]['dtype'])
+                # result += (
+                #         self.cola_base[self.active_adapter]['model'](x)
+                #         * self.cola_alpha[self.active_adapter]
+                # )
                 result += (
                         self.cola_base[self.active_adapter]['model'](x)
-                        * self.cola_alpha[self.active_adapter]
+                        * 1
                 )
         else:
             result = F.linear(x, transpose(self.weight, self.fan_in_fan_out), bias=self.bias)

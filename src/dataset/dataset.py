@@ -239,28 +239,33 @@ class TensorDataset(Dataset):
 def make_cola_data_loader(dataset, tokenizer, model, batch_size=None, shuffle=None):
     for n, p in model.named_parameters():
         p.requires_grad = False
-    model.train(True)
-    data_loader = make_data_loader(dataset, tokenizer, cfg['model_name'], shuffle={'train': False, 'test': False})
-    input = defaultdict(list)
-    output_gradient = defaultdict(list)
-    for i, input_ in enumerate(data_loader['train']):
-        input_ = to_device(input_, cfg['device'])
-        output = model(**input_)
-        output['loss'].backward()
-        input_i, output_gradient_i = model.flush()
-        for k in input_i:
-            input[k].append(input_i[k])
-            output_gradient[k].append(output_gradient_i[k])
-            # break
     batch_size_ = cfg[cfg['model_name']]['batch_size']['train'] if batch_size is None else batch_size
     shuffle_ = cfg[cfg['model_name']]['shuffle']['train'] if shuffle is None else shuffle
+    model.train(True)
+    data_loader = make_data_loader(dataset, tokenizer, cfg['model_name'], shuffle={'train': False, 'test': False})
     cola_data_loader = {}
-    for k in input:
-        input[k] = torch.cat(input[k], dim=0)
-        output_gradient[k] = torch.cat(output_gradient[k], dim=0)
-        cola_dataset_k = TensorDataset(input[k], output_gradient[k])
-        cola_data_loader[k] = DataLoader(dataset=cola_dataset_k, batch_size=batch_size_, shuffle=shuffle_,
-                                         pin_memory=cfg['pin_memory'], num_workers=cfg['num_workers'],
-                                         collate_fn=make_data_collate('dict'),
-                                         worker_init_fn=np.random.seed(cfg['seed']))
+    for split in data_loader:
+        input = defaultdict(list)
+        output_gradient = defaultdict(list)
+        for i, input_ in enumerate(data_loader[split]):
+            input_ = to_device(input_, cfg['device'])
+            output = model(**input_)
+            output['loss'].backward()
+            input_i, output_gradient_i = model.flush()
+            j = 0
+            for k in input_i:
+                input[k].append(input_i[k])
+                output_gradient[k].append(output_gradient_i[k])
+                j += 1
+                if j == 3:
+                    break
+        cola_data_loader[split] = {}
+        for k in input:
+            input[k] = torch.cat(input[k], dim=0)
+            output_gradient[k] = torch.cat(output_gradient[k], dim=0)
+            cola_dataset_k = TensorDataset(input[k], output_gradient[k])
+            cola_data_loader[split][k] = DataLoader(dataset=cola_dataset_k, batch_size=batch_size_, shuffle=shuffle_,
+                                                    pin_memory=cfg['pin_memory'], num_workers=cfg['num_workers'],
+                                                    collate_fn=make_data_collate('dict'),
+                                                    worker_init_fn=np.random.seed(cfg['seed']))
     return cola_data_loader

@@ -86,12 +86,18 @@ def runExperiment():
         cfg['epoch'] = epoch
         if cfg['ft_name'] == 'cola':
             cola_data_loader = make_cola_data_loader(dataset, tokenizer, model)
-            train_cola(cola_data_loader, cola_base, optimizer, scheduler, metric, logger)
-            model.load_cola_base(cola_base)
-            pass
+            train_cola(cola_data_loader['train'], cola_base, optimizer, scheduler, metric, logger)
+            test_cola(cola_data_loader['test'], cola_base, metric, logger)
+            cola_base_ = {}
+            for k in cola_data_loader['train']:
+                cola_base_[k] = cola_base[k]
+            model.load_cola_base(cola_base_)
+            logger.save(True)
+            logger.reset()
         else:
             train(data_loader['train'], model, optimizer, scheduler, metric, logger)
         test(data_loader['test'], model, metric, logger)
+        exit()
         result = {'cfg': cfg, 'epoch': cfg['epoch'] + 1,
                   'optimizer_state_dict': optimizer.state_dict(), 'scheduler_state_dict': scheduler.state_dict(),
                   'metric_state_dict': metric.state_dict(), 'logger_state_dict': logger.state_dict()}
@@ -143,34 +149,52 @@ def train_cola(data_loader, model, optimizer, scheduler, metric, logger):
     for k in data_loader:
         model[k].train(True)
         start_time = time.time()
-        for i, input in enumerate(data_loader[k]):
-            input = collate(input)
-            input_size = input['data'].size(0)
-            input = to_device(input, cfg['device'])
-            output = model[k].f(input)
-            output['loss'].backward()
-            torch.nn.utils.clip_grad_norm_(model[k].parameters(), 1)
-            optimizer.step()
-            # scheduler.step()
-            optimizer.zero_grad()
-            evaluation = metric.evaluate('train', 'batch', input, output)
-            logger.append(evaluation, 'train', n=input_size)
-            if i % int((len(data_loader[k]) * cfg['log_interval']) + 1) == 0:
-                batch_time = (time.time() - start_time) / (i + 1)
-                lr = optimizer.param_groups[0]['lr']
-                epoch_finished_time = datetime.timedelta(seconds=round(batch_time * (len(data_loader[k]) - i - 1)))
-                exp_finished_time = epoch_finished_time + datetime.timedelta(
-                    seconds=round(
-                        (cfg[cfg['model_name']]['num_epochs'] - cfg['epoch']) * batch_time * len(data_loader[k])))
-                info = {'info': ['Model: {}()'.format(cfg['model_tag'], k),
-                                 'Train Epoch: {}({:.0f}%)'.format(cfg['epoch'], 100. * i / len(data_loader[k])),
-                                 'Learning rate: {:.6f}'.format(lr),
-                                 'Epoch Finished Time: {}'.format(epoch_finished_time),
-                                 'Experiment Finished Time: {}'.format(exp_finished_time)]}
-                logger.append(info, 'train')
-                print(logger.write('train', metric.metric_name['train']))
+        for iter in range(10):
+            for i, input in enumerate(data_loader[k]):
+                input = collate(input)
+                input_size = input['data'].size(0)
+                input = to_device(input, cfg['device'])
+                output = model[k].f(input)
+                output['loss'].backward()
+                torch.nn.utils.clip_grad_norm_(model[k].parameters(), 1)
+                optimizer.step()
+                # scheduler.step()
+                optimizer.zero_grad()
+                evaluation = metric.evaluate('train', 'batch', input, output, {'train': ['Loss']})
+                logger.append(evaluation, 'train', n=input_size)
+                if i % int((len(data_loader[k]) * cfg['log_interval']) + 1) == 0:
+                    batch_time = (time.time() - start_time) / (i + 1)
+                    lr = optimizer.param_groups[0]['lr']
+                    epoch_finished_time = datetime.timedelta(seconds=round(batch_time * (len(data_loader[k]) - i - 1)))
+                    exp_finished_time = epoch_finished_time + datetime.timedelta(
+                        seconds=round(
+                            (cfg[cfg['model_name']]['num_epochs'] - cfg['epoch']) * batch_time * len(data_loader[k])))
+                    info = {'info': ['Model: {}({})'.format(cfg['model_tag'], k),
+                                     'Train Epoch: {}({:.0f}%)'.format(cfg['epoch'], 100. * i / len(data_loader[k])),
+                                     'Learning rate: {:.6f}'.format(lr),
+                                     'Epoch Finished Time: {}'.format(epoch_finished_time),
+                                     'Experiment Finished Time: {}'.format(exp_finished_time)]}
+                    logger.append(info, 'train')
+                    print(logger.write('train', ['Loss']))
     return
 
+def test_cola(data_loader, model, metric, logger):
+    with torch.no_grad():
+        for k in data_loader:
+            model[k].train(True)
+            for i, input in enumerate(data_loader[k]):
+                input = collate(input)
+                input_size = input['data'].size(0)
+                input = to_device(input, cfg['device'])
+                output = model[k].f(input)
+                evaluation = metric.evaluate('test', 'batch', input, output, {'test': ['Loss']})
+                logger.append(evaluation, 'test', input_size)
+            evaluation = metric.evaluate('test', 'full')
+            logger.append(evaluation, 'test', input_size)
+            info = {'info': ['Model: {}({})'.format(cfg['model_tag'], k), 'Test Epoch: {}({:.0f}%)'.format(cfg['epoch'], 100.)]}
+            logger.append(info, 'test')
+            print(logger.write('test', ['Loss']))
+    return
 
 def test(data_loader, model, metric, logger):
     with torch.no_grad():

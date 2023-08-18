@@ -13,7 +13,7 @@ def process_control():
     cfg['model_name'] = cfg['control']['model_name']
     cfg['task_name'] = cfg['control']['task_name']
     cfg['ft_name'] = cfg['control']['ft_name']
-    cfg['cola'] = {'hidden_size': 64}
+    cfg['cola'] = {'hidden_size': 8}
     model_name = cfg['model_name']
     cfg[model_name]['shuffle'] = {'train': True, 'test': False}
     cfg[model_name]['optimizer_name'] = 'AdamW'
