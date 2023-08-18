@@ -41,7 +41,7 @@ class ColaConfig(PeftConfig):
                     "For example, ['q', 'v'] or '.*decoder.*(SelfAttention|EncDecAttention).*(q|v)$' "
         },
     )
-    cola_alpha: float = field(default=1., metadata={"help": "Cola alpha"})
+    cola_alpha: float = field(default=1.0, metadata={"help": "Cola alpha"})
     fan_in_fan_out: bool = field(
         default=False,
         metadata={"help": "Set this to True if the layer to replace stores weight like (fan_in, fan_out)"},
@@ -502,12 +502,9 @@ class ColaModel(torch.nn.Module):
                 if name in cola_base:
                     module.update_layer(cola_base=cola_base[name])
         return
+
+
 def mark_only_cola_as_trainable(model: nn.Module) -> None:
-    # for n, p in model.named_parameters():
-    #     if "cola_" not in n:
-    #         p.requires_grad = False
-    #     else:
-    #         p.requires_grad = True
     for n, p in model.named_parameters():
         p.requires_grad = False
     return
@@ -546,7 +543,7 @@ class ColaLayer:
 
     def backward_hook(self, grad):
         grad_ = grad.detach().to('cpu')
-        self.output_grad.append(grad_)
+        self.output_grad[-1] = self.output_grad[-1] - grad_
         return
 
 
@@ -624,14 +621,11 @@ class Linear(nn.Linear, ColaLayer):
 
             if self.cola_base[self.active_adapter]['model'] is not None:
                 x = x.to(self.cola_base[self.active_adapter]['dtype'])
-                # result += (
-                #         self.cola_base[self.active_adapter]['model'](x)
-                #         * self.cola_alpha[self.active_adapter]
-                # )
-                result += (
-                        self.cola_base[self.active_adapter]['model'](x)
-                        * 1
-                )
+                with torch.no_grad():
+                    cola_output = self.cola_base[self.active_adapter]['model'](x) * self.cola_alpha[self.active_adapter]
+                    cola_output.detach_()
+                    self.output_grad.append(cola_output.to('cpu'))
+                result += cola_output
         else:
             result = F.linear(x, transpose(self.weight, self.fan_in_fan_out), bias=self.bias)
 

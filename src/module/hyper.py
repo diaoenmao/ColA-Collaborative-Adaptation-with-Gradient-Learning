@@ -13,7 +13,6 @@ def process_control():
     cfg['model_name'] = cfg['control']['model_name']
     cfg['task_name'] = cfg['control']['task_name']
     cfg['ft_name'] = cfg['control']['ft_name']
-    cfg['cola'] = {'hidden_size': 8}
     model_name = cfg['model_name']
     cfg[model_name]['shuffle'] = {'train': True, 'test': False}
     cfg[model_name]['optimizer_name'] = 'AdamW'
@@ -26,6 +25,7 @@ def process_control():
     cfg[model_name]['batch_size'] = {'train': 32, 'test': 32}
     cfg[model_name]['scheduler_name'] = 'LinearAnnealingLR'
 
+    cfg['cola'] = {'hidden_size': 64, 'dropout': 0.00}  # dropout seems not working
     cfg['cola']['shuffle'] = {'train': True, 'test': False}
     cfg['cola']['optimizer_name'] = 'AdamW'
     cfg['cola']['lr'] = 1e-3
@@ -33,7 +33,8 @@ def process_control():
     cfg['cola']['betas'] = (0.9, 0.999)
     cfg['cola']['weight_decay'] = 5e-4
     cfg['cola']['nesterov'] = True
-    cfg['cola']['num_epochs'] = 8
+    cfg['cola']['num_steps'] = 1
+    cfg['cola']['num_epochs'] = 1
     cfg['cola']['batch_size'] = {'train': 32, 'test': 32}
     cfg['cola']['scheduler_name'] = 'LinearAnnealingLR'
     return

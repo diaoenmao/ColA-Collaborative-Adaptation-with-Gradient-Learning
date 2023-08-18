@@ -7,28 +7,30 @@ from module.peft.tuners.cola import ColaLayer
 
 
 class ColA(nn.Module):
-    def __init__(self, input_size, hidden_size, output_size):
+    def __init__(self, name, input_size, hidden_size, output_size, dropout):
         super().__init__()
+        self.name = name
+        if dropout > 0.0:
+            self.dropout = nn.Dropout(p=dropout)
+        else:
+            self.dropout = nn.Identity()
         self.cola_A = nn.Linear(input_size, hidden_size)
         self.cola_B = nn.Linear(hidden_size, output_size)
-        # self.cola_A = nn.Linear(input_size, output_size)
 
     def f(self, input):
         output = {}
         x = input['data']
         x = self.forward(x)
         output['target'] = x
-        output['loss'] = mse_loss(output['target'], input['target'])
-        # output['loss'] = -(F.normalize(output['target'], dim=-1) * F.normalize(input['target'], dim=-1)).sum(dim=-1).mean()
+        output['loss'] = F.mse_loss(output['target'], input['target'])
         return output
 
     def forward(self, x):
+        x = self.dropout(x)
         x = self.cola_A(x)
         # x = F.relu(x)
         x = self.cola_B(x)
         return x
-
-
 
 
 def make_cola(model, mode=None):
@@ -38,6 +40,7 @@ def make_cola(model, mode=None):
             input_size = module.in_features
             hidden_size = cfg['cola']['hidden_size']
             output_size = module.out_features
-            cola[name] = ColA(input_size, hidden_size, output_size)
+            dropout = cfg['cola']['dropout']
+            cola[name] = ColA(name, input_size, hidden_size, output_size, dropout)
             cola[name].apply(init_param)
     return cola

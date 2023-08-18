@@ -123,6 +123,8 @@ def get_peft_model_state_dict(model, state_dict=None, adapter_name="default"):
         to_return["prompt_embeddings"] = prompt_embeddings
     elif config.peft_type == PeftType.IA3:
         to_return = {k: state_dict[k] for k in state_dict if "ia3_" in k}
+    elif config.peft_type == PeftType.COLA:
+        to_return = {k: state_dict[k] for k in state_dict if "cola_" in k}
     else:
         raise NotImplementedError
     if model.modules_to_save is not None:
