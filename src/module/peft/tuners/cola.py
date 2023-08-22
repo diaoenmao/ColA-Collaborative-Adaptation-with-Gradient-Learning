@@ -487,14 +487,14 @@ class ColaModel(torch.nn.Module):
 
     def flush(self):
         input = {}
-        output_grad = {}
+        output_target = {}
         for name, module in self.named_modules():
             if isinstance(module, ColaLayer):
                 input[name] = torch.cat(module.input, dim=0)
-                output_grad[name] = torch.cat(module.output_grad, dim=0)
+                output_target[name] = torch.cat(module.output_target, dim=0)
                 module.input = []
-                module.output_grad = []
-        return input, output_grad
+                module.output_target = []
+        return input, output_target
 
     def load_cola_base(self, cola_base):
         for name, module in self.named_modules():
@@ -522,7 +522,7 @@ class ColaLayer:
         self.kwargs = kwargs
 
         self.input = []
-        self.output_grad = []
+        self.output_target = []
 
         self.cola_tag = nn.Parameter(torch.zeros(0))
         if self.training:
@@ -543,7 +543,7 @@ class ColaLayer:
 
     def backward_hook(self, grad):
         grad_ = grad.detach().to('cpu')
-        self.output_grad[-1] = self.output_grad[-1] - grad_
+        self.output_target[-1] = self.output_target[-1] - grad_
         return
 
 
@@ -624,7 +624,7 @@ class Linear(nn.Linear, ColaLayer):
                 with torch.no_grad():
                     cola_output = self.cola_base[self.active_adapter]['model'](x) * self.cola_alpha[self.active_adapter]
                     cola_output.detach_()
-                    self.output_grad.append(cola_output.to('cpu'))
+                    self.output_target.append(cola_output.to('cpu'))
                 result += cola_output
         else:
             result = F.linear(x, transpose(self.weight, self.fan_in_fan_out), bias=self.bias)
@@ -679,7 +679,13 @@ class Embedding(nn.Embedding, ColaLayer):
             return nn.Embedding.forward(self, x)
         elif not self.merged:
             result = nn.Embedding.forward(self, x)
-            result += self.cola_base[self.active_adapter] * self.cola_alpha[self.active_adapter]
+
+            if self.cola_base[self.active_adapter]['model'] is not None:
+                with torch.no_grad():
+                    cola_output = self.cola_base[self.active_adapter]['model'](x) * self.cola_alpha[self.active_adapter]
+                    cola_output.detach_()
+                    self.output_target.append(cola_output.to('cpu'))
+                result += cola_output
             return result
         else:
             return nn.Embedding.forward(self, x)
@@ -788,12 +794,14 @@ class Conv2d(nn.Conv2d, ColaLayer):
                 groups=self.groups,
             )
 
-            x = x.to(self.cola_base[self.active_adapter]['dtype'])
+            if self.cola_base[self.active_adapter]['model'] is not None:
+                x = x.to(self.cola_base[self.active_adapter]['dtype'])
+                with torch.no_grad():
+                    cola_output = self.cola_base[self.active_adapter]['model'](x) * self.cola_alpha[self.active_adapter]
+                    cola_output.detach_()
+                    self.output_target.append(cola_output.to('cpu'))
+                result += cola_output
 
-            result += (
-                    self.cola_base[self.active_adapter]['model'](x)
-                    * self.cola_alpha[self.active_adapter]
-            )
         else:
             result = F.conv2d(
                 x,
@@ -850,15 +858,26 @@ if is_bnb_available():
 
                     if x.dtype != torch.float32:
                         x = x.float()
-                    output = (
-                            self.cola_base[self.active_adapter]['model'](x).to(expected_dtype)
-                            * self.cola_alpha[self.active_adapter]
-                    )
+
+                    if self.cola_base[self.active_adapter]['model'] is not None:
+                        with torch.no_grad():
+                            cola_output = self.cola_base[self.active_adapter]['model'](x).to(expected_dtype) * \
+                                          self.cola_alpha[self.active_adapter]
+                            cola_output.detach_()
+                            self.output_target.append(cola_output.to('cpu'))
+                        output = cola_output
+                    else:
+                        output = 0
                 else:
-                    output = (
-                            self.cola_base[self.active_adapter]['model'](x)
-                            * self.cola_alpha[self.active_adapter]
-                    )
+                    if self.cola_base[self.active_adapter]['model'] is not None:
+                        with torch.no_grad():
+                            cola_output = self.cola_base[self.active_adapter]['model'](x) * \
+                                          self.cola_alpha[self.active_adapter]
+                            cola_output.detach_()
+                            self.output_target.append(cola_output.to('cpu'))
+                        output = cola_output
+                    else:
+                        output = 0
                 result += output
             return result
 
@@ -902,14 +921,24 @@ if is_bnb_available():
                     if not torch.is_autocast_enabled():
                         expected_dtype = result.dtype
                         x = x.to(self.cola_base[self.active_adapter].weight.dtype)
-                        output = (
-                                self.cola_base[self.active_adapter]['model'](x).to(expected_dtype)
-                                * self.cola_alpha[self.active_adapter]
-                        )
+                        if self.cola_base[self.active_adapter]['model'] is not None:
+                            with torch.no_grad():
+                                cola_output = self.cola_base[self.active_adapter]['model'](x).to(expected_dtype) * \
+                                              self.cola_alpha[self.active_adapter]
+                                cola_output.detach_()
+                                self.output_target.append(cola_output.to('cpu'))
+                            output = cola_output
+                        else:
+                            output = 0
                     else:
-                        output = (
-                                self.cola_base[self.active_adapter]['model'](x)
-                                * self.cola_alpha[self.active_adapter]
-                        )
+                        if self.cola_base[self.active_adapter]['model'] is not None:
+                            with torch.no_grad():
+                                cola_output = self.cola_base[self.active_adapter]['model'](x) * \
+                                              self.cola_alpha[self.active_adapter]
+                                cola_output.detach_()
+                                self.output_target.append(cola_output.to('cpu'))
+                            output = cola_output
+                        else:
+                            output = 0
                     result += output
                 return result

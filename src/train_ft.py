@@ -7,7 +7,7 @@ import torch
 import torch.backends.cudnn as cudnn
 from collections import defaultdict
 from config import cfg, process_args
-from dataset import make_dataset, make_data_loader, process_dataset, make_cola_data_loader, collate
+from dataset import make_dataset, make_data_loader, process_dataset, collate
 from metric import make_metric, make_logger
 from model import make_model, make_optimizer, make_scheduler, make_ft_model, make_cola
 from module import save, to_device, process_control, resume, makedir_exist_ok, PeftModel
@@ -141,7 +141,7 @@ def train_cola(data_loader, model, cola_base, optimizer, scheduler, metric, logg
     model.train(True)
     start_time = time.time()
     input_buffer = defaultdict(list)
-    output_gradient_buffer = defaultdict(list)
+    output_target_buffer = defaultdict(list)
     for i, input in enumerate(data_loader):
         for k in cola_base:
             cola_base[k].train(False)
@@ -151,24 +151,24 @@ def train_cola(data_loader, model, cola_base, optimizer, scheduler, metric, logg
         input_ = {'target': input['labels']}
         output_ = {'target': output['logits'], 'loss': output['loss']}
         output['loss'].backward()
-        input_i, output_gradient_i = model.flush()
+        input_i, output_target_i = model.flush()
         for k in input_i:
             input_buffer[k].extend(input_i[k])
-            output_gradient_buffer[k].extend(output_gradient_i[k])
+            output_target_buffer[k].extend(output_target_i[k])
         if (i + 1) % cfg['cola']['num_steps'] == 0:
             for k in input_buffer:
                 cola_base[k].train(True)
                 for _ in range(cfg['cola']['num_epochs']):
                     input_cola = torch.cat(input_buffer[k], dim=0)
-                    output_gradient_cola = torch.cat(output_gradient_buffer[k], dim=0)
-                    input_cola = {'data': input_cola, 'target': output_gradient_cola}
+                    output_target_cola = torch.cat(output_target_buffer[k], dim=0)
+                    input_cola = {'data': input_cola, 'target': output_target_cola}
                     input_cola = to_device(input_cola, cfg['device'])
                     output_cola = cola_base[k].f(input_cola)
                     output_cola['loss'].backward()
                     optimizer.step()
                     optimizer.zero_grad()
             input_buffer = defaultdict(list)
-            output_gradient_buffer = defaultdict(list)
+            output_target_buffer = defaultdict(list)
         scheduler.step()
         evaluation = metric.evaluate('train', 'batch', input_, output_)
         logger.append(evaluation, 'train', n=input_size)
