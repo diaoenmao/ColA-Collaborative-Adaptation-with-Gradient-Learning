@@ -59,10 +59,13 @@ def runExperiment():
             for k in cola_base:
                 cola_base[k] = cola_base[k].to(cfg['device'])
                 cola_param.extend(list(cola_base[k].parameters()))
-            optimizer = make_optimizer(cola_param, cfg['model_name'])
+            optimizer = make_optimizer(cola_param, 'cola')
+            scheduler = make_scheduler(optimizer, 'cola')
+            cola_func_optimizer = make_optimizer(cola_param, 'cola_func')
+            cola_func_scheduler = make_scheduler(cola_func_optimizer, 'cola_func')
         else:
             optimizer = make_optimizer(model.parameters(), cfg['model_name'])
-        scheduler = make_scheduler(optimizer, cfg['model_name'])
+            scheduler = make_scheduler(optimizer, cfg['model_name'])
     else:
         cfg['epoch'] = result['epoch']
         model = PeftModel.from_pretrained(model, os.path.join(checkpoint_path, 'adapter'), is_trainable=True)
@@ -87,7 +90,8 @@ def runExperiment():
     for epoch in range(cfg['epoch'], cfg[cfg['model_name']]['num_epochs'] + 1):
         cfg['epoch'] = epoch
         if cfg['ft_name'] == 'cola':
-            train_cola(data_loader['train'], model, cola_base, optimizer, scheduler, metric, logger)
+            train_cola(data_loader['train'], model, cola_base, optimizer, scheduler, cola_func_optimizer,
+                       cola_func_scheduler, metric, logger)
         else:
             train(data_loader['train'], model, optimizer, scheduler, metric, logger)
         test(data_loader['test'], model, metric, logger)
@@ -113,6 +117,7 @@ def train(data_loader, model, optimizer, scheduler, metric, logger):
     for i, input in enumerate(data_loader):
         input_size = input['labels'].size(0)
         input = to_device(input, cfg['device'])
+
         output = model(**input)
         input_ = {'target': input['labels']}
         output_ = {'target': output['logits'], 'loss': output['loss']}
@@ -137,12 +142,16 @@ def train(data_loader, model, optimizer, scheduler, metric, logger):
     return
 
 
-def train_cola(data_loader, model, cola_base, optimizer, scheduler, metric, logger):
+def train_cola(data_loader, model, cola_base, optimizer, scheduler, cola_func_optimizer, cola_func_scheduler, metric,
+               logger):
     model.train(True)
     start_time = time.time()
     input_buffer = defaultdict(list)
     output_target_buffer = defaultdict(list)
     for i, input in enumerate(data_loader):
+        lr = optimizer.param_groups[0]['lr']
+        cola_lr = cola_func_optimizer.param_groups[0]['lr']
+        model.load_lr(lr)
         for k in cola_base:
             cola_base[k].train(False)
         input_size = input['labels'].size(0)
@@ -165,22 +174,23 @@ def train_cola(data_loader, model, cola_base, optimizer, scheduler, metric, logg
                     input_cola = to_device(input_cola, cfg['device'])
                     output_cola = cola_base[k].f(input_cola)
                     output_cola['loss'].backward()
-                    optimizer.step()
-                    optimizer.zero_grad()
+                    cola_func_optimizer.step()
+                    cola_func_optimizer.zero_grad()
             input_buffer = defaultdict(list)
             output_target_buffer = defaultdict(list)
-        scheduler.step()
+            cola_func_scheduler.step()
+            scheduler.step()
         evaluation = metric.evaluate('train', 'batch', input_, output_)
         logger.append(evaluation, 'train', n=input_size)
         if i % int((len(data_loader) * cfg['log_interval']) + 1) == 0:
             batch_time = (time.time() - start_time) / (i + 1)
-            lr = optimizer.param_groups[0]['lr']
             epoch_finished_time = datetime.timedelta(seconds=round(batch_time * (len(data_loader) - i - 1)))
             exp_finished_time = epoch_finished_time + datetime.timedelta(
                 seconds=round((cfg[cfg['model_name']]['num_epochs'] - cfg['epoch']) * batch_time * len(data_loader)))
             info = {'info': ['Model: {}'.format(cfg['model_tag']),
                              'Train Epoch: {}({:.0f}%)'.format(cfg['epoch'], 100. * i / len(data_loader)),
-                             'Learning rate: {:.6f}'.format(lr), 'Epoch Finished Time: {}'.format(epoch_finished_time),
+                             'Learning rate: {:.6f}|{:.6f}'.format(lr, cola_lr),
+                             'Epoch Finished Time: {}'.format(epoch_finished_time),
                              'Experiment Finished Time: {}'.format(exp_finished_time)]}
             logger.append(info, 'train')
             print(logger.write('train', metric.metric_name['train']))

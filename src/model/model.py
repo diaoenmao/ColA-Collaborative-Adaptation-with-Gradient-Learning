@@ -95,9 +95,17 @@ def make_optimizer(parameters, tag):
     return optimizer
 
 
+class NoOpScheduler(torch.optim.lr_scheduler._LRScheduler):
+    def __init__(self, optimizer, last_epoch=-1):
+        super(NoOpScheduler, self).__init__(optimizer, last_epoch)
+
+    def get_lr(self):
+        return [group['lr'] for group in self.optimizer.param_groups]
+
+
 def make_scheduler(optimizer, tag):
     if cfg[tag]['scheduler_name'] == 'None':
-        scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[65535])
+        scheduler = NoOpScheduler(optimizer)
     elif cfg[tag]['scheduler_name'] == 'StepLR':
         scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=cfg[tag]['step_size'], gamma=cfg[tag]['factor'])
     elif cfg[tag]['scheduler_name'] == 'MultiStepLR':
