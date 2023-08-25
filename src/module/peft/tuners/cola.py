@@ -531,7 +531,6 @@ class ColaLayer:
         self.lr = 1.
 
         self.hook = self.register_forward_hook(self.forward_hook)
-        self.cola_tag = nn.Parameter(torch.zeros(0))
 
     def update_layer(self, adapter_name="default", cola_alpha=None, cola_base=None):
         if cola_alpha is not None:

@@ -9,8 +9,8 @@ from collections import defaultdict
 from config import cfg, process_args
 from dataset import make_dataset, make_data_loader, process_dataset, collate
 from metric import make_metric, make_logger
-from model import make_model, make_optimizer, make_scheduler, make_ft_model
-from module import save, to_device, process_control, resume, makedir_exist_ok, PeftModel
+from model import make_model, make_optimizer, make_scheduler
+from module import save, to_device, process_control, resume, makedir_exist_ok
 
 cudnn.benchmark = True
 parser = argparse.ArgumentParser(description='cfg')
@@ -49,20 +49,15 @@ def runExperiment():
     logger = make_logger(os.path.join('output', 'runs', 'train_{}'.format(cfg['model_tag'])))
     if result is None:
         cfg['epoch'] = 1
-        model = make_ft_model(model)
         model = model.to(cfg['device'])
-        model.print_trainable_parameters()
         optimizer = make_optimizer(model.parameters(), cfg['model_name'])
         scheduler = make_scheduler(optimizer, cfg['model_name'])
     else:
         cfg['epoch'] = result['epoch']
-        model = PeftModel.from_pretrained(model, os.path.join(checkpoint_path, 'adapter'), is_trainable=True)
         model = model.to(cfg['device'])
-        model.print_trainable_parameters()
         optimizer = make_optimizer(model.parameters(), cfg['model_name'])
-        if cfg['ft_name'] not in ['adalora']:
-            optimizer.load_state_dict(result['optimizer_state_dict'])
         scheduler = make_scheduler(optimizer, cfg['model_name'])
+        model.load_state_dict(result['model_state_dict'])
         scheduler.load_state_dict(result['scheduler_state_dict'])
         metric.load_state_dict(result['metric_state_dict'])
         logger.load_state_dict(result['logger_state_dict'])
@@ -70,17 +65,14 @@ def runExperiment():
         cfg['epoch'] = epoch
         train(data_loader['train'], model, optimizer, scheduler, metric, logger)
         test(data_loader['test'], model, metric, logger)
-        result = {'cfg': cfg, 'epoch': cfg['epoch'] + 1,
+        result = {'cfg': cfg, 'epoch': cfg['epoch'] + 1, 'model_state_dict': model.state_dict(),
                   'optimizer_state_dict': optimizer.state_dict(), 'scheduler_state_dict': scheduler.state_dict(),
                   'metric_state_dict': metric.state_dict(), 'logger_state_dict': logger.state_dict()}
         save(result, os.path.join(checkpoint_path, 'model'))
-        model.save_pretrained(os.path.join(checkpoint_path, 'adapter'))
         if metric.compare(logger.mean['test/{}'.format(metric.pivot_name)]):
             metric.update(logger.mean['test/{}'.format(metric.pivot_name)])
             makedir_exist_ok(best_path)
             shutil.copy(os.path.join(checkpoint_path, 'model'), os.path.join(best_path, 'model'))
-            shutil.copytree(os.path.join(checkpoint_path, 'adapter'), os.path.join(best_path, 'adapter'),
-                            dirs_exist_ok=True)
         logger.save(True)
         logger.reset()
     return

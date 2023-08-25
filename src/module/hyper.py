@@ -16,7 +16,10 @@ def process_control():
     model_name = cfg['model_name']
     cfg[model_name]['shuffle'] = {'train': True, 'test': False}
     cfg[model_name]['optimizer_name'] = 'AdamW'
-    cfg[model_name]['lr'] = 1e-3
+    if cfg['ft_name'] == 'full':
+        cfg[model_name]['lr'] = 5e-5
+    else:
+        cfg[model_name]['lr'] = 1e-3
     cfg[model_name]['momentum'] = 0.9
     cfg[model_name]['betas'] = (0.9, 0.999)
     cfg[model_name]['weight_decay'] = 5e-4
@@ -24,6 +27,7 @@ def process_control():
     cfg[model_name]['num_epochs'] = 8
     cfg[model_name]['batch_size'] = {'train': 32, 'test': 32}
     cfg[model_name]['scheduler_name'] = 'LinearAnnealingLR'
+    cfg[model_name]['scheduler_name'] = 'None'
 
     cfg['cola'] = {'hidden_size': 64, 'dropout': 0.00}
     cfg['cola']['shuffle'] = {'train': True, 'test': False}

@@ -59,20 +59,20 @@ def make_dataset(data_name, verbose=True):
         dataset_['test'].transform = dataset.Compose([
             transforms.ToTensor(),
             transforms.Normalize(*data_stats[data_name])])
+    elif data_name in ['raft']:
+        dataset_ = load_dataset(cfg['hf_data_name'], cfg['hf_subset_name'], cache_dir=root)
+        classes = [k.replace("_", " ") for k in dataset_["train"].features["Label"].names]
+        dataset_ = dataset_.map(
+            lambda x: {"text_label": [classes[label] for label in x["Label"]]},
+            batched=True,
+            num_proc=1,
+        )
     elif data_name in ['fpb']:
         dataset_ = load_dataset(cfg['hf_data_name'], cfg['hf_subset_name'], cache_dir=root)
         dataset_ = dataset_['train'].train_test_split(test_size=0.1, seed=cfg['seed'])
         classes = dataset_['train'].features['label'].names
         dataset_ = dataset_.map(
             lambda x: {"text_label": [classes[label] for label in x["label"]]},
-            batched=True,
-            num_proc=1,
-        )
-    elif data_name in ['raft']:
-        dataset_ = load_dataset(cfg['hf_data_name'], cfg['hf_subset_name'], cache_dir=root)
-        classes = [k.replace("_", " ") for k in dataset_["train"].features["Label"].names]
-        dataset_ = dataset_.map(
-            lambda x: {"text_label": [classes[label] for label in x["Label"]]},
             batched=True,
             num_proc=1,
         )
