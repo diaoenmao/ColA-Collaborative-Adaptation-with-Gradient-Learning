@@ -52,35 +52,43 @@ def runExperiment():
         model = make_ft_model(model)
         model = model.to(cfg['device'])
         model.print_trainable_parameters()
-        cola_base = make_cola(model) if cfg['ft_name'] == 'cola' else None
+        cola_base = make_cola(model, cfg['cola']['model']['name']) if cfg['ft_name'] == 'cola' else None
         model.load_cola_base(cola_base)
         cola_param = []
         for k in cola_base:
             cola_base[k] = cola_base[k].to(cfg['device'])
             cola_param.extend(list(cola_base[k].parameters()))
-        optimizer = make_optimizer(cola_param, 'cola')
+        optimizer = make_optimizer([torch.tensor([0.0], requires_grad=True)], 'cola')
         scheduler = make_scheduler(optimizer, 'cola')
-        func_optimizer = make_optimizer(cola_param, 'cola_func')
-        func_scheduler = make_scheduler(func_optimizer, 'cola_func')
+        if cfg['cola']['model']['name'] in ['lr', 'linear', 'mlp']:
+            func_optimizer = make_optimizer(cola_param, 'cola_func')
+            func_scheduler = make_scheduler(func_optimizer, 'cola_func')
+        else:
+            func_optimizer = None
+            func_scheduler = None
     else:
         cfg['epoch'] = result['epoch']
         model = PeftModel.from_pretrained(model, os.path.join(checkpoint_path, 'adapter'), is_trainable=True)
         model = model.to(cfg['device'])
         model.print_trainable_parameters()
-        cola_base = make_cola(model) if cfg['ft_name'] == 'cola' else None
+        cola_base = make_cola(model, cfg['cola']['model']['name']) if cfg['ft_name'] == 'cola' else None
         model.load_cola_base(cola_base)
         cola_param = []
         for k in cola_base:
             cola_base[k] = cola_base[k].to(cfg['device'])
             cola_param.extend(list(cola_base[k].parameters()))
-        optimizer = make_optimizer(cola_param, cfg['model_name'])
-        func_optimizer = make_optimizer(cola_param, 'cola_func')
+        optimizer = make_optimizer([torch.tensor([0.0], requires_grad=True)], 'cola')
         optimizer.load_state_dict(result['optimizer_state_dict'])
-        func_optimizer.load_state_dict(result['func_optimizer_state_dict'])
-        scheduler = make_scheduler(optimizer, cfg['model_name'])
-        func_scheduler = make_scheduler(func_optimizer, 'cola_func')
+        scheduler = make_scheduler(optimizer, 'cola')
         scheduler.load_state_dict(result['scheduler_state_dict'])
-        func_scheduler.load_state_dict(result['func_scheduler_state_dict'])
+        if cfg['cola']['model']['name'] in ['lr', 'linear', 'mlp']:
+            func_optimizer = make_optimizer(cola_param, 'cola_func')
+            func_optimizer.load_state_dict(result['func_optimizer_state_dict'])
+            func_scheduler = make_scheduler(func_optimizer, 'cola_func')
+            func_scheduler.load_state_dict(result['func_scheduler_state_dict'])
+        else:
+            func_optimizer = None
+            func_scheduler = None
         metric.load_state_dict(result['metric_state_dict'])
         logger.load_state_dict(result['logger_state_dict'])
     for epoch in range(cfg['epoch'], cfg[cfg['model_name']]['num_epochs'] + 1):
@@ -104,15 +112,21 @@ def runExperiment():
     return
 
 
+def cola_fit_sk(input_cola, model):
+    model.fit(input_cola)
+    return model
+
 def train(data_loader, model, cola_base, optimizer, scheduler, func_optimizer, func_scheduler, metric,
           logger):
+    from multiprocessing import Pool, cpu_count
+
     model.train(True)
     start_time = time.time()
     input_buffer = defaultdict(list)
     output_target_buffer = defaultdict(list)
     for i, input in enumerate(data_loader):
         lr = optimizer.param_groups[0]['lr']
-        func_lr = func_optimizer.param_groups[0]['lr']
+        func_lr = func_optimizer.param_groups[0]['lr'] if func_optimizer is not None else 0
         model.load_lr(lr)
         for k in cola_base:
             cola_base[k].train(False)
@@ -128,20 +142,27 @@ def train(data_loader, model, cola_base, optimizer, scheduler, func_optimizer, f
             input_buffer[k].extend(input_i[k])
             output_target_buffer[k].extend(output_target_i[k])
         if (i + 1) % cfg['cola']['num_steps'] == 0:
-            for k in input_buffer:
-                cola_base[k].train(True)
-                for _ in range(cfg['cola']['num_epochs']):
+            if cfg['cola']['model']['name'] in ['lr', 'linear', 'mlp']:
+                for k in input_buffer:
                     input_cola = torch.cat(input_buffer[k], dim=0)
                     output_target_cola = torch.cat(output_target_buffer[k], dim=0)
                     input_cola = {'data': input_cola, 'target': output_target_cola}
+                    cola_base[k].train(True)
                     input_cola = to_device(input_cola, cfg['device'])
-                    output_cola = cola_base[k].f(input_cola)
-                    output_cola['loss'].backward()
-                    func_optimizer.step()
-                    func_optimizer.zero_grad()
+                    for _ in range(cfg['cola']['num_epochs']):
+                        output_cola = cola_base[k].f(input_cola)
+                        output_cola['loss'].backward()
+                        func_optimizer.step()
+                        func_optimizer.zero_grad()
+                func_scheduler.step()
+            else:
+                for k in input_buffer:
+                    input_cola = torch.cat(input_buffer[k], dim=0)
+                    output_target_cola = torch.cat(output_target_buffer[k], dim=0)
+                    input_cola = {'data': input_cola, 'target': output_target_cola}
+                    cola_base[k].fit(input_cola)
             input_buffer = defaultdict(list)
             output_target_buffer = defaultdict(list)
-            func_scheduler.step()
             scheduler.step()
         evaluation = metric.evaluate('train', 'batch', input_, output_)
         logger.append(evaluation, 'train', n=input_size)

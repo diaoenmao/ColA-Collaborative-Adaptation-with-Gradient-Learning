@@ -4,7 +4,7 @@ control:
   data_name: fpb-sa
   model_name: bart-base
   task_name: s2s
-  ft_name: lora
+  ft_name: cola-lr-1-1
 # experiment
 pin_memory: True
 num_workers: 0
