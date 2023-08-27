@@ -47,12 +47,19 @@ def runExperiment():
     model = model.to(cfg['device'])
     cfg['epoch'] = result['epoch']
     test_logger = make_logger(os.path.join('output', 'runs', 'test_{}'.format(cfg['model_tag'])))
+    test_merge_logger = make_logger(os.path.join('output', 'runs', 'test_merge_{}'.format(cfg['model_tag'])))
     test(data_loader['test'], model, metric, test_logger)
+    if cfg['ft_name'] in ['lora', 'adalora', 'ia3']:
+        model = model.merge_and_unload()
+        test(data_loader['test'], model, metric, test_merge_logger)
     result = resume(os.path.join(checkpoint_path, 'model'))
     result = {'cfg': cfg, 'epoch': cfg['epoch'], 'logger_state_dict': {'train': result['logger_state_dict'],
-                                                                       'test': test_logger.state_dict()}}
+                                                                       'test': test_logger.state_dict(),
+                                                                       'test_merge': test_merge_logger.state_dict()}}
     save(result, os.path.join(result_path, cfg['model_tag']))
     return
+
+
 
 
 def test(data_loader, model, metric, logger):

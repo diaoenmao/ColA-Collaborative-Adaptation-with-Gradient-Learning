@@ -65,12 +65,6 @@ def save(input, path, mode='pickle'):
     return
 
 
-def load_cola_base(peft_config):
-    cola_path = peft_config.cola_path
-    cola = load(cola_path)
-    return cola
-
-
 def get_peft_model_state_dict(model, state_dict=None, adapter_name="default"):
     """
     Get the state dict of the Peft model.
@@ -176,6 +170,8 @@ def set_peft_model_state_dict(model, peft_model_state_dict, adapter_name="defaul
             if rank_pattern is not None:
                 model.resize_modules_by_rank_pattern(rank_pattern, adapter_name)
     elif isinstance(config, PromptLearningConfig) or config.peft_type == PeftType.ADAPTION_PROMPT:
+        peft_model_state_dict = state_dict
+    elif config.peft_type in (PeftType.COLA):
         peft_model_state_dict = state_dict
     else:
         raise NotImplementedError

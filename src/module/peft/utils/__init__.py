@@ -50,7 +50,6 @@ from .save_and_load import (
     makedir_exist_ok,
     save,
     load,
-    load_cola_base,
-    get_peft_model_state_dict, 
+    get_peft_model_state_dict,
     set_peft_model_state_dict
 )

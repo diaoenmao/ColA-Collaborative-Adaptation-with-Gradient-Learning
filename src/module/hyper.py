@@ -30,8 +30,8 @@ def process_control():
     cfg[model_name]['scheduler_name'] = 'LinearAnnealingLR'
     cfg[model_name]['scheduler_name'] = 'None'
 
-    cfg['cola'] = {}
     if ft_name_list[0] == 'cola' and len(ft_name_list) > 1:
+        cfg['cola'] = {}
         if ft_name_list[1] == 'lr':
             cfg['cola']['model'] = {'name': ft_name_list[1], 'hidden_size': 64, 'dropout': 0.0}
         elif ft_name_list[1] == 'linear':
@@ -43,25 +43,25 @@ def process_control():
             cfg['cola']['model'] = {'name': ft_name_list[1]}
         else:
             raise ValueError('Not valid cola model')
-    cfg['cola']['shuffle'] = {'train': True, 'test': False}
-    cfg['cola']['optimizer_name'] = 'AdamW'
-    cfg['cola']['lr'] = 1
-    cfg['cola']['momentum'] = 0.9
-    cfg['cola']['betas'] = (0.9, 0.999)
-    cfg['cola']['weight_decay'] = 5e-4
-    cfg['cola']['nesterov'] = True
-    cfg['cola']['num_steps'] = int(ft_name_list[2])
-    cfg['cola']['num_epochs'] = int(ft_name_list[3])
-    cfg['cola']['batch_size'] = {'train': 32, 'test': 32}
-    cfg['cola']['scheduler_name'] = 'LinearAnnealingLR'
-    cfg['cola_func'] = {}
-    cfg['cola_func']['optimizer_name'] = 'AdamW'
-    cfg['cola_func']['lr'] = 1e-3
-    cfg['cola_func']['momentum'] = 0.9
-    cfg['cola_func']['betas'] = (0.9, 0.999)
-    cfg['cola_func']['weight_decay'] = 5e-4
-    cfg['cola_func']['nesterov'] = True
-    cfg['cola_func']['scheduler_name'] = 'LinearAnnealingLR'
+        cfg['cola']['shuffle'] = {'train': True, 'test': False}
+        cfg['cola']['optimizer_name'] = 'AdamW'
+        cfg['cola']['lr'] = 1
+        cfg['cola']['momentum'] = 0.9
+        cfg['cola']['betas'] = (0.9, 0.999)
+        cfg['cola']['weight_decay'] = 5e-4
+        cfg['cola']['nesterov'] = True
+        cfg['cola']['num_steps'] = int(ft_name_list[2])
+        cfg['cola']['num_epochs'] = int(ft_name_list[3])
+        cfg['cola']['batch_size'] = {'train': 32, 'test': 32}
+        cfg['cola']['scheduler_name'] = 'LinearAnnealingLR'
+        cfg['cola_func'] = {}
+        cfg['cola_func']['optimizer_name'] = 'AdamW'
+        cfg['cola_func']['lr'] = 1e-3
+        cfg['cola_func']['momentum'] = 0.9
+        cfg['cola_func']['betas'] = (0.9, 0.999)
+        cfg['cola_func']['weight_decay'] = 5e-4
+        cfg['cola_func']['nesterov'] = True
+        cfg['cola_func']['scheduler_name'] = 'LinearAnnealingLR'
     return
 
 

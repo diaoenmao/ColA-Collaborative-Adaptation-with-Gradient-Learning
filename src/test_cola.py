@@ -2,10 +2,11 @@ import argparse
 import os
 import torch
 import torch.backends.cudnn as cudnn
+from collections import defaultdict
 from config import cfg, process_args
 from dataset import make_dataset, make_data_loader, process_dataset
 from metric import make_metric, make_logger
-from model import make_model
+from model import make_model, make_cola
 from module import save, to_device, process_control, resume, PeftModel
 
 cudnn.benchmark = True
@@ -45,14 +46,51 @@ def runExperiment():
     result = resume(os.path.join(best_path, 'model'))
     model = PeftModel.from_pretrained(model, os.path.join(best_path, 'adapter'))
     model = model.to(cfg['device'])
+    cola_base = make_cola(model, cfg['cola']['model']['name']) if cfg['ft_name'] == 'cola' else None
+    for k in cola_base:
+        cola_base[k].load_state_dict(result['cola_base_state_dict'][k])
+        cola_base[k] = cola_base[k].to(cfg['device'])
+    model.load_cola_base(cola_base)
     cfg['epoch'] = result['epoch']
     test_logger = make_logger(os.path.join('output', 'runs', 'test_{}'.format(cfg['model_tag'])))
+    test_merge_logger = make_logger(os.path.join('output', 'runs', 'test_merge_{}'.format(cfg['model_tag'])))
     test(data_loader['test'], model, metric, test_logger)
+    if cfg['ft_name'] in ['cola']:
+        delta_weight = make_delta_weight(data_loader['train'], model, cola_base)
+        model = model.merge_and_unload(delta_weight)
+        test(data_loader['test'], model, metric, test_merge_logger)
     result = resume(os.path.join(checkpoint_path, 'model'))
     result = {'cfg': cfg, 'epoch': cfg['epoch'], 'logger_state_dict': {'train': result['logger_state_dict'],
-                                                                       'test': test_logger.state_dict()}}
+                                                                       'test': test_logger.state_dict(),
+                                                                       'test_merge': test_merge_logger.state_dict()}}
     save(result, os.path.join(result_path, cfg['model_tag']))
     return
+
+
+def make_delta_weight(data_loader, model, cola_base):
+    with torch.no_grad():
+        model.train(False)
+        model.input_buffer(True)
+        delta_weight = defaultdict(float)
+        size = defaultdict(float)
+        for i, input in enumerate(data_loader):
+            for k in cola_base:
+                cola_base[k].train(False)
+            input = to_device(input, cfg['device'])
+            model(**input)
+            input_i, _ = model.flush()
+            for k in input_i:
+                input_i_k = input_i[k].to(cfg['device'])
+                output_i_k = cola_base[k](input_i_k)
+                input_i_k = input_i_k.view(-1, input_i_k.size(-1))
+                size[k] += input_i_k.size(0)
+                output_i_k = output_i_k.view(-1, output_i_k.size(-1))
+                delta_weight_i_k = output_i_k.t() @ input_i_k
+                delta_weight[k] += delta_weight_i_k
+        for k in cola_base:
+            delta_weight[k] /= size[k]
+        model.input_buffer(False)
+    return delta_weight
 
 
 def test(data_loader, model, metric, logger):

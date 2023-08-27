@@ -72,19 +72,21 @@ def runExperiment():
         model = model.to(cfg['device'])
         model.print_trainable_parameters()
         cola_base = make_cola(model, cfg['cola']['model']['name']) if cfg['ft_name'] == 'cola' else None
+        for k in cola_base:
+            cola_base[k].load_state_dict(result['cola_base_state_dict'][k])
         model.load_cola_base(cola_base)
         cola_param = []
         for k in cola_base:
             cola_base[k] = cola_base[k].to(cfg['device'])
             cola_param.extend(list(cola_base[k].parameters()))
         optimizer = make_optimizer([torch.tensor([0.0], requires_grad=True)], 'cola')
-        optimizer.load_state_dict(result['optimizer_state_dict'])
         scheduler = make_scheduler(optimizer, 'cola')
+        optimizer.load_state_dict(result['optimizer_state_dict'])
         scheduler.load_state_dict(result['scheduler_state_dict'])
         if cfg['cola']['model']['name'] in ['lr', 'linear', 'mlp']:
             func_optimizer = make_optimizer(cola_param, 'cola_func')
-            func_optimizer.load_state_dict(result['func_optimizer_state_dict'])
             func_scheduler = make_scheduler(func_optimizer, 'cola_func')
+            func_optimizer.load_state_dict(result['func_optimizer_state_dict'])
             func_scheduler.load_state_dict(result['func_scheduler_state_dict'])
         else:
             func_optimizer = None
@@ -97,8 +99,12 @@ def runExperiment():
               logger)
         test(data_loader['test'], model, metric, logger)
         result = {'cfg': cfg, 'epoch': cfg['epoch'] + 1,
+                  'cola_base_state_dict': {k: cola_base[k].state_dict() for k in cola_base},
                   'optimizer_state_dict': optimizer.state_dict(), 'scheduler_state_dict': scheduler.state_dict(),
                   'metric_state_dict': metric.state_dict(), 'logger_state_dict': logger.state_dict()}
+        if cfg['cola']['model']['name'] in ['lr', 'linear', 'mlp']:
+            result = {**result, 'func_optimizer_state_dict': func_optimizer.state_dict(),
+                      'func_scheduler_state_dict': func_scheduler.state_dict()}
         save(result, os.path.join(checkpoint_path, 'model'))
         model.save_pretrained(os.path.join(checkpoint_path, 'adapter'))
         if metric.compare(logger.mean['test/{}'.format(metric.pivot_name)]):
@@ -116,10 +122,9 @@ def cola_fit_sk(input_cola, model):
     model.fit(input_cola)
     return model
 
+
 def train(data_loader, model, cola_base, optimizer, scheduler, func_optimizer, func_scheduler, metric,
           logger):
-    from multiprocessing import Pool, cpu_count
-
     model.train(True)
     start_time = time.time()
     input_buffer = defaultdict(list)

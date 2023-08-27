@@ -25,7 +25,6 @@ from ..utils import (
     _freeze_adapter,
     _get_submodules,
     transpose,
-    load_cola_base
 )
 
 if is_bnb_available():
@@ -207,10 +206,7 @@ class ColaModel(torch.nn.Module):
         cola_config = self.peft_config[adapter_name]
         is_target_modules_in_base_model = False
         key_list = [key for key, _ in self.model.named_modules()]
-        if cola_config.inference_mode:
-            cola_base = load_cola_base(cola_config)
-        else:
-            cola_base = None
+        cola_base = None
         for key in key_list:
             if not self._check_target_module_exists(cola_config, key):
                 continue
@@ -219,8 +215,7 @@ class ColaModel(torch.nn.Module):
             parent, target, target_name = _get_submodules(self.model, key)
 
             cola_base_i = cola_base[key] if cola_base else None
-            if cola_config.inference_mode:
-                cola_base_i = _freeze_cola_base(cola_base_i)
+
             if isinstance(target, ColaLayer) and isinstance(target, torch.nn.Conv2d):
                 target.update_layer(
                     adapter_name,
@@ -352,43 +347,44 @@ class ColaModel(torch.nn.Module):
             peft_config.target_modules = TRANSFORMERS_MODELS_TO_COLA_TARGET_MODULES_MAPPING[model_config["model_type"]]
         return peft_config
 
-    # def _unload_and_optionally_merge(self, merge=True):
-    #     if getattr(self.model, "is_loaded_in_8bit", False) or getattr(self.model, "is_loaded_in_4bit", False):
-    #         raise ValueError("Cannot merge ColA layers when the model is loaded in 8-bit mode")
-    #
-    #     key_list = [key for key, _ in self.model.named_modules() if "cola" not in key]
-    #     for key in key_list:
-    #         try:
-    #             parent, target, target_name = _get_submodules(self.model, key)
-    #         except AttributeError:
-    #             continue
-    #         if isinstance(target, LoraLayer):
-    #             if isinstance(target, nn.Embedding):
-    #                 new_module = torch.nn.Embedding(target.in_features, target.out_features)
-    #             elif isinstance(target, nn.Conv2d):
-    #                 new_module = torch.nn.Conv2d(
-    #                     target.in_channels,
-    #                     target.out_channels,
-    #                     kernel_size=target.kernel_size,
-    #                     stride=target.stride,
-    #                     padding=target.padding,
-    #                     dilation=target.dilation,
-    #                 )
-    #             else:
-    #                 bias = target.bias is not None
-    #                 if getattr(target, "is_target_conv_1d_layer", False):
-    #                     new_module = Conv1D(target.out_features, target.in_features)
-    #                 else:
-    #                     new_module = torch.nn.Linear(target.in_features, target.out_features, bias=bias)
-    #             if merge:
-    #                 target.merge()
-    #             self._replace_module(parent, target_name, new_module, target)
-    #
-    #         # save any additional trainable modules part of `modules_to_save`
-    #         if isinstance(target, ModulesToSaveWrapper):
-    #             setattr(parent, target_name, target.modules_to_save[target.active_adapter])
-    #
-    #     return self.model
+    def _unload_and_optionally_merge(self, delta_weight, merge=True):
+        if getattr(self.model, "is_loaded_in_8bit", False) or getattr(self.model, "is_loaded_in_4bit", False):
+            raise ValueError("Cannot merge ColA layers when the model is loaded in 8-bit mode")
+
+        key_list = [key for key, _ in self.model.named_modules() if "cola" not in key]
+        for key in key_list:
+            try:
+                parent, target, target_name = _get_submodules(self.model, key)
+            except AttributeError:
+                continue
+            if isinstance(target, ColaLayer):
+                if isinstance(target, nn.Embedding):
+                    new_module = torch.nn.Embedding(target.in_features, target.out_features)
+                elif isinstance(target, nn.Conv2d):
+                    new_module = torch.nn.Conv2d(
+                        target.in_channels,
+                        target.out_channels,
+                        kernel_size=target.kernel_size,
+                        stride=target.stride,
+                        padding=target.padding,
+                        dilation=target.dilation,
+                    )
+                else:
+                    bias = target.bias is not None
+                    if getattr(target, "is_target_conv_1d_layer", False):
+                        new_module = Conv1D(target.out_features, target.in_features)
+                    else:
+                        new_module = torch.nn.Linear(target.in_features, target.out_features, bias=bias)
+                if merge:
+                    target.merge(delta_weight[key])
+                self._replace_module(parent, target_name, new_module, target)
+
+            # save any additional trainable modules part of `modules_to_save`
+            if isinstance(target, ModulesToSaveWrapper):
+                setattr(parent, target_name, target.modules_to_save[target.active_adapter])
+
+        return self.model
+
     #
     # def add_weighted_adapter(self, adapters, weights, adapter_name, combination_type="svd"):
     #     """
@@ -479,19 +475,21 @@ class ColaModel(torch.nn.Module):
                     )
                     target.active_adapter = resetting_active_adapter
 
-    def merge_and_unload(self):
-        return self._unload_and_optionally_merge()
+    def merge_and_unload(self, delta_weight):
+        return self._unload_and_optionally_merge(delta_weight)
 
     def unload(self):
-        return self._unload_and_optionally_merge(merge=False)
+        return self._unload_and_optionally_merge(None, merge=False)
 
     def flush(self):
         input = {}
         output_target = {}
         for name, module in self.named_modules():
             if isinstance(module, ColaLayer):
-                input[name] = torch.cat(module.input, dim=0)
-                output_target[name] = torch.cat(module.output_target, dim=0)
+                if len(module.input) > 0:
+                    input[name] = torch.cat(module.input, dim=0)
+                if len(module.output_target) > 0:
+                    output_target[name] = torch.cat(module.output_target, dim=0)
                 module.input = []
                 module.output_target = []
         return input, output_target
@@ -508,6 +506,13 @@ class ColaModel(torch.nn.Module):
             if isinstance(module, ColaLayer):
                 module.lr = lr
         return
+
+    def input_buffer(self, flag):
+        for name, module in self.named_modules():
+            if isinstance(module, ColaLayer):
+                module.if_input_buffer = flag
+        return
+
 
 def mark_only_cola_as_trainable(model: nn.Module) -> None:
     for n, p in model.named_parameters():
@@ -529,6 +534,7 @@ class ColaLayer:
         self.input = []
         self.output_target = []
         self.lr = 1.
+        self.if_input_buffer = False
 
         self.hook = self.register_forward_hook(self.forward_hook)
 
@@ -539,7 +545,7 @@ class ColaLayer:
         self.to(self.weight.device)
 
     def forward_hook(self, module, input, output):
-        if self.training:
+        if self.training or self.if_input_buffer:
             input_ = input[0].detach().to('cpu')
             self.input.append(input_)
             output.requires_grad_(True)
@@ -579,40 +585,34 @@ class Linear(nn.Linear, ColaLayer):
         self.update_layer(adapter_name, cola_alpha)
         self.active_adapter = adapter_name
 
-    def merge(self):
-        # if self.active_adapter:
-        #     return
-        # if self.merged:
-        #     warnings.warn("Already merged. Nothing to do.")
-        #     return
-        # if self.r[self.active_adapter] > 0:
-        #     self.weight.data += self.get_delta_weight(self.active_adapter)
-        #     self.merged = True
-        # TODO: need implementation
-        pass
+    def merge(self, delta_weight):
+        if self.active_adapter:
+            return
+        if self.merged:
+            warnings.warn("Already merged. Nothing to do.")
+            return
+        self.weight.data += self.get_delta_weight(delta_weight, self.active_adapter)
+        self.merged = True
+        return
 
-    def unmerge(self):
-        # if self.active_adapter not in self.lora_A.keys():
-        #     return
-        # if not self.merged:
-        #     warnings.warn("Already unmerged. Nothing to do.")
-        #     return
-        # if self.r[self.active_adapter] > 0:
-        #     self.weight.data -= self.get_delta_weight(self.active_adapter)
-        #     self.merged = False
-        # TODO: need implementation
-        pass
+    def unmerge(self, delta_weight=None):
+        if delta_weight is None:
+            return
+        if not self.merged:
+            warnings.warn("Already unmerged. Nothing to do.")
+            return
+        self.weight.data -= self.get_delta_weight(delta_weight, self.active_adapter)
+        self.merged = False
+        return
 
-    def get_delta_weight(self, adapter):
-        # return (
-        #         transpose(
-        #             self.lora_B[adapter].weight @ self.lora_A[adapter].weight,
-        #             self.fan_in_fan_out,
-        #         )
-        #         * self.scaling[adapter]
-        # )
-        # TODO: need implementation
-        pass
+    def get_delta_weight(self, delta_weight, adapter):
+        return (
+                transpose(
+                    delta_weight,
+                    self.fan_in_fan_out,
+                )
+                * self.cola_alpha[adapter]
+        )
 
     def forward(self, x: torch.Tensor):
         previous_dtype = x.dtype
@@ -660,24 +660,26 @@ class Embedding(nn.Embedding, ColaLayer):
         self.update_layer(adapter_name, cola_alpha)
         self.active_adapter = adapter_name
 
-    # def unmerge(self):
-    #     if not self.merged:
-    #         warnings.warn("Already unmerged. Nothing to do.")
-    #         return
-    #     if self.r[self.active_adapter] > 0:
-    #         self.weight.data -= self.get_delta_weight(self.active_adapter)
-    #         self.merged = False
-    #
-    # def merge(self):
-    #     if self.merged:
-    #         warnings.warn("Already merged. Nothing to do.")
-    #         return
-    #     if self.r[self.active_adapter] > 0:
-    #         self.weight.data += self.get_delta_weight(self.active_adapter)
-    #         self.merged = True
-    #
-    # def get_delta_weight(self, adapter):
-    #     return transpose(self.lora_embedding_B[adapter] @ self.lora_embedding_A[adapter], True) * self.scaling[adapter]
+    def unmerge(self, delta_weight=None):
+        if delta_weight is None:
+            return
+        if not self.merged:
+            warnings.warn("Already unmerged. Nothing to do.")
+            return
+        self.weight.data -= self.get_delta_weight(delta_weight, self.active_adapter)
+        self.merged = False
+        return
+
+    def merge(self):
+        if self.merged:
+            warnings.warn("Already merged. Nothing to do.")
+            return
+        self.weight.data += self.get_delta_weight(delta_weight, self.active_adapter)
+        self.merged = True
+        return
+
+    def get_delta_weight(self, delta_weight, adapter):
+        return transpose(delta_weight, True) * self.cola_alpha[adapter]
 
     def forward(self, x: torch.Tensor):
         if self.disable_adapters:
@@ -728,43 +730,26 @@ class Conv2d(nn.Conv2d, ColaLayer):
         self.update_layer(adapter_name, cola_alpha)
         self.active_adapter = adapter_name
 
-    # def merge(self):
-    #     if self.active_adapter not in self.lora_A.keys():
-    #         return
-    #     if self.merged:
-    #         warnings.warn("Already merged. Nothing to do.")
-    #         return
-    #     if self.r[self.active_adapter] > 0:
-    #         self.weight.data += self.get_delta_weight(self.active_adapter)
-    #         self.merged = True
-    #
-    # def unmerge(self):
-    #     if self.active_adapter not in self.lora_A.keys():
-    #         return
-    #     if not self.merged:
-    #         warnings.warn("Already unmerged. Nothing to do.")
-    #         return
-    #     if self.r[self.active_adapter] > 0:
-    #         self.weight.data -= self.get_delta_weight(self.active_adapter)
-    #         self.merged = False
-    #
-    # def get_delta_weight(self, adapter):
-    #     # https://github.com/bmaltais/kohya_ss/blob/feb6728762a8f463d15ba936d189d4c3abfaa1ab/networks/lora.py#L117
-    #     if self.weight.size()[2:4] == (1, 1):
-    #         # conv2d 1x1
-    #         return (
-    #                 self.lora_B[adapter].weight.squeeze(3).squeeze(2) @ self.lora_A[adapter].weight.squeeze(3).squeeze(
-    #             2)
-    #         ).unsqueeze(2).unsqueeze(3) * self.scaling[adapter]
-    #     else:
-    #         # conv2d 3x3
-    #         return (
-    #                 F.conv2d(
-    #                     self.lora_A[adapter].weight.permute(1, 0, 2, 3),
-    #                     self.lora_B[adapter].weight,
-    #                 ).permute(1, 0, 2, 3)
-    #                 * self.scaling[adapter]
-    #         )
+    def merge(self, delta_weight):
+        if self.merged:
+            warnings.warn("Already merged. Nothing to do.")
+            return
+        self.weight.data += self.get_delta_weight(delta_weight, self.active_adapter)
+        self.merged = True
+        return
+
+    def unmerge(self, delta_weight=None):
+        if delta_weight is None:
+            return
+        if not self.merged:
+            warnings.warn("Already unmerged. Nothing to do.")
+            return
+        self.weight.data -= self.get_delta_weight(delta_weight, self.active_adapter)
+        self.merged = False
+        return
+
+    def get_delta_weight(self, delta_weight, adapter):
+        return delta_weight * self.cola_alpha[adapter]
 
     def forward(self, x: torch.Tensor):
         previous_dtype = x.dtype
