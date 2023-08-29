@@ -56,7 +56,8 @@ def runExperiment():
     test_merge_logger = make_logger(os.path.join('output', 'runs', 'test_merge_{}'.format(cfg['model_tag'])))
     test(data_loader['test'], model, metric, test_logger)
     if cfg['ft_name'] in ['cola']:
-        delta_weight = make_delta_weight(cola_base)
+        # delta_weight = make_delta_weight(cola_base)
+        delta_weight = make_delta_weight_ma(data_loader['train'], model, cola_base)
         model = model.merge_and_unload(delta_weight)
         test(data_loader['test'], model, metric, test_merge_logger)
     result = resume(os.path.join(checkpoint_path, 'model'))
@@ -67,11 +68,38 @@ def runExperiment():
     return
 
 
-def make_delta_weight(cola_base):
+# def make_delta_weight(cola_base):
+#     with torch.no_grad():
+#         delta_weight = {}
+#         for k in cola_base:
+#             delta_weight[k] = cola_base[k].make_delta_weight()
+#     return delta_weight
+
+
+def make_delta_weight_ma(data_loader, model, cola_base):
     with torch.no_grad():
-        delta_weight = {}
+        model.train(False)
+        model.input_buffer(True)
+        delta_weight = defaultdict(float)
+        size = defaultdict(float)
+        for i, input in enumerate(data_loader):
+            for k in cola_base:
+                cola_base[k].train(False)
+            input = to_device(input, cfg['device'])
+            model(**input)
+            input_i, _ = model.flush()
+            for k in input_i:
+                input_i_k = input_i[k].to(cfg['device'])
+                output_i_k = cola_base[k](input_i_k)
+                input_i_k = input_i_k.view(-1, input_i_k.size(-1))
+                size[k] += input_i_k.size(0)
+                output_i_k = output_i_k.view(-1, output_i_k.size(-1))
+                delta_weight_i_k = output_i_k.t() @ input_i_k
+                delta_weight[k] += delta_weight_i_k
         for k in cola_base:
-            delta_weight[k] = cola_base[k].make_delta_weight()
+            delta_weight[k] /= size[k]
+        model.input_buffer(False)
+    delta_weight = dict(delta_weight)
     return delta_weight
 
 
