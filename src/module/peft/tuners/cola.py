@@ -351,10 +351,11 @@ class ColaModel(torch.nn.Module):
         if getattr(self.model, "is_loaded_in_8bit", False) or getattr(self.model, "is_loaded_in_4bit", False):
             raise ValueError("Cannot merge ColA layers when the model is loaded in 8-bit mode")
 
-        key_list = [key for key, _ in self.model.named_modules() if "cola" not in key]
+        # key_list = [key for key, _ in self.model.named_modules() if "cola" not in key]
+        key_list = [key for key, _ in self.named_modules()]
         for key in key_list:
             try:
-                parent, target, target_name = _get_submodules(self.model, key)
+                parent, target, target_name = _get_submodules(self, key)
             except AttributeError:
                 continue
             if isinstance(target, ColaLayer):
@@ -586,11 +587,12 @@ class Linear(nn.Linear, ColaLayer):
         self.active_adapter = adapter_name
 
     def merge(self, delta_weight):
-        if self.active_adapter:
-            return
+        # if self.active_adapter:
+        #     return
         if self.merged:
             warnings.warn("Already merged. Nothing to do.")
             return
+
         self.weight.data += self.get_delta_weight(delta_weight, self.active_adapter)
         self.merged = True
         return

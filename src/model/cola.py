@@ -21,8 +21,8 @@ class LR(nn.Module):
             self.dropout = nn.Dropout(p=dropout)
         else:
             self.dropout = nn.Identity()
-        self.cola_A = nn.Linear(input_size, hidden_size)
-        self.cola_B = nn.Linear(hidden_size, output_size)
+        self.cola_A = nn.Linear(input_size, hidden_size, bias=False)
+        self.cola_B = nn.Linear(hidden_size, output_size, bias=False)
 
     def f(self, input):
         output = {}
@@ -32,10 +32,12 @@ class LR(nn.Module):
         output['loss'] = F.mse_loss(output['target'], input['target'])
         return output
 
+    def make_delta_weight(self):
+        return self.cola_B.weight.data @ self.cola_A.weight.data
+
     def forward(self, x):
         x = self.dropout(x)
         x = self.cola_A(x)
-        # x = F.relu(x)
         x = self.cola_B(x)
         return x
 
@@ -45,7 +47,7 @@ class Linear(nn.Module):
         super().__init__()
         self.input_size = input_size
         self.output_size = output_size
-        self.linear = nn.Linear(input_size, output_size)
+        self.linear = nn.Linear(input_size, output_size, bias=False)
 
     def f(self, input):
         output = {}
@@ -54,6 +56,9 @@ class Linear(nn.Module):
         output['target'] = x
         output['loss'] = F.mse_loss(output['target'], input['target'])
         return output
+
+    def make_delta_weight(self):
+        return self.linear.weight.data
 
     def forward(self, x):
         x = self.linear(x)
@@ -87,6 +92,9 @@ class MLP(nn.Module):
         output['loss'] = F.mse_loss(output['target'], input['target'])
         return output
 
+    def make_delta_weight(self):
+        raise NotImplementedError
+
     def forward(self, x):
         x = self.blocks(x)
         x = self.linear(x)
@@ -105,6 +113,13 @@ class SK(nn.Module):
         else:
             raise ValueError('Not valid model name')
         self.model = model
+
+    def state_dict(self):
+        return self.model.get_params()
+
+    def load_state_dict(self, state_dict):
+        self.model.set_params(**state_dict)
+        return
 
     def fit(self, input):
         output = {}
@@ -128,6 +143,9 @@ class SK(nn.Module):
         output['loss'] = F.mse_loss(output['target'], input['target'], loss_mode=input['loss_mode'])
         return output
 
+    def make_delta_weight(self):
+        raise NotImplementedError
+
     def forward(self, input):
         x = input.cpu().numpy()
         x = x.reshape(-1, self.input_size)
@@ -138,13 +156,6 @@ class SK(nn.Module):
             x = np.zeros((*input.shape[:-1], self.output_size))
         x = input.new_tensor(x)
         return x
-
-    def state_dict(self):
-        return self.model.get_params()
-
-    def load_state_dict(self, state_dict):
-        self.model.set_params(**state_dict)
-        return
 
 
 def make_cola(model, model_name):
