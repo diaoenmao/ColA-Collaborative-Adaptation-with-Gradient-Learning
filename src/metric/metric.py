@@ -20,6 +20,12 @@ def make_metric(metric_name):
             pivot_name = 'Perplexity'
             for k in metric_name:
                 metric_name[k].extend(['Perplexity'])
+        elif cfg['data_name'] in ['databricks-dolly']:
+            pivot = float('inf')
+            pivot_direction = 'down'
+            pivot_name = 'Perplexity'
+            for k in metric_name:
+                metric_name[k].extend(['Perplexity'])
         else:
             raise ValueError('Not valid data name')
     elif cfg['task_name'] == 's2s':

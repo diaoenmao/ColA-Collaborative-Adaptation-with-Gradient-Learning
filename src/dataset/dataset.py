@@ -80,6 +80,9 @@ def make_dataset(data_name, verbose=True):
         dataset_ = load_dataset(cfg['hf_data_name'], cfg['hf_subset_name'], cache_dir=root)
         dataset_['test'] = dataset_['validation']
         del dataset_['validation']
+    elif data_name in ['databricks-dolly']:
+        dataset_ = load_dataset(cfg['hf_data_name'], cache_dir=root)
+        dataset_ = dataset_['train'].train_test_split(test_size=0.1, seed=cfg['seed'])
     else:
         raise ValueError('Not valid dataset name')
     if verbose:
@@ -212,6 +215,61 @@ def process_dataset(dataset, tokenizer):
             load_from_cache_file=False,
             desc="Running tokenizer on dataset",
         )
+    elif cfg['data_name'] == 'databricks-dolly':
+        max_length = cfg[cfg['model_name']]['max_length']
+
+        def preprocess_function(examples):
+            batch_size = len(examples[text_column[0]])
+            inputs = [(f"{' '.join([f'{col}: {examples[col][i]}' for col in text_column])} "
+                       f"response: ") for i in range(batch_size)]
+            targets = [str(x) for x in examples[label_column]]
+            model_inputs = tokenizer(inputs)
+            labels = tokenizer(targets)
+            for i in range(batch_size):
+                sample_input_ids = model_inputs["input_ids"][i]
+                label_input_ids = labels["input_ids"][i] + [tokenizer.pad_token_id]
+                model_inputs["input_ids"][i] = sample_input_ids + label_input_ids
+                labels["input_ids"][i] = [-100] * len(sample_input_ids) + label_input_ids
+                model_inputs["attention_mask"][i] = [1] * len(model_inputs["input_ids"][i])
+            for i in range(batch_size):
+                sample_input_ids = model_inputs["input_ids"][i]
+                label_input_ids = labels["input_ids"][i]
+                model_inputs["input_ids"][i] = [tokenizer.pad_token_id] * (
+                        max_length - len(sample_input_ids)) + sample_input_ids
+                model_inputs["attention_mask"][i] = [0] * (max_length - len(sample_input_ids)) + model_inputs[
+                    "attention_mask"][i]
+                labels["input_ids"][i] = [-100] * (max_length - len(sample_input_ids)) + label_input_ids
+                model_inputs["input_ids"][i] = torch.tensor(model_inputs["input_ids"][i][:max_length])
+                model_inputs["attention_mask"][i] = torch.tensor(model_inputs["attention_mask"][i][:max_length])
+                labels["input_ids"][i] = torch.tensor(labels["input_ids"][i][:max_length])
+            model_inputs["labels"] = labels["input_ids"]
+            return model_inputs
+
+        cfg['task_label'] = list(set(dataset['train']['category']))
+        cfg['num_split'] = len(cfg['task_label'])
+
+        if cfg['dist_mode'] in ['alone', 'col']:
+            processed_dataset = []
+            for i in range(len(cfg['task_label'])):
+                subset = dataset.filter(lambda x: x['category'] == unique_categories[i])
+                processed_dataset_i = subset.map(
+                    preprocess_function,
+                    batched=True,
+                    num_proc=1,
+                    remove_columns=dataset["train"].column_names,
+                    load_from_cache_file=False,
+                    desc="Running tokenizer on dataset",
+                )
+                processed_dataset.append(processed_dataset_i)
+        else:
+            processed_dataset = dataset.map(
+                preprocess_function,
+                batched=True,
+                num_proc=1,
+                remove_columns=dataset["train"].column_names,
+                load_from_cache_file=False,
+                desc="Running tokenizer on dataset",
+            )
     else:
         raise ValueError('Not valid data name')
     cfg['data_size'] = {k: len(processed_dataset[k]) for k in processed_dataset}

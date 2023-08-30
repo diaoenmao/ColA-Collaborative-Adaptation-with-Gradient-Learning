@@ -14,6 +14,10 @@ def process_control():
     cfg['task_name'] = cfg['control']['task_name']
     ft_name_list = cfg['control']['ft_name'].split('-')
     cfg['ft_name'] = ft_name_list[0]
+    if 'dist_mode' in cfg['control']:
+        cfg['dist_mode'] = cfg['control']['dist_mode']
+    else:
+        cfg['dist_mode'] = 'joint'
     model_name = cfg['model_name']
     cfg[model_name]['shuffle'] = {'train': True, 'test': False}
     cfg[model_name]['optimizer_name'] = 'AdamW'
@@ -26,7 +30,8 @@ def process_control():
     cfg[model_name]['weight_decay'] = 5e-4
     cfg[model_name]['nesterov'] = True
     cfg[model_name]['num_epochs'] = 8
-    cfg[model_name]['batch_size'] = {'train': 32, 'test': 32}
+    cfg[model_name]['batch_size'] = {'train': 8, 'test': 8} # clm bloomz-560m
+    # cfg[model_name]['batch_size'] = {'train': 32, 'test': 32}
     cfg[model_name]['scheduler_name'] = 'LinearAnnealingLR'
     cfg[model_name]['scheduler_name'] = 'None'
 
@@ -66,7 +71,9 @@ def process_control():
 
 
 def make_data_name():
-    cfg['data_name'], cfg['subset_name'] = cfg['control']['data_name'].split('-')
+    data_name_list = cfg['control']['data_name'].split('-')
+    cfg['data_name'] = '-'.join(data_name_list[:-1])
+    cfg['subset_name'] = data_name_list[-1]
     data_name_dict = {'fpb': {'data_name': 'financial_phrasebank',
                               'subset_name_dict': {'sa': {'subset_name': 'sentences_allagree',
                                                           'text_column': 'sentence',
@@ -110,7 +117,14 @@ def make_data_name():
                                                              'text_column': ['sentence1', 'sentence2'],
                                                              'label_column': 'label'}
                                                     }
-                               }
+                               },
+                      'databricks-dolly': {'data_name': 'databricks/databricks-dolly-15k',
+                                           'subset_name_dict': {'15k': {'subset_name': '15k',
+                                                                        'text_column': ['instruction', 'context'],
+                                                                        'label_column': 'response'}
+                                           }
+
+                      }
                       }
     cfg['hf_data_name'] = data_name_dict[cfg['data_name']]['data_name']
     cfg['hf_subset_name'] = data_name_dict[cfg['data_name']]['subset_name_dict'][cfg['subset_name']]['subset_name']

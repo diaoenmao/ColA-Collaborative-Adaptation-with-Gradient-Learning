@@ -6,12 +6,12 @@ from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM, AutoModelF
 
 
 def make_hf_model(model_name):
-    if 'bart' in model_name:
-        cfg['model_name_or_path'] = 'facebook/{}'.format(model_name)
-        cfg['tokenizer_name_or_path'] = 'facebook/{}'.format(model_name)
-    elif 'bloomz' in model_name:
+    if 'bloomz' in model_name:
         cfg['model_name_or_path'] = 'bigscience/{}'.format(model_name)
         cfg['tokenizer_name_or_path'] = 'bigscience/{}'.format(model_name)
+    elif 'bart' in model_name:
+        cfg['model_name_or_path'] = 'facebook/{}'.format(model_name)
+        cfg['tokenizer_name_or_path'] = 'facebook/{}'.format(model_name)
     elif 'roberta' in model_name:
         cfg['model_name_or_path'] = '{}'.format(model_name)
         cfg['tokenizer_name_or_path'] = '{}'.format(model_name)
