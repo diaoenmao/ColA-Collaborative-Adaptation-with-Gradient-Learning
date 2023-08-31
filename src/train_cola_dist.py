@@ -43,7 +43,14 @@ def runExperiment():
     dataset = make_dataset(cfg['data_name'])
     model, tokenizer = make_model(cfg['model_name'])
     dataset = process_dataset(dataset, tokenizer)
-    data_loader = make_data_loader(dataset, tokenizer, cfg['model_name'])
+    data_loader = {'train': [], 'test': []}
+    for i in range(len(dataset)):
+        data_loader_i = make_data_loader(dataset[i], tokenizer, cfg['model_name'],
+                                         batch_size={
+                                             'train': cfg[cfg['model_name']]['batch_size']['train'] // cfg['num_split'],
+                                             'test': cfg[cfg['model_name']]['batch_size']['test'] // cfg['num_split']})
+        data_loader['train'].append(data_loader_i['train'])
+        data_loader['test'].append(data_loader_i['test'])
     result = resume(os.path.join(checkpoint_path, 'model'), resume_mode=cfg['resume_mode'])
     metric = make_metric({'train': ['Loss'], 'test': ['Loss']})
     logger = make_logger(os.path.join('output', 'runs', 'train_{}'.format(cfg['model_tag'])))
@@ -52,7 +59,9 @@ def runExperiment():
         model = make_ft_model(model)
         model = model.to(cfg['device'])
         model.print_trainable_parameters()
-        cola_base = make_cola(model, cfg['cola']['model']['name']) if cfg['ft_name'] == 'cola' else None
+        cola_base = make_cola(model, cfg['cola']['model']['name'], cfg['dist_mode']) \
+            if cfg['ft_name'] == 'cola' else None
+        cola_base = cola_base
         model.load_cola_base(cola_base)
         cola_param = []
         for k in cola_base:
@@ -71,7 +80,8 @@ def runExperiment():
         model = PeftModel.from_pretrained(model, os.path.join(checkpoint_path, 'adapter'), is_trainable=True)
         model = model.to(cfg['device'])
         model.print_trainable_parameters()
-        cola_base = make_cola(model, cfg['cola']['model']['name']) if cfg['ft_name'] == 'cola' else None
+        cola_base = make_cola(model, cfg['cola']['model']['name'], cfg['dist_mode']) \
+            if cfg['ft_name'] == 'cola' else None
         for k in cola_base:
             cola_base[k].load_state_dict(result['cola_base_state_dict'][k])
         model.load_cola_base(cola_base)
@@ -129,23 +139,26 @@ def train(data_loader, model, cola_base, optimizer, scheduler, func_optimizer, f
     start_time = time.time()
     input_buffer = defaultdict(list)
     output_target_buffer = defaultdict(list)
-    for i, input in enumerate(data_loader):
+    for i, input in enumerate(zip(*data_loader)):
         lr = optimizer.param_groups[0]['lr']
         func_lr = func_optimizer.param_groups[0]['lr'] if func_optimizer is not None else 0
         model.load_lr(lr)
+        input_ = {k: torch.cat([input[i][k] for i in range(len(input))], dim=0) for k in input[0]}
+        size_ = [input[i]['labels'].size(0) for i in range(len(input))]
         for k in cola_base:
             cola_base[k].train(False)
-        input_size = input['labels'].size(0)
-        input = to_device(input, cfg['device'])
-        output = model(**input)
-        input_ = {'target': input['labels']}
+            cola_base[k].size = size_
+        input_size = input_['labels'].size(0)
+        input_ = to_device(input_, cfg['device'])
+        output = model(**input_)
+        input_ = {'target': input_['labels']}
         output_ = {'target': output['logits'], 'loss': output['loss']}
         output['loss'].backward()
         optimizer.zero_grad()
         input_i, output_target_i = model.flush()
         for k in input_i:
-            input_buffer[k].extend(input_i[k])
-            output_target_buffer[k].extend(output_target_i[k])
+            input_buffer[k].append(input_i[k])
+            output_target_buffer[k].append(output_target_i[k])
         if (i + 1) % cfg['cola']['num_steps'] == 0:
             if cfg['cola']['model']['name'] in ['lr', 'linear', 'mlp']:
                 for k in input_buffer:
@@ -169,15 +182,16 @@ def train(data_loader, model, cola_base, optimizer, scheduler, func_optimizer, f
             input_buffer = defaultdict(list)
             output_target_buffer = defaultdict(list)
             scheduler.step()
-        evaluation = metric.evaluate('train', 'batch', input_, output_)
-        logger.append(evaluation, 'train', n=input_size)
-        if i % int((len(data_loader) * cfg['log_interval']) + 1) == 0:
+            evaluation = metric.evaluate('train', 'batch', input_, output_)
+            logger.append(evaluation, 'train', n=input_size)
+        if i % int((len(data_loader[-1]) * cfg['log_interval']) + 1) == 0:
             batch_time = (time.time() - start_time) / (i + 1)
-            epoch_finished_time = datetime.timedelta(seconds=round(batch_time * (len(data_loader) - i - 1)))
+            epoch_finished_time = datetime.timedelta(seconds=round(batch_time * (len(data_loader[-1]) - i - 1)))
             exp_finished_time = epoch_finished_time + datetime.timedelta(
-                seconds=round((cfg[cfg['model_name']]['num_epochs'] - cfg['epoch']) * batch_time * len(data_loader)))
+                seconds=round(
+                    (cfg[cfg['model_name']]['num_epochs'] - cfg['epoch']) * batch_time * len(data_loader[-1])))
             info = {'info': ['Model: {}'.format(cfg['model_tag']),
-                             'Train Epoch: {}({:.0f}%)'.format(cfg['epoch'], 100. * i / len(data_loader)),
+                             'Train Epoch: {}({:.0f}%)'.format(cfg['epoch'], 100. * i / len(data_loader[-1])),
                              'Learning rate: {:.6f}|{:.6f}'.format(lr, func_lr),
                              'Epoch Finished Time: {}'.format(epoch_finished_time),
                              'Experiment Finished Time: {}'.format(exp_finished_time)]}

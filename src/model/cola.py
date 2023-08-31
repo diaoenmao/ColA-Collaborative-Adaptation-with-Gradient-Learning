@@ -1,3 +1,4 @@
+import copy
 import numpy as np
 import torch
 import torch.nn as nn
@@ -158,7 +159,37 @@ class SK(nn.Module):
         return x
 
 
-def make_cola(model, model_name):
+class Router(nn.Module):
+    def __init__(self, model, dist_mode):
+        super().__init__()
+        self.model = nn.ModuleList(model)
+        self.dist_mode = dist_mode
+        self.size = None
+
+    def f(self, input):
+        output = {}
+        x = input['data']
+        x = self.forward(x)
+        output['target'] = x
+        output['loss'] = F.mse_loss(output['target'], input['target'])
+        return output
+
+    def make_delta_weight(self):
+        delta_weight = sum([self.model[i].make_delta_weight() for i in range(len(self.size))])
+        raise delta_weight
+
+    def forward(self, x):
+        if self.dist_mode == 'alone':
+            chunks = torch.split(x, self.size, dim=0)
+            x = torch.cat([self.model[i](chunks[i]) for i in range(len(self.size))], dim=0)
+        elif self.dist_mode == 'col':
+            x = torch.stack([self.model[i](x) for i in range(len(self.size))], dim=0).sum(dim=0)
+        else:
+            raise ValueError('Not valid dist mode')
+        return x
+
+
+def make_cola(model, model_name, dist_mode='joint'):
     cola = {}
     for name, module in model.base_model.named_modules():
         if isinstance(module, ColaLayer):
@@ -183,4 +214,6 @@ def make_cola(model, model_name):
                 cola[name] = SK(input_size, output_size, model_name, max_iter=cfg['cola']['num_epochs'])
             else:
                 raise ValueError('Not valid model name')
+            if dist_mode in ['alone', 'col']:
+                cola[name] = Router([copy.deepcopy(cola[name]) for _ in range(cfg['num_split'])], dist_mode)
     return cola

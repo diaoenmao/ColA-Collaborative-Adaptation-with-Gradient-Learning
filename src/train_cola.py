@@ -144,8 +144,8 @@ def train(data_loader, model, cola_base, optimizer, scheduler, func_optimizer, f
         optimizer.zero_grad()
         input_i, output_target_i = model.flush()
         for k in input_i:
-            input_buffer[k].extend(input_i[k])
-            output_target_buffer[k].extend(output_target_i[k])
+            input_buffer[k].append(input_i[k])
+            output_target_buffer[k].append(output_target_i[k])
         if (i + 1) % cfg['cola']['num_steps'] == 0:
             if cfg['cola']['model']['name'] in ['lr', 'linear', 'mlp']:
                 for k in input_buffer:

@@ -251,7 +251,7 @@ def process_dataset(dataset, tokenizer):
         if cfg['dist_mode'] in ['alone', 'col']:
             processed_dataset = []
             for i in range(len(cfg['task_label'])):
-                subset = dataset.filter(lambda x: x['category'] == unique_categories[i])
+                subset = dataset.filter(lambda x: x['category'] == cfg['task_label'][i])
                 processed_dataset_i = subset.map(
                     preprocess_function,
                     batched=True,
@@ -261,6 +261,8 @@ def process_dataset(dataset, tokenizer):
                     desc="Running tokenizer on dataset",
                 )
                 processed_dataset.append(processed_dataset_i)
+            cfg['data_size'] = [{k: len(processed_dataset[i][k]) for k in processed_dataset[i]} for i in
+                                range(len(processed_dataset))]
         else:
             processed_dataset = dataset.map(
                 preprocess_function,
@@ -270,8 +272,8 @@ def process_dataset(dataset, tokenizer):
                 load_from_cache_file=False,
                 desc="Running tokenizer on dataset",
             )
+            cfg['data_size'] = {k: len(processed_dataset[k]) for k in processed_dataset}
     else:
         raise ValueError('Not valid data name')
-    cfg['data_size'] = {k: len(processed_dataset[k]) for k in processed_dataset}
     cfg['target_size'] = len(tokenizer)
     return processed_dataset
