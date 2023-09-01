@@ -134,16 +134,6 @@ class SK(nn.Module):
         output['loss'] = F.mse_loss(output['target'], input['target'])
         return output
 
-    def predict(self, input):
-        output = {}
-        data = input['data'].cpu().numpy()
-        data = data.reshape(-1, data.shape[-1])
-        output_target = self.model.predict(data)
-        output_target = output_target.reshape(input['target'].shape)
-        output['target'] = input['target'].new_tensor(output_target)
-        output['loss'] = F.mse_loss(output['target'], input['target'], loss_mode=input['loss_mode'])
-        return output
-
     def make_delta_weight(self):
         raise NotImplementedError
 
@@ -164,7 +154,22 @@ class Router(nn.Module):
         super().__init__()
         self.model = nn.ModuleList(model)
         self.dist_mode = dist_mode
-        self.size = None
+        self.split = None
+        self.unique_split = None
+        self.indices = None
+        self.sorted_indices = None
+
+    def make_split(self, split):
+        self.split = split
+        self.unique_split = torch.unique(split)
+        indices = []
+        for unique_value in self.unique_split:
+            mask_i = self.split == unique_value
+            indices_i = torch.nonzero(mask_i).view(-1)
+            indices.append(indices_i)
+        self.indices = indices
+        self.sorted_indices = torch.argsort(torch.cat(indices))
+        return
 
     def f(self, input):
         output = {}
@@ -178,12 +183,60 @@ class Router(nn.Module):
         delta_weight = sum([self.model[i].make_delta_weight() for i in range(len(self.size))])
         raise delta_weight
 
+    def fit(self, input):
+        if self.dist_mode == 'alone':
+            x_ = []
+            for i in range(len(self.unique_split)):
+                x_i = x[self.indices[i]]
+                x_i = self.model[self.unique_split[i]](x_i)
+                x_.append(x_i)
+            x_ = torch.cat(x_, dim=0)
+            x = x_[self.sorted_indices]
+        elif self.dist_mode == 'col':
+            x_ = []
+            for i in range(len(self.unique_split)):
+                x_i = x[self.indices[i]]
+                x_i_ = []
+                for j in range(len(self.model)):
+                    x_i_j = self.model[i](x_i)
+                    if j != self.unique_split[i]:
+                        x_i_j = x_i_j.detach()
+                    x_i_.append(x_i_j)
+                x_i = torch.stack(x_i_, dim=0).mean(dim=0)
+                x_.append(x_i)
+            x_ = torch.cat(x_, dim=0)
+            x = x_[self.sorted_indices]
+        else:
+            raise ValueError('Not valid dist mode')
+
+
+
+
+        return
+
     def forward(self, x):
         if self.dist_mode == 'alone':
-            chunks = torch.split(x, self.size, dim=0)
-            x = torch.cat([self.model[i](chunks[i]) for i in range(len(self.size))], dim=0)
+            x_ = []
+            for i in range(len(self.unique_split)):
+                x_i = x[self.indices[i]]
+                x_i = self.model[self.unique_split[i]](x_i)
+                x_.append(x_i)
+            x_ = torch.cat(x_, dim=0)
+            x = x_[self.sorted_indices]
         elif self.dist_mode == 'col':
-            x = torch.stack([self.model[i](x) for i in range(len(self.size))], dim=0).sum(dim=0)
+            x_ = []
+            for i in range(len(self.unique_split)):
+                x_i = x[self.indices[i]]
+                x_i_ = []
+                for j in range(len(self.model)):
+                    x_i_j = self.model[i](x_i)
+                    if j != self.unique_split[i]:
+                        x_i_j = x_i_j.detach()
+                    x_i_.append(x_i_j)
+                x_i = torch.stack(x_i_, dim=0).mean(dim=0)
+                x_.append(x_i)
+            x_ = torch.cat(x_, dim=0)
+            x = x_[self.sorted_indices]
         else:
             raise ValueError('Not valid dist mode')
         return x

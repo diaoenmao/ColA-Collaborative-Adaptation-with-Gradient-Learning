@@ -118,11 +118,6 @@ def runExperiment():
     return
 
 
-def cola_fit_sk(input_cola, model):
-    model.fit(input_cola)
-    return model
-
-
 def train(data_loader, model, cola_base, optimizer, scheduler, func_optimizer, func_scheduler, metric,
           logger):
     model.train(True)
@@ -136,6 +131,8 @@ def train(data_loader, model, cola_base, optimizer, scheduler, func_optimizer, f
         for k in cola_base:
             cola_base[k].train(False)
         input_size = input['labels'].size(0)
+        input = {'input_ids': input['input_ids'], 'attention_mask': input['attention_mask'],
+                 'labels': input['labels']}
         input = to_device(input, cfg['device'])
         output = model(**input)
         input_ = {'target': input['labels']}
@@ -191,6 +188,8 @@ def test(data_loader, model, metric, logger):
         model.train(False)
         for i, input in enumerate(data_loader):
             input_size = input['labels'].size(0)
+            input = {'input_ids': input['input_ids'], 'attention_mask': input['attention_mask'],
+                     'labels': input['labels']}
             input = to_device(input, cfg['device'])
             output = model(**input)
             input_ = {'target': input['labels']}

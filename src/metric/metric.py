@@ -52,6 +52,11 @@ def make_metric(metric_name):
     return metric
 
 
+def Loss(output):
+    loss = output.item()
+    return loss
+
+
 def Perplexity(output):
     ppl = output.exp().item()
     return ppl
@@ -101,7 +106,7 @@ class Metric:
         for split in metric_name:
             for m in metric_name[split]:
                 if m == 'Loss':
-                    metric[split][m] = {'mode': 'batch', 'metric': (lambda input, output: output['loss'].item())}
+                    metric[split][m] = {'mode': 'batch', 'metric': (lambda input, output: recur(Loss, output['loss']))}
                 elif m == 'Perplexity':
                     metric[split][m] = {'mode': 'batch', 'metric': (lambda input,
                                                                            output: recur(Perplexity, output['loss']))}
@@ -114,8 +119,7 @@ class Metric:
                                         'metric': (
                                             lambda input, output: recur(RMSE, output['target'], input['target']))}
                 elif m == 'GLUE':
-                    metric[split][m] = {'mode': 'full',
-                                        'metric': GLUE(cfg['hf_subset_name'])}
+                    metric[split][m] = {'mode': 'full', 'metric': recur(GLUE, cfg['hf_subset_name'])}
                 else:
                     raise ValueError('Not valid metric name')
         return metric

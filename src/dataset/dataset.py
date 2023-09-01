@@ -225,12 +225,14 @@ def process_dataset(dataset, tokenizer):
             targets = [str(x) for x in examples[label_column]]
             model_inputs = tokenizer(inputs)
             labels = tokenizer(targets)
+            model_inputs["split"] = []
             for i in range(batch_size):
                 sample_input_ids = model_inputs["input_ids"][i]
                 label_input_ids = labels["input_ids"][i] + [tokenizer.pad_token_id]
                 model_inputs["input_ids"][i] = sample_input_ids + label_input_ids
                 labels["input_ids"][i] = [-100] * len(sample_input_ids) + label_input_ids
                 model_inputs["attention_mask"][i] = [1] * len(model_inputs["input_ids"][i])
+                model_inputs["split"].append(cfg['task_label'][examples['category'][i]])
             for i in range(batch_size):
                 sample_input_ids = model_inputs["input_ids"][i]
                 label_input_ids = labels["input_ids"][i]
@@ -245,34 +247,20 @@ def process_dataset(dataset, tokenizer):
             model_inputs["labels"] = labels["input_ids"]
             return model_inputs
 
-        cfg['task_label'] = list(set(dataset['train']['category']))
+        cfg['task_value'] = list(set(dataset['train']['category']))
+        cfg['task_label'] = {category: idx for idx, category in enumerate(cfg['task_value'])}
         cfg['num_split'] = len(cfg['task_label'])
 
-        if cfg['dist_mode'] in ['alone', 'col']:
-            processed_dataset = []
-            for i in range(len(cfg['task_label'])):
-                subset = dataset.filter(lambda x: x['category'] == cfg['task_label'][i])
-                processed_dataset_i = subset.map(
-                    preprocess_function,
-                    batched=True,
-                    num_proc=1,
-                    remove_columns=dataset["train"].column_names,
-                    load_from_cache_file=False,
-                    desc="Running tokenizer on dataset",
-                )
-                processed_dataset.append(processed_dataset_i)
-            cfg['data_size'] = [{k: len(processed_dataset[i][k]) for k in processed_dataset[i]} for i in
-                                range(len(processed_dataset))]
-        else:
-            processed_dataset = dataset.map(
-                preprocess_function,
-                batched=True,
-                num_proc=1,
-                remove_columns=dataset["train"].column_names,
-                load_from_cache_file=False,
-                desc="Running tokenizer on dataset",
-            )
-            cfg['data_size'] = {k: len(processed_dataset[k]) for k in processed_dataset}
+        # dataset = dataset.map(lambda x: {'split': cfg['task_label'][x['category']]})
+        processed_dataset = dataset.map(
+            preprocess_function,
+            batched=True,
+            num_proc=1,
+            remove_columns=dataset["train"].column_names,
+            load_from_cache_file=False,
+            desc="Running tokenizer on dataset",
+        )
+        cfg['data_size'] = {k: len(processed_dataset[k]) for k in processed_dataset}
     else:
         raise ValueError('Not valid data name')
     cfg['target_size'] = len(tokenizer)

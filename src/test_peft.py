@@ -67,6 +67,8 @@ def test(data_loader, model, metric, logger):
         model.train(False)
         for i, input in enumerate(data_loader):
             input_size = input['labels'].size(0)
+            input = {'input_ids': input['input_ids'], 'attention_mask': input['attention_mask'],
+                     'labels': input['labels']}
             input = to_device(input, cfg['device'])
             output = model(**input)
             input_ = {'target': input['labels']}
