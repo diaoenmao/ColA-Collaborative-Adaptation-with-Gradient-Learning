@@ -14,7 +14,7 @@ from module.peft.tuners.cola import ColaLayer
 warnings.filterwarnings('ignore', category=ConvergenceWarning)
 
 
-class LR(nn.Module):
+class LowRank(nn.Module):
     def __init__(self, input_size, hidden_size, output_size, dropout):
         super().__init__()
         self.input_size = input_size
@@ -146,8 +146,7 @@ class SK(nn.Module):
         data, target = input['data'].cpu().numpy(), input['target'].cpu().numpy()
         data = data.reshape(-1, self.input_size)
         target = target.reshape(-1, self.output_size)
-        for _ in range(cfg['cola']['num_epochs']):
-            self.model.fit(data, target)
+        self.model.fit(data, target)
         output_target = self.model.predict(data)
         output_target = output_target.reshape(input['target'].shape)
         output['target'] = input['target'].new_tensor(output_target)
@@ -191,37 +190,28 @@ class Router(nn.Module):
         self.sorted_indices = torch.argsort(torch.cat(indices))
         return
 
-    def fit(self, input):
+    def fit(self, input, optimizer=None, scheduler=None):
         if self.dist_mode == 'alone':
-            x_ = []
             for i in range(len(self.unique_split)):
-                x_i = x[self.indices[i]]
-                x_i = self.model[self.unique_split[i]](x_i)
-                x_.append(x_i)
-            x_ = torch.cat(x_, dim=0)
-            x = x_[self.sorted_indices]
+                data_i, target_i = input['data'][self.indices[i]], input['target'][self.indices[i]]
+                input_i = {'data': data_i, 'target': target_i}
+                self.model[self.unique_split[i]].fit(input_i, optimizer[i], scheduler[i])
         elif self.dist_mode == 'col':
-            x_ = []
             for i in range(len(self.unique_split)):
-                x_i = x[self.indices[i]]
-                x_i_ = []
-                for j in range(len(self.model)):
-                    x_i_j = self.model[i](x_i)
-                    if j != self.unique_split[i]:
-                        x_i_j = x_i_j.detach()
-                    x_i_.append(x_i_j)
-                x_i = torch.stack(x_i_, dim=0).mean(dim=0)
-                x_.append(x_i)
-            x_ = torch.cat(x_, dim=0)
-            x = x_[self.sorted_indices]
+                data_i, target_i = input['data'][self.indices[i]], input['target'][self.indices[i]]
+                input_i = {'data': data_i, 'target': target_i}
+                self.model[self.unique_split[i]].fit(input_i, optimizer[i], scheduler[i])
         else:
             raise ValueError('Not valid dist mode')
-
         return
 
     def make_delta_weight(self):
-        delta_weight = sum([self.model[i].make_delta_weight() for i in range(len(self.size))])
-        raise delta_weight
+        delta_weight = []
+        for i in range(len(self.model)):
+            delta_weight_i = self.model[i].make_delta_weight()
+            delta_weight.append(delta_weight_i)
+        delta_weight = torch.stack(delta_weight, dim=0).mean(dim=0)
+        return delta_weight
 
     def forward(self, x):
         if self.dist_mode == 'alone':
@@ -251,31 +241,55 @@ class Router(nn.Module):
         return x
 
 
+def make_cola_model(model_name, input_size, output_size):
+    if model_name == 'lowrank':
+        hidden_size = cfg['cola']['lowrank']['hidden_size']
+        dropout = cfg['cola']['lowrank']['dropout']
+        model = LowRank(input_size, hidden_size, output_size, dropout)
+        model.apply(init_param)
+    elif model_name == 'linear':
+        model = Linear(input_size, output_size)
+        model.apply(init_param)
+    elif model_name == 'mlp':
+        hidden_size = cfg['cola']['mlp']['hidden_size']
+        scale_factor = cfg['cola']['mlp']['scale_factor']
+        num_layers = cfg['cola']['mlp']['num_layers']
+        activation = cfg['cola']['mlp']['activation']
+        model = MLP(input_size, hidden_size, scale_factor, num_layers, activation, output_size)
+        model.apply(init_param)
+    elif model_name in ['skmlp']:
+        model = SK(input_size, output_size, model_name, max_iter=cfg['cola']['num_epochs'])
+    else:
+        raise ValueError('Not valid model name')
+    return model
+
+
+def make_model_name(model_name):
+    model_name_list = model_name.split("~")
+    num_model_each = cfg['num_split'] // len(model_name_list)
+    remainder = cfg['num_split'] % len(model_name_list)
+    model_name_ = []
+    for model_name_i in model_name_list:
+        model_name_.extend([model_name_i] * num_model_each)
+    for i in range(remainder):
+        model_name_.append(model_name_list[i])
+    return model_name_
+
+
 def make_cola(model, model_name, dist_mode='joint'):
+    if dist_mode in ['alone', 'col']:
+        cfg['cola']['model_name'] = make_model_name(model_name)
     cola = {}
     for name, module in model.base_model.named_modules():
         if isinstance(module, ColaLayer):
             input_size = module.in_features
             output_size = module.out_features
-            if model_name == 'lr':
-                hidden_size = cfg['cola']['model']['hidden_size']
-                dropout = cfg['cola']['model']['dropout']
-                cola[name] = LR(input_size, hidden_size, output_size, dropout)
-                cola[name].apply(init_param)
-            elif model_name == 'linear':
-                cola[name] = Linear(input_size, output_size)
-                cola[name].apply(init_param)
-            elif model_name == 'mlp':
-                hidden_size = cfg['cola']['model']['hidden_size']
-                scale_factor = cfg['cola']['model']['scale_factor']
-                num_layers = cfg['cola']['model']['num_layers']
-                activation = cfg['cola']['model']['activation']
-                cola[name] = MLP(input_size, hidden_size, scale_factor, num_layers, activation, output_size)
-                cola[name].apply(init_param)
-            elif model_name in ['skmlp']:
-                cola[name] = SK(input_size, output_size, model_name, max_iter=cfg['cola']['num_epochs'])
-            else:
-                raise ValueError('Not valid model name')
             if dist_mode in ['alone', 'col']:
-                cola[name] = Router([copy.deepcopy(cola[name]) for _ in range(cfg['num_split'])], dist_mode)
+                cola[name] = []
+                for i in range(cfg['num_split']):
+                    cola_model_i = make_cola_model(cfg['cola']['model_name'][i], input_size, output_size)
+                    cola[name].append(cola_model_i)
+                cola[name] = Router(cola[name], dist_mode)
+            else:
+                cola[name] = make_cola_model(model_name, input_size, output_size)
     return cola

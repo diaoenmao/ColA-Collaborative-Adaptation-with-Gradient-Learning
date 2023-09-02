@@ -54,14 +54,14 @@ def runExperiment():
         model.print_trainable_parameters()
         optimizer = make_optimizer([torch.tensor([0.0], requires_grad=True)], 'cola')
         scheduler = make_scheduler(optimizer, 'cola')
-        cola_base = make_cola(model, cfg['cola']['model']['name']) if cfg['ft_name'] == 'cola' else None
+        cola_base = make_cola(model, cfg['cola']['model_name'])
         model.load_cola_base(cola_base)
         func_optimizer = {}
         func_scheduler = {}
         for k in cola_base:
-            cola_base[k] = cola_base[k].to(cfg['device'])
-            cola_param_k = cola_base[k].parameters()
-            if cfg['cola']['model']['name'] in ['lr', 'linear', 'mlp']:
+            if cfg['cola']['model_name'] in ['lowrank', 'linear', 'mlp']:
+                cola_base[k] = cola_base[k].to(cfg['device'])
+                cola_param_k = cola_base[k].parameters()
                 func_optimizer[k] = make_optimizer(cola_param_k, 'cola_func')
                 func_scheduler[k] = make_scheduler(func_optimizer[k], 'cola_func')
             else:
@@ -83,9 +83,9 @@ def runExperiment():
         func_optimizer = {}
         func_scheduler = {}
         for k in cola_base:
-            cola_base[k] = cola_base[k].to(cfg['device'])
-            cola_param_k = cola_base[k].parameters()
-            if cfg['cola']['model']['name'] in ['lr', 'linear', 'mlp']:
+            if cfg['cola']['model']['name'] in ['lowrank', 'linear', 'mlp']:
+                cola_base[k] = cola_base[k].to(cfg['device'])
+                cola_param_k = cola_base[k].parameters()
                 func_optimizer[k] = make_optimizer(cola_param_k, 'cola_func')
                 func_scheduler[k] = make_scheduler(func_optimizer[k], 'cola_func')
                 func_optimizer[k].load_state_dict(result['func_optimizer_state_dict'][k])

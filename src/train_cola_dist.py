@@ -6,7 +6,6 @@ import time
 import torch
 import torch.backends.cudnn as cudnn
 from collections import defaultdict
-from itertools import zip_longest
 from config import cfg, process_args
 from dataset import make_dataset, make_data_loader, process_dataset, collate
 from metric import make_metric, make_logger
@@ -53,30 +52,28 @@ def runExperiment():
         model = make_ft_model(model)
         model = model.to(cfg['device'])
         model.print_trainable_parameters()
-        cola_base = make_cola(model, cfg['cola']['model']['name'], cfg['dist_mode']) \
-            if cfg['ft_name'] == 'cola' else None
-        cola_base = cola_base
+        cola_base = make_cola(model, cfg['cola']['model_name'], cfg['dist_mode'])
         model.load_cola_base(cola_base)
         optimizer = make_optimizer([torch.tensor([0.0], requires_grad=True)], 'cola')
         scheduler = make_scheduler(optimizer, 'cola')
-        func_optimizer = {}
-        func_scheduler = {}
+        func_optimizer = defaultdict(list)
+        func_scheduler = defaultdict(list)
         for k in cola_base:
-            cola_base[k] = cola_base[k].to(cfg['device'])
-            cola_param_k = cola_base[k].parameters()
-            if cfg['cola']['model']['name'] in ['lr', 'linear', 'mlp']:
-                func_optimizer[k] = make_optimizer(cola_param_k, 'cola_func')
-                func_scheduler[k] = make_scheduler(func_optimizer[k], 'cola_func')
-            else:
-                func_optimizer[k] = None
-                func_scheduler[k] = None
+            for i in range(cfg['num_split']):
+                if cfg['cola']['model_name'][i] in ['lowrank', 'linear', 'mlp']:
+                    cola_base[k].model[i] = cola_base[k].model[i].to(cfg['device'])
+                    cola_param_k_i = cola_base[k].model[i].parameters()
+                    func_optimizer[k].append(make_optimizer(cola_param_k_i, 'cola_func'))
+                    func_scheduler[k].append(make_scheduler(func_optimizer[k][i], 'cola_func'))
+                else:
+                    func_optimizer[i][k] = None
+                    func_scheduler[i][k] = None
     else:
         cfg['epoch'] = result['epoch']
         model = PeftModel.from_pretrained(model, os.path.join(checkpoint_path, 'adapter'), is_trainable=True)
         model = model.to(cfg['device'])
         model.print_trainable_parameters()
-        cola_base = make_cola(model, cfg['cola']['model']['name'], cfg['dist_mode']) \
-            if cfg['ft_name'] == 'cola' else None
+        cola_base = make_cola(model, cfg['cola']['model_name'], cfg['dist_mode'])
         for k in cola_base:
             cola_base[k].load_state_dict(result['cola_base_state_dict'][k])
         model.load_cola_base(cola_base)
@@ -84,19 +81,18 @@ def runExperiment():
         scheduler = make_scheduler(optimizer, 'cola')
         optimizer.load_state_dict(result['optimizer_state_dict'])
         scheduler.load_state_dict(result['scheduler_state_dict'])
-        func_optimizer = {}
-        func_scheduler = {}
+        func_optimizer = defaultdict(list)
+        func_scheduler = defaultdict(list)
         for k in cola_base:
-            cola_base[k] = cola_base[k].to(cfg['device'])
-            cola_param_k = cola_base[k].parameters()
-            if cfg['cola']['model']['name'] in ['lr', 'linear', 'mlp']:
-                func_optimizer[k] = make_optimizer(cola_param_k, 'cola_func')
-                func_scheduler[k] = make_scheduler(func_optimizer[k], 'cola_func')
-                func_optimizer[k].load_state_dict(result['func_optimizer_state_dict'][k])
-                func_scheduler[k].load_state_dict(result['func_scheduler_state_dict'][k])
-            else:
-                func_optimizer[k] = None
-                func_scheduler[k] = None
+            for i in range(cfg['num_split']):
+                if cfg['cola']['model_name'][i] in ['lowrank', 'linear', 'mlp']:
+                    cola_base[k].model[i] = cola_base[k].model[i].to(cfg['device'])
+                    cola_param_k_i = cola_base[k].model[i].parameters()
+                    func_optimizer[k].append(make_optimizer(cola_param_k_i, 'cola_func'))
+                    func_scheduler[k].append(make_scheduler(func_optimizer[k][i], 'cola_func'))
+                else:
+                    func_optimizer[i][k] = None
+                    func_scheduler[i][k] = None
         metric.load_state_dict(result['metric_state_dict'])
         logger.load_state_dict(result['logger_state_dict'])
     for epoch in range(cfg['epoch'], cfg[cfg['model_name']]['num_epochs'] + 1):
@@ -107,8 +103,10 @@ def runExperiment():
         result = {'cfg': cfg, 'epoch': cfg['epoch'] + 1,
                   'cola_base_state_dict': {k: cola_base[k].state_dict() for k in cola_base},
                   'optimizer_state_dict': optimizer.state_dict(), 'scheduler_state_dict': scheduler.state_dict(),
-                  'func_optimizer_state_dict': {k: func_optimizer[k].state_dict() for k in func_optimizer},
-                  'func_scheduler_state_dict': {k: func_scheduler[k].state_dict() for k in func_scheduler},
+                  'func_optimizer_state_dict': {k: [func_optimizer[k][i].state_dict() for i in
+                                                    range(len(func_optimizer[k]))] for k in func_optimizer},
+                  'func_scheduler_state_dict': {k: [func_scheduler[k][i].state_dict() for i in
+                                                    range(len(func_scheduler[k]))] for k in func_scheduler},
                   'metric_state_dict': metric.state_dict(), 'logger_state_dict': logger.state_dict()}
         save(result, os.path.join(checkpoint_path, 'model'))
         model.save_pretrained(os.path.join(checkpoint_path, 'adapter'))
@@ -135,7 +133,7 @@ def train(data_loader, model, cola_base, optimizer, scheduler, func_optimizer, f
         model.load_lr(lr)
         split_i = input['split']
         for k in cola_base:
-            func_lr = func_optimizer[k].param_groups[0]['lr'] if func_optimizer[k] is not None else 0
+            func_lr = func_optimizer[k][0].param_groups[0]['lr'] if func_optimizer[k][0] is not None else 0
             cola_base[k].train(False)
             cola_base[k].make_split(split_i)
         input_size = input['labels'].size(0)

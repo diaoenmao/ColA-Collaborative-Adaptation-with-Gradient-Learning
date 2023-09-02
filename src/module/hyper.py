@@ -37,17 +37,11 @@ def process_control():
 
     if ft_name_list[0] == 'cola' and len(ft_name_list) > 1:
         cfg['cola'] = {}
-        if ft_name_list[1] == 'lr':
-            cfg['cola']['model'] = {'name': ft_name_list[1], 'hidden_size': 64, 'dropout': 0.0}
-        elif ft_name_list[1] == 'linear':
-            cfg['cola']['model'] = {'name': ft_name_list[1]}
-        elif ft_name_list[1] == 'mlp':
-            cfg['cola']['model'] = {'name': ft_name_list[1], 'hidden_size': 128, 'scale_factor': 2, 'num_layers': 2,
-                                    'activation': 'relu'}
-        elif ft_name_list[1] in ['skmlp']:
-            cfg['cola']['model'] = {'name': ft_name_list[1]}
-        else:
-            raise ValueError('Not valid cola model')
+        cfg['cola']['lowrank'] = {'hidden_size': 64, 'dropout': 0.0}
+        cfg['cola']['linear'] = {}
+        cfg['cola']['mlp'] = {'hidden_size': 128, 'scale_factor': 2, 'num_layers': 2, 'activation': 'relu'}
+        cfg['cola']['skmlp'] = {}
+        cfg['cola']['model_name'] = ft_name_list[1]
         cfg['cola']['shuffle'] = {'train': True, 'test': False}
         cfg['cola']['optimizer_name'] = 'AdamW'
         cfg['cola']['lr'] = 1
