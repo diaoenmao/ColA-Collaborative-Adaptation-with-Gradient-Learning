@@ -8,6 +8,7 @@ from sklearn.exceptions import NotFittedError, ConvergenceWarning
 from sklearn.neural_network import MLPRegressor
 from config import cfg
 from .model import init_param, mse_loss
+from module import to_device
 from module.peft.tuners.cola import ColaLayer
 
 warnings.filterwarnings('ignore', category=ConvergenceWarning)
@@ -25,12 +26,18 @@ class LR(nn.Module):
         self.cola_A = nn.Linear(input_size, hidden_size, bias=False)
         self.cola_B = nn.Linear(hidden_size, output_size, bias=False)
 
-    def f(self, input):
+    def fit(self, input, optimizer, scheduler):
+        self.train(True)
+        input = to_device(input, cfg['device'])
         output = {}
-        x = input['data']
-        x = self.forward(x)
-        output['target'] = x
-        output['loss'] = F.mse_loss(output['target'], input['target'])
+        for _ in range(cfg['cola']['num_epochs']):
+            x = input['data']
+            output['target'] = self.forward(x)
+            output['loss'] = F.mse_loss(output['target'], input['target'])
+            output['loss'].backward()
+            optimizer.step()
+            optimizer.zero_grad()
+        scheduler.step()
         return output
 
     def make_delta_weight(self):
@@ -50,12 +57,18 @@ class Linear(nn.Module):
         self.output_size = output_size
         self.linear = nn.Linear(input_size, output_size, bias=False)
 
-    def f(self, input):
+    def fit(self, input, optimizer, scheduler):
+        self.train(True)
+        input = to_device(input, cfg['device'])
         output = {}
-        x = input['data']
-        x = self.forward(x)
-        output['target'] = x
-        output['loss'] = F.mse_loss(output['target'], input['target'])
+        for _ in range(cfg['cola']['num_epochs']):
+            x = input['data']
+            output['target'] = self.forward(x)
+            output['loss'] = F.mse_loss(output['target'], input['target'])
+            output['loss'].backward()
+            optimizer.step()
+            optimizer.zero_grad()
+        scheduler.step()
         return output
 
     def make_delta_weight(self):
@@ -85,12 +98,18 @@ class MLP(nn.Module):
         self.blocks = nn.Sequential(*blocks)
         self.linear = nn.Linear(input_size, output_size)
 
-    def f(self, input):
+    def fit(self, input, optimizer, scheduler):
+        self.train(True)
+        input = to_device(input, cfg['device'])
         output = {}
-        x = input['data']
-        x = self.forward(x)
-        output['target'] = x
-        output['loss'] = F.mse_loss(output['target'], input['target'])
+        for _ in range(cfg['cola']['num_epochs']):
+            x = input['data']
+            output['target'] = self.forward(x)
+            output['loss'] = F.mse_loss(output['target'], input['target'])
+            output['loss'].backward()
+            optimizer.step()
+            optimizer.zero_grad()
+        scheduler.step()
         return output
 
     def make_delta_weight(self):
@@ -122,12 +141,13 @@ class SK(nn.Module):
         self.model.set_params(**state_dict)
         return
 
-    def fit(self, input):
+    def fit(self, input, optimizer=None, scheduler=None):
         output = {}
         data, target = input['data'].cpu().numpy(), input['target'].cpu().numpy()
         data = data.reshape(-1, self.input_size)
         target = target.reshape(-1, self.output_size)
-        self.model.fit(data, target)
+        for _ in range(cfg['cola']['num_epochs']):
+            self.model.fit(data, target)
         output_target = self.model.predict(data)
         output_target = output_target.reshape(input['target'].shape)
         output['target'] = input['target'].new_tensor(output_target)
@@ -171,18 +191,6 @@ class Router(nn.Module):
         self.sorted_indices = torch.argsort(torch.cat(indices))
         return
 
-    def f(self, input):
-        output = {}
-        x = input['data']
-        x = self.forward(x)
-        output['target'] = x
-        output['loss'] = F.mse_loss(output['target'], input['target'])
-        return output
-
-    def make_delta_weight(self):
-        delta_weight = sum([self.model[i].make_delta_weight() for i in range(len(self.size))])
-        raise delta_weight
-
     def fit(self, input):
         if self.dist_mode == 'alone':
             x_ = []
@@ -209,10 +217,11 @@ class Router(nn.Module):
         else:
             raise ValueError('Not valid dist mode')
 
-
-
-
         return
+
+    def make_delta_weight(self):
+        delta_weight = sum([self.model[i].make_delta_weight() for i in range(len(self.size))])
+        raise delta_weight
 
     def forward(self, x):
         if self.dist_mode == 'alone':

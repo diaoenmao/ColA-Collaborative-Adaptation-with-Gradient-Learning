@@ -251,7 +251,6 @@ def process_dataset(dataset, tokenizer):
         cfg['task_label'] = {category: idx for idx, category in enumerate(cfg['task_value'])}
         cfg['num_split'] = len(cfg['task_label'])
 
-        # dataset = dataset.map(lambda x: {'split': cfg['task_label'][x['category']]})
         processed_dataset = dataset.map(
             preprocess_function,
             batched=True,

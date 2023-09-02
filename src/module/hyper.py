@@ -12,6 +12,7 @@ def process_control():
     cfg['roberta-large'] = {}
     cfg['model_name'] = cfg['control']['model_name']
     cfg['task_name'] = cfg['control']['task_name']
+    cfg['batch_size'] = int(cfg['control']['batch_size'])
     ft_name_list = cfg['control']['ft_name'].split('-')
     cfg['ft_name'] = ft_name_list[0]
     if 'dist_mode' in cfg['control']:
@@ -30,8 +31,7 @@ def process_control():
     cfg[model_name]['weight_decay'] = 5e-4
     cfg[model_name]['nesterov'] = True
     cfg[model_name]['num_epochs'] = 8
-    cfg[model_name]['batch_size'] = {'train': 8, 'test': 8} # clm bloomz-560m
-    # cfg[model_name]['batch_size'] = {'train': 32, 'test': 32}
+    cfg[model_name]['batch_size'] = {'train': cfg['batch_size'], 'test': cfg['batch_size']}
     cfg[model_name]['scheduler_name'] = 'LinearAnnealingLR'
     cfg[model_name]['scheduler_name'] = 'None'
 
@@ -57,7 +57,7 @@ def process_control():
         cfg['cola']['nesterov'] = True
         cfg['cola']['num_steps'] = int(ft_name_list[2])
         cfg['cola']['num_epochs'] = int(ft_name_list[3])
-        cfg['cola']['batch_size'] = {'train': 32, 'test': 32}
+        cfg['cola']['batch_size'] = {'train': cfg['batch_size'], 'test': cfg['batch_size']}
         cfg['cola']['scheduler_name'] = 'LinearAnnealingLR'
         cfg['cola_func'] = {}
         cfg['cola_func']['optimizer_name'] = 'AdamW'
