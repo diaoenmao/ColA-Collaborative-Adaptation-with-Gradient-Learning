@@ -33,7 +33,6 @@ def process_control():
     cfg[model_name]['num_epochs'] = 8
     cfg[model_name]['batch_size'] = {'train': cfg['batch_size'], 'test': cfg['batch_size']}
     cfg[model_name]['scheduler_name'] = 'LinearAnnealingLR'
-    cfg[model_name]['scheduler_name'] = 'None'
 
     if ft_name_list[0] == 'cola' and len(ft_name_list) > 1:
         cfg['cola'] = {}

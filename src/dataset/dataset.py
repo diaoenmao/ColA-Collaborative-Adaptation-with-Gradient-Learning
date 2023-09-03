@@ -1,3 +1,4 @@
+import copy
 import dataset
 import numpy as np
 import os
@@ -162,6 +163,7 @@ def process_dataset(dataset, tokenizer):
             load_from_cache_file=False,
             desc="Running tokenizer on dataset",
         )
+        cfg['max_new_tokens'] = 10
     elif cfg['data_name'] == 'raft':
         max_length = cfg[cfg['model_name']]['max_length']
 
@@ -171,6 +173,8 @@ def process_dataset(dataset, tokenizer):
                        f"Label: ") for i in range(batch_size)]
             targets = [str(x) for x in examples[label_column]]
             model_inputs = tokenizer(inputs)
+            model_inputs['raw_input_ids'] = copy.deepcopy(model_inputs["input_ids"])
+            model_inputs['raw_attention_mask'] = copy.deepcopy(model_inputs["attention_mask"])
             labels = tokenizer(targets)
             for i in range(batch_size):
                 sample_input_ids = model_inputs["input_ids"][i]
@@ -183,11 +187,17 @@ def process_dataset(dataset, tokenizer):
                 label_input_ids = labels["input_ids"][i]
                 model_inputs["input_ids"][i] = [tokenizer.pad_token_id] * (
                         max_length - len(sample_input_ids)) + sample_input_ids
+                model_inputs['raw_input_ids'][i] = [tokenizer.pad_token_id] * (
+                        max_length - len(model_inputs['raw_input_ids'][i])) + model_inputs['raw_input_ids'][i]
                 model_inputs["attention_mask"][i] = [0] * (max_length - len(sample_input_ids)) + model_inputs[
                     "attention_mask"][i]
+                model_inputs["raw_attention_mask"][i] = ([0] * (max_length - len(model_inputs['raw_input_ids'][i]))
+                                                         + model_inputs["attention_mask"][i])
                 labels["input_ids"][i] = [-100] * (max_length - len(sample_input_ids)) + label_input_ids
                 model_inputs["input_ids"][i] = torch.tensor(model_inputs["input_ids"][i][:max_length])
                 model_inputs["attention_mask"][i] = torch.tensor(model_inputs["attention_mask"][i][:max_length])
+                model_inputs["raw_input_ids"][i] = torch.tensor(model_inputs["raw_input_ids"][i][:max_length])
+                model_inputs["raw_attention_mask"][i] = torch.tensor(model_inputs["raw_attention_mask"][i][:max_length])
                 labels["input_ids"][i] = torch.tensor(labels["input_ids"][i][:max_length])
             model_inputs["labels"] = labels["input_ids"]
             return model_inputs
@@ -200,6 +210,7 @@ def process_dataset(dataset, tokenizer):
             load_from_cache_file=False,
             desc="Running tokenizer on dataset",
         )
+        cfg['max_new_tokens'] = 10
     elif cfg['data_name'] == 'glue':
         def tokenize_function(examples):
             # max_length=None => use the model max length (it's actually the default)

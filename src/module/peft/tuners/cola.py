@@ -508,12 +508,6 @@ class ColaModel(torch.nn.Module):
                 module.lr = lr
         return
 
-    def input_buffer(self, flag):
-        for name, module in self.named_modules():
-            if isinstance(module, ColaLayer):
-                module.if_input_buffer = flag
-        return
-
 
 def mark_only_cola_as_trainable(model: nn.Module) -> None:
     for n, p in model.named_parameters():
@@ -535,7 +529,6 @@ class ColaLayer:
         self.input = []
         self.output_target = []
         self.lr = 1.
-        self.if_input_buffer = False
 
         self.hook = self.register_forward_hook(self.forward_hook)
 
@@ -546,7 +539,7 @@ class ColaLayer:
         self.to(self.weight.device)
 
     def forward_hook(self, module, input, output):
-        if self.training or self.if_input_buffer:
+        if self.training:
             input_ = input[0].detach().to('cpu')
             self.input.append(input_)
             output.requires_grad_(True)

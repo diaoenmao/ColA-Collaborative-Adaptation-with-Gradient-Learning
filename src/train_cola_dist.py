@@ -178,7 +178,6 @@ def train(data_loader, model, cola_base, optimizer, scheduler, func_optimizer, f
                              'Experiment Finished Time: {}'.format(exp_finished_time)]}
             logger.append(info, 'train')
             print(logger.write('train', metric.metric_name['train']))
-        break
     return
 
 

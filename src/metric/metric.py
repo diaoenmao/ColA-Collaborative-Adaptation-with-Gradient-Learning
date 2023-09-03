@@ -6,7 +6,7 @@ from config import cfg
 from module import recur
 
 
-def make_metric(metric_name):
+def make_metric(metric_name, tokenizer):
     if cfg['data_name'] in ['MNIST', 'FashionMNIST', 'SVHN', 'CIFAR10', 'CIFAR100']:
         pivot = -float('inf')
         pivot_direction = 'up'
@@ -15,27 +15,25 @@ def make_metric(metric_name):
             metric_name[k].extend(['Accuracy'])
     if cfg['task_name'] == 'clm':
         if cfg['data_name'] in ['raft']:
-            pivot = float('inf')
-            pivot_direction = 'down'
-            pivot_name = 'Perplexity'
-            for k in metric_name:
-                metric_name[k].extend(['Perplexity'])
+            pivot = -float('inf')
+            pivot_direction = 'up'
+            pivot_name = 'Rouge'
+            metric_name['test'].extend(['Rouge'])
         elif cfg['data_name'] in ['databricks-dolly']:
-            pivot = float('inf')
-            pivot_direction = 'down'
-            pivot_name = 'Perplexity'
-            for k in metric_name:
-                metric_name[k].extend(['Perplexity'])
+            pivot = -float('inf')
+            pivot_direction = 'up'
+            pivot_name = 'Rouge'
+            metric_name['test'].extend(['Rouge'])
         else:
             raise ValueError('Not valid data name')
     elif cfg['task_name'] == 's2s':
         if cfg['data_name'] in ['fpb']:
             pivot = -float('inf')
             pivot_direction = 'up'
-            pivot_name = 'Accuracy'
+            pivot_name = 'Rouge'
             for k in metric_name:
                 metric_name[k].extend(['Accuracy'])
-                # metric_name[k].extend(['Rouge'])
+            metric_name['test'].extend(['Rouge'])
         else:
             raise ValueError('Not valid data name')
     elif cfg['task_name'] == 'sc':
@@ -48,7 +46,7 @@ def make_metric(metric_name):
             raise ValueError('Not valid data name')
     else:
         raise ValueError('Not valid task name')
-    metric = Metric(metric_name, pivot, pivot_direction, pivot_name)
+    metric = Metric(metric_name, pivot, pivot_direction, pivot_name, tokenizer)
     return metric
 
 
@@ -95,13 +93,36 @@ class GLUE:
         return glue
 
 
+class Rouge:
+    def __init__(self, tokenizer):
+        self.metric = evaluate.load('rouge')
+        self.tokenizer = tokenizer
+
+    def add(self, input, output):
+        predictions = output['generate']
+        references = input['target']
+        if cfg['task_name'] == 'clm':
+            predictions = predictions[:, -cfg['max_new_tokens']:]
+            references[references < 0] = cfg['pad_token_id']
+        predictions = self.tokenizer.batch_decode(predictions.detach().cpu().numpy(), skip_special_tokens=True)
+        references = self.tokenizer.batch_decode(references.detach().cpu().numpy(), skip_special_tokens=True)
+        print(references, predictions)
+        exit()
+        self.metric.add_batch(predictions=predictions, references=references)
+        return
+
+    def __call__(self, *args, **kwargs):
+        rouge = self.metric.compute()['rougeL']
+        return rouge
+
+
 class Metric:
-    def __init__(self, metric_name, pivot, pivot_direction, pivot_name):
+    def __init__(self, metric_name, pivot, pivot_direction, pivot_name, tokenizer):
         self.pivot, self.pivot_name, self.pivot_direction = pivot, pivot_name, pivot_direction
         self.metric_name = metric_name
-        self.metric = self.make_metric(metric_name)
+        self.metric = self.make_metric(metric_name, tokenizer)
 
-    def make_metric(self, metric_name):
+    def make_metric(self, metric_name, tokenizer):
         metric = defaultdict(dict)
         for split in metric_name:
             for m in metric_name[split]:
@@ -118,8 +139,10 @@ class Metric:
                     metric[split][m] = {'mode': 'batch',
                                         'metric': (
                                             lambda input, output: recur(RMSE, output['target'], input['target']))}
+                elif m == 'Rouge':
+                    metric[split][m] = {'mode': 'full', 'metric': Rouge(tokenizer)}
                 elif m == 'GLUE':
-                    metric[split][m] = {'mode': 'full', 'metric': recur(GLUE, cfg['hf_subset_name'])}
+                    metric[split][m] = {'mode': 'full', 'metric': GLUE(cfg['hf_subset_name'])}
                 else:
                     raise ValueError('Not valid metric name')
         return metric
