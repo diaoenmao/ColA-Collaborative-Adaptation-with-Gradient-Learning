@@ -41,7 +41,7 @@ def runExperiment():
     model, tokenizer = make_model(cfg['model_name'])
     dataset = process_dataset(dataset, tokenizer)
     data_loader = make_data_loader(dataset, tokenizer, cfg['model_name'])
-    metric = make_metric({'train': ['Loss'], 'test': ['Loss']})
+    metric = make_metric({'train': ['Loss'], 'test': ['Loss']}, tokenizer)
     result = resume(os.path.join(best_path, 'model'))
     model = PeftModel.from_pretrained(model, os.path.join(best_path, 'adapter'))
     model = model.to(cfg['device'])

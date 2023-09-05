@@ -1,4 +1,5 @@
 import argparse
+import os
 import itertools
 
 parser = argparse.ArgumentParser(description='config')
@@ -9,19 +10,20 @@ parser.add_argument('--world_size', default=1, type=int)
 parser.add_argument('--init_seed', default=0, type=int)
 parser.add_argument('--round', default=4, type=int)
 parser.add_argument('--experiment_step', default=1, type=int)
-parser.add_argument('--num_experiments', default=1, type=int)
+parser.add_argument('--num_experiment', default=1, type=int)
 parser.add_argument('--resume_mode', default=0, type=int)
 parser.add_argument('--mode', default=None, type=str)
 parser.add_argument('--split_round', default=65535, type=int)
+parser.add_argument('--task_name', default=None, type=str)
 args = vars(parser.parse_args())
 
 
-def make_controls(script_name, init_seeds, world_size, num_experiments, resume_mode, control_name):
+def make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode, control_name):
     control_names = []
     for i in range(len(control_name)):
         control_names.extend(list('_'.join(x) for x in itertools.product(*control_name[i])))
     control_names = [control_names]
-    controls = script_name + init_seeds + world_size + num_experiments + resume_mode + control_names
+    controls = script_name + init_seeds + world_size + num_experiment + resume_mode + control_names
     controls = list(itertools.product(*controls))
     return controls
 
@@ -34,23 +36,65 @@ def main():
     round = args['round']
     experiment_step = args['experiment_step']
     init_seed = args['init_seed']
-    num_experiments = args['num_experiments']
+    num_experiment = args['num_experiment']
     resume_mode = args['resume_mode']
     mode = args['mode']
     split_round = args['split_round']
+    task_name = args['task_name']
     gpu_ids = [','.join(str(i) for i in list(range(x, x + world_size))) for x in
                list(range(init_gpu, init_gpu + num_gpus, world_size))]
-    init_seeds = [list(range(init_seed, init_seed + num_experiments, experiment_step))]
+    init_seeds = [list(range(init_seed, init_seed + num_experiment, experiment_step))]
     world_size = [[world_size]]
-    num_experiments = [[experiment_step]]
+    num_experiment = [[experiment_step]]
     resume_mode = [[resume_mode]]
     filename = '{}_{}'.format(run, mode)
-    if mode == 'base':
-        script_name = [['{}_classifier.py'.format(run)]]
-        data_names = ['MNIST', 'CIFAR10']
-        model_names = ['linear', 'mlp', 'cnn', 'resnet18']
-        control_name = [[data_names, model_names]]
-        controls = make_controls(script_name, init_seeds, world_size, num_experiments, resume_mode, control_name)
+    if task_name == 's2s':
+        data_names = ['fpb-sa']
+        model_names = ['bart-base', 't5-base']
+    elif task_name == 'clm':
+        data_names = ['ptb', 'dolly-15k']
+        model_names = ['gpt2', 'bloomz-560m']
+    elif task_name == 'sc':
+        data_names = ['glue-mrpc']
+        model_names = ['roberta-base', 'gpt2']
+    else:
+        raise ValueError('Not valid task name')
+    if mode == 'full':
+        script_name = [['{}_model.py'.format(run)]]
+        batch_size = ['8']
+        control_name = [[data_names, model_names, [task_name], ['full'], batch_size]]
+        controls = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode, control_name)
+    elif mode == 'peft':
+        ft_name = ['lora', 'adalora', 'ia3', 'promptune', 'ptune']
+        batch_size = ['8']
+        script_name = [['{}_peft.py'.format(run)]]
+        control_name = [[data_names, model_names, [task_name], ft_name, batch_size]]
+        controls = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode, control_name)
+    elif mode == 'cola':
+        ft_name = ['cola-lr-1-1', 'cola-linear-1-1', 'cola-mlp-1-1', 'cola-skmlp-1-1']
+        batch_size = ['8']
+        script_name = [['{}_cola.py'.format(run)]]
+        control_name = [[data_names, model_names, [task_name], ft_name, batch_size]]
+        controls = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode, control_name)
+    elif mode == 'cola_step':
+        ft_name = ['cola-lr-1-1', 'cola-linear-2-1', 'cola-mlp-4-1', 'cola-skmlp-8-1']
+        batch_size = ['1', '8']
+        script_name = [['{}_cola.py'.format(run)]]
+        control_name = [[data_names, model_names, [task_name], ft_name, batch_size]]
+        controls = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode, control_name)
+    elif mode == 'cola_iter':
+        ft_name = ['cola-lr-1-1', 'cola-linear-1-2', 'cola-mlp-1-4', 'cola-skmlp-1-8']
+        batch_size = ['32']
+        script_name = [['{}_cola.py'.format(run)]]
+        control_name = [[data_names, model_names, [task_name], ft_name, batch_size]]
+        controls = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode, control_name)
+    elif mode == 'cola_dist':
+        ft_name = ['cola-lr-1-1', 'cola-lr~linear-1-1', 'cola-lr~mlp-1-1', 'cola-lr~skmlp-1-1']
+        batch_size = ['8']
+        dist_mode = ['alone', 'joint']
+        script_name = [['{}_cola_dist.py'.format(run)]]
+        control_name = [[data_names, model_names, [task_name], ft_name, batch_size, dist_mode]]
+        controls = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode, control_name)
     else:
         raise ValueError('Not valid mode')
     s = '#!/bin/bash\n'
@@ -58,7 +102,7 @@ def main():
     k = 1
     for i in range(len(controls)):
         controls[i] = list(controls[i])
-        s = s + 'CUDA_VISIBLE_DEVICES=\"{}\" python {} --init_seed {} --world_size {} --num_experiments {} ' \
+        s = s + 'CUDA_VISIBLE_DEVICES=\"{}\" python {} --init_seed {} --world_size {} --num_experiment {} ' \
                 '--resume_mode {} --control_name {}&\n'.format(gpu_ids[i % len(gpu_ids)], *controls[i])
         if i % round == round - 1:
             s = s[:-2] + '\nwait\n'
@@ -74,7 +118,9 @@ def main():
         if s[-5:-1] != 'wait':
             s = s + 'wait\n'
         print(s)
-        run_file = open('{}_{}.sh'.format(filename, k), 'w')
+        if not os.path.exists('scripts'):
+            os.makedirs('scripts')
+        run_file = open(os.path.join('scripts', '{}_{}.sh'.format(filename, k)), 'w')
         run_file.write(s)
         run_file.close()
     return

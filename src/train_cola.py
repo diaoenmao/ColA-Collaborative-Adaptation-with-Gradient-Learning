@@ -45,7 +45,7 @@ def runExperiment():
     dataset = process_dataset(dataset, tokenizer)
     data_loader = make_data_loader(dataset, tokenizer, cfg['model_name'])
     result = resume(os.path.join(checkpoint_path, 'model'), resume_mode=cfg['resume_mode'])
-    metric = make_metric({'train': ['Loss'], 'test': ['Loss']})
+    metric = make_metric({'train': ['Loss'], 'test': ['Loss']}, tokenizer)
     logger = make_logger(os.path.join('output', 'runs', 'train_{}'.format(cfg['model_tag'])))
     if result is None:
         cfg['epoch'] = 1

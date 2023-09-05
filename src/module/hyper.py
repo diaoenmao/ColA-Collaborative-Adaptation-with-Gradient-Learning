@@ -9,7 +9,9 @@ def process_control():
         cfg['collate_mode'] = 'transformer'
     cfg['bart-base'] = {'max_length': 128}
     cfg['bloomz-560m'] = {'max_length': 64}
-    cfg['roberta-large'] = {}
+    cfg['roberta-base'] = {'max_length': 128}
+    cfg['gpt2'] = {'max_length': 128}
+    cfg['t5-base'] = {'max_length': 128}
     cfg['model_name'] = cfg['control']['model_name']
     cfg['task_name'] = cfg['control']['task_name']
     cfg['batch_size'] = int(cfg['control']['batch_size'])
@@ -71,7 +73,7 @@ def make_data_name():
         cfg['data_name'] = data_name_list[0]
         cfg['subset_name'] = 'none'
     data_name_dict = {'fpb': {'data_name': 'financial_phrasebank',
-                              'subset_name_dict': {'on': {'subset_name': 'sentences_allagree',
+                              'subset_name_dict': {'sa': {'subset_name': 'sentences_allagree',
                                                           'text_column': 'sentence',
                                                           'label_column': 'text_label'}}},
                       'ptb': {'data_name': 'ptb_text_only',

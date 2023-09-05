@@ -6,7 +6,7 @@ from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM, AutoModelF
 
 
 def make_hf_model(model_name):
-    if 'bloomz' in model_name:
+    if 'bloom' in model_name:
         cfg['model_name_or_path'] = 'bigscience/{}'.format(model_name)
         cfg['tokenizer_name_or_path'] = 'bigscience/{}'.format(model_name)
     elif 'bart' in model_name:
@@ -15,6 +15,14 @@ def make_hf_model(model_name):
     elif 'roberta' in model_name:
         cfg['model_name_or_path'] = '{}'.format(model_name)
         cfg['tokenizer_name_or_path'] = '{}'.format(model_name)
+    elif 'gpt' in model_name:
+        cfg['model_name_or_path'] = '{}'.format(model_name)
+        cfg['tokenizer_name_or_path'] = '{}'.format(model_name)
+    elif 't5' in model_name:
+        cfg['model_name_or_path'] = '{}'.format(model_name)
+        cfg['tokenizer_name_or_path'] = '{}'.format(model_name)
+    else:
+        raise ValueError('Not valid model name')
     cfg['cache_model_path'] = os.path.join('output', 'model', model_name)
     cfg['cache_tokenizer_path'] = os.path.join('output', 'tokenizer', model_name)
     if cfg['task_name'] == 'clm':
@@ -34,5 +42,7 @@ def make_hf_model(model_name):
                                               padding_side=padding_side)
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token_id = tokenizer.eos_token_id
+    if 'gpt' in model_name:
+        model.config.pad_token_id = tokenizer.pad_token_id
     cfg['pad_token_id'] = tokenizer.pad_token_id
     return model, tokenizer

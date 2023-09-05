@@ -101,9 +101,8 @@ class Rouge:
     def add(self, input, output):
         predictions = output['generate']
         references = input['target']
-        if cfg['task_name'] == 'clm':
-            predictions = predictions[:, -cfg['max_new_tokens']:]
-            references[references < 0] = cfg['pad_token_id']
+        predictions = predictions[:, -cfg['max_new_tokens']:]
+        references[references < 0] = cfg['pad_token_id']
         predictions = self.tokenizer.batch_decode(predictions.detach().cpu().numpy(), skip_special_tokens=True)
         references = self.tokenizer.batch_decode(references.detach().cpu().numpy(), skip_special_tokens=True)
         self.metric.add_batch(predictions=predictions, references=references)
