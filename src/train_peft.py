@@ -123,7 +123,6 @@ def test(data_loader, model, metric, logger):
         model.train(False)
         for i, input in enumerate(data_loader):
             input_size = input['labels'].size(0)
-            raw_input = {'input_ids': input['raw_input_ids'], 'attention_mask': input['raw_attention_mask']}
             input = {'input_ids': input['input_ids'], 'attention_mask': input['attention_mask'],
                      'labels': input['labels']}
             input = to_device(input, cfg['device'])
@@ -134,9 +133,8 @@ def test(data_loader, model, metric, logger):
                 output_['generate'] = model.generate(input_ids=input["input_ids"],
                                                      max_new_tokens=cfg['max_new_tokens'])
             elif cfg['task_name'] == 'clm':
-                raw_input = to_device(raw_input, cfg['device'])
-                output_['generate'] = model.generate(input_ids=raw_input["input_ids"],
-                                                     attention_mask=raw_input["attention_mask"],
+                output_['generate'] = model.generate(input_ids=input["input_ids"],
+                                                     attention_mask=input["attention_mask"],
                                                      max_new_tokens=cfg['max_new_tokens'],
                                                      eos_token_id=cfg['pad_token_id'])
             metric.add('test', input_, output_)

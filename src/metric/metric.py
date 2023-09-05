@@ -14,12 +14,12 @@ def make_metric(metric_name, tokenizer):
         for k in metric_name:
             metric_name[k].extend(['Accuracy'])
     if cfg['task_name'] == 'clm':
-        if cfg['data_name'] in ['raft']:
+        if cfg['data_name'] in ['ptb']:
             pivot = -float('inf')
             pivot_direction = 'up'
             pivot_name = 'Rouge'
             metric_name['test'].extend(['Rouge'])
-        elif cfg['data_name'] in ['databricks-dolly']:
+        elif cfg['data_name'] in ['dolly']:
             pivot = -float('inf')
             pivot_direction = 'up'
             pivot_name = 'Rouge'
@@ -106,8 +106,6 @@ class Rouge:
             references[references < 0] = cfg['pad_token_id']
         predictions = self.tokenizer.batch_decode(predictions.detach().cpu().numpy(), skip_special_tokens=True)
         references = self.tokenizer.batch_decode(references.detach().cpu().numpy(), skip_special_tokens=True)
-        print(references, predictions)
-        exit()
         self.metric.add_batch(predictions=predictions, references=references)
         return
 

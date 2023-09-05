@@ -65,16 +65,19 @@ def process_control():
 
 def make_data_name():
     data_name_list = cfg['control']['data_name'].split('-')
-    cfg['data_name'] = '-'.join(data_name_list[:-1])
-    cfg['subset_name'] = data_name_list[-1]
+    if len(data_name_list) == 2:
+        cfg['data_name'], cfg['subset_name'] = data_name_list
+    else:
+        cfg['data_name'] = data_name_list[0]
+        cfg['subset_name'] = 'none'
     data_name_dict = {'fpb': {'data_name': 'financial_phrasebank',
-                              'subset_name_dict': {'sa': {'subset_name': 'sentences_allagree',
+                              'subset_name_dict': {'on': {'subset_name': 'sentences_allagree',
                                                           'text_column': 'sentence',
                                                           'label_column': 'text_label'}}},
-                      'raft': {'data_name': 'ought/raft',
-                               'subset_name_dict': {'tc': {'subset_name': 'twitter_complaints',
-                                                           'text_column': ['Tweet text'],
-                                                           'label_column': 'text_label'}}},
+                      'ptb': {'data_name': 'ptb_text_only',
+                              'subset_name_dict': {'none': {'subset_name': None,
+                                                            'text_column': 'sentence',
+                                                            'label_column': None}}},
                       'glue': {'data_name': 'glue',
                                'subset_name_dict': {'cola': {'subset_name': 'cola',
                                                              'text_column': ['sentence'],
@@ -111,13 +114,13 @@ def make_data_name():
                                                              'label_column': 'label'}
                                                     }
                                },
-                      'databricks-dolly': {'data_name': 'databricks/databricks-dolly-15k',
-                                           'subset_name_dict': {'15k': {'subset_name': '15k',
-                                                                        'text_column': ['instruction', 'context'],
-                                                                        'label_column': 'response'}
-                                           }
+                      'dolly': {'data_name': 'databricks/databricks-dolly-15k',
+                                'subset_name_dict': {'15k': {'subset_name': '15k',
+                                                             'text_column': ['instruction', 'context'],
+                                                             'label_column': 'response'}
+                                                     }
 
-                      }
+                                }
                       }
     cfg['hf_data_name'] = data_name_dict[cfg['data_name']]['data_name']
     cfg['hf_subset_name'] = data_name_dict[cfg['data_name']]['subset_name_dict'][cfg['subset_name']]['subset_name']
