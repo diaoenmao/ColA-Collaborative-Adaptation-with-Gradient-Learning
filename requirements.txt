@@ -18,3 +18,5 @@ tqdm==4.65.0
 transformers==4.33.0
 rouge_score==0.1.2
 tensorboard==2.14.0
+
+# pip install transformers dataset evaluate seqeval accelerate torchinfo peft rouge_score tensorboard

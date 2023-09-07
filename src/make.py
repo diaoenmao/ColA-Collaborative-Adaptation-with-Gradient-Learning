@@ -47,7 +47,7 @@ def main():
     world_size = [[world_size]]
     num_experiment = [[experiment_step]]
     resume_mode = [[resume_mode]]
-    filename = '{}_{}'.format(run, mode)
+    filename = '{}_{}_{}'.format(run, mode, task_name)
     if task_name == 's2s':
         data_names = ['fpb-sa']
         model_names = ['bart-base', 't5-base']

@@ -202,27 +202,22 @@ def process_dataset(dataset, tokenizer):
             inputs = [(f"{' '.join([f'{col}: {examples[col][i]}' for col in text_column])} "
                        f"response: ") for i in range(batch_size)]
             targets = [str(x) for x in examples[label_column]]
-            model_inputs = tokenizer(inputs)
-            labels = tokenizer(targets)
+            model_inputs = tokenizer(inputs, max_length=max_length, padding='max_length', truncation=True)
+            labels = tokenizer(targets, max_length=max_length, padding='do_not_pad', truncation=True)
+
             model_inputs["split"] = []
             for i in range(batch_size):
                 sample_input_ids = model_inputs["input_ids"][i]
-                label_input_ids = labels["input_ids"][i] + [tokenizer.pad_token_id]
-                model_inputs["input_ids"][i] = sample_input_ids + label_input_ids
-                labels["input_ids"][i] = [-100] * len(sample_input_ids) + label_input_ids
-                model_inputs["attention_mask"][i] = [1] * len(model_inputs["input_ids"][i])
-                model_inputs["split"].append(cfg['task_label'][examples['category'][i]])
-            for i in range(batch_size):
-                sample_input_ids = model_inputs["input_ids"][i]
+                sample_attention_mask = model_inputs["attention_mask"][i]
                 label_input_ids = labels["input_ids"][i]
-                model_inputs["input_ids"][i] = [tokenizer.pad_token_id] * (
-                        max_length - len(sample_input_ids)) + sample_input_ids
-                model_inputs["attention_mask"][i] = [0] * (max_length - len(sample_input_ids)) + model_inputs[
-                    "attention_mask"][i]
-                labels["input_ids"][i] = [-100] * (max_length - len(sample_input_ids)) + label_input_ids
-                model_inputs["input_ids"][i] = torch.tensor(model_inputs["input_ids"][i][:max_length])
-                model_inputs["attention_mask"][i] = torch.tensor(model_inputs["attention_mask"][i][:max_length])
-                labels["input_ids"][i] = torch.tensor(labels["input_ids"][i][:max_length])
+                label_attention_mask = labels["attention_mask"][i]
+                model_inputs["input_ids"][i] = sample_input_ids + label_input_ids
+                model_inputs["attention_mask"][i] = sample_attention_mask + label_attention_mask
+                labels["input_ids"][i] = [-100] * len(sample_input_ids) + label_input_ids
+                model_inputs["split"].append(cfg['task_label'][examples['category'][i]])
+                model_inputs["input_ids"][i] = torch.tensor(model_inputs["input_ids"][i][-max_length:])
+                model_inputs["attention_mask"][i] = torch.tensor(model_inputs["attention_mask"][i][-max_length:])
+                labels["input_ids"][i] = torch.tensor(labels["input_ids"][i][-max_length:])
             model_inputs["labels"] = labels["input_ids"]
             return model_inputs
 
@@ -239,7 +234,7 @@ def process_dataset(dataset, tokenizer):
             desc="Running tokenizer on dataset",
         )
         cfg['data_size'] = {k: len(processed_dataset[k]) for k in processed_dataset}
-        cfg['max_new_tokens'] = 10
+        cfg['max_new_tokens'] = 40
     else:
         raise ValueError('Not valid data name')
     cfg['target_size'] = len(tokenizer)

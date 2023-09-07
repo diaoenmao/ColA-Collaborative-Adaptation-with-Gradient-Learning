@@ -18,11 +18,15 @@ def make_metric(metric_name, tokenizer):
             pivot = -float('inf')
             pivot_direction = 'up'
             pivot_name = 'Rouge'
+            for k in metric_name:
+                metric_name[k].extend(['Perplexity'])
             metric_name['test'].extend(['Rouge'])
         elif cfg['data_name'] in ['dolly']:
             pivot = -float('inf')
             pivot_direction = 'up'
             pivot_name = 'Rouge'
+            for k in metric_name:
+                metric_name[k].extend(['Perplexity'])
             metric_name['test'].extend(['Rouge'])
         else:
             raise ValueError('Not valid data name')
