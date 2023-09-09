@@ -1,0 +1,160 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        
+        {
+            "name": "train_cola_fpb-sa",
+            "type": "python",
+            "request": "launch",
+            "console": "integratedTerminal",
+            "program": "${workspaceFolder}/train_cola.py",
+            "justMyCode": true,
+            "args": [
+                "--device",
+                "cpu",
+                "--init_seed",
+                "0",
+                "--control_name",
+                "fpb-sa_bart-base_s2s_cola-lr-1-1",
+               
+            // python train_classifier_fl.py --control_name 
+            ]
+        },
+        
+        {
+            "name": "train_peft_fpb-sa",
+            "type": "python",
+            "request": "launch",
+            "console": "integratedTerminal",
+            "program": "${workspaceFolder}/train_peft.py",
+            "justMyCode": true,
+            "args": [
+                "--device",
+                "cpu",
+                "--init_seed",
+                "0",
+                "--control_name",
+                "fpb-sa_bart-base_s2s_cola-lr-1-1",
+               
+            // python train_classifier_fl.py --control_name 
+            ]
+        },
+
+        {
+            "name": "train_cola_raft-tc",
+            "type": "python",
+            "request": "launch",
+            "console": "integratedTerminal",
+            "program": "${workspaceFolder}/train_cola.py",
+            "justMyCode": true,
+            "args": [
+                "--device",
+                "cpu",
+                "--init_seed",
+                "0",
+                "--control_name",
+                "raft-tc_bart-base_s2s_cola-lr-1-1",
+               
+            // python train_classifier_fl.py --control_name 
+            ]
+        },
+
+        {
+            "name": "train_wikisql",
+            "type": "python",
+            "request": "launch",
+            "console": "integratedTerminal",
+            "program": "${workspaceFolder}/train_cola.py",
+            "justMyCode": true,
+            "args": [
+                "--device",
+                "cpu",
+                "--init_seed",
+                "0",
+                "--control_name",
+                "wikisql-main_bart-base_s2s_cola-lr-1-1",
+               
+            // python train_classifier_fl.py --control_name 
+            ]
+        },
+
+        {
+            "name": "train_samsum",
+            "type": "python",
+            "request": "launch",
+            "console": "integratedTerminal",
+            "program": "${workspaceFolder}/train_cola.py",
+            "justMyCode": true,
+            "args": [
+                "--device",
+                "cpu",
+                "--init_seed",
+                "0",
+                "--control_name",
+                "samsum-main_bart-base_s2s_cola-lr-1-1",
+               
+            // python train_classifier_fl.py --control_name 
+            ]
+        },
+
+        {
+            "name": "train_e2enlg",
+            "type": "python",
+            "request": "launch",
+            "console": "integratedTerminal",
+            "program": "${workspaceFolder}/train_cola.py",
+            "justMyCode": true,
+            "args": [
+                "--device",
+                "cpu",
+                "--init_seed",
+                "0",
+                "--control_name",
+                "e2enlg-main_bart-base_s2s_cola-lr-1-1",
+               
+            // python train_classifier_fl.py --control_name 
+            ]
+        },
+
+        {
+            "name": "train_webnlg",
+            "type": "python",
+            "request": "launch",
+            "console": "integratedTerminal",
+            "program": "${workspaceFolder}/train_cola.py",
+            "justMyCode": true,
+            "args": [
+                "--device",
+                "cpu",
+                "--init_seed",
+                "0",
+                "--control_name",
+                "webnlg-r3.0_bart-base_s2s_cola-lr-1-1",
+               
+            // python train_classifier_fl.py --control_name 
+            ]
+        },
+
+        {
+            "name": "train_dart",
+            "type": "python",
+            "request": "launch",
+            "console": "integratedTerminal",
+            "program": "${workspaceFolder}/train_cola.py",
+            "justMyCode": true,
+            "args": [
+                "--device",
+                "cpu",
+                "--init_seed",
+                "0",
+                "--control_name",
+                "dart-main_bart-base_s2s_cola-lr-1-1",
+               
+            // python train_classifier_fl.py --control_name 
+            ]
+        },
+    ]
+}

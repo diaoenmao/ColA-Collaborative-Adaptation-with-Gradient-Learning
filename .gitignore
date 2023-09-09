@@ -123,3 +123,16 @@ res/
 .idea/
 .DS_Store
 
+
+
+
+
+# Ignore all files with .pbs ending
+*.pbs
+
+# Ignore folders starting with msiexp
+msiout*/
+
+# Ignore files starting with .__
+.__*
+._*

@@ -26,7 +26,7 @@ def process_control():
     cfg[model_name]['weight_decay'] = 5e-4
     cfg[model_name]['nesterov'] = True
     cfg[model_name]['num_epochs'] = 8
-    cfg[model_name]['batch_size'] = {'train': 32, 'test': 32}
+    cfg[model_name]['batch_size'] = {'train': 8, 'test': 32}
     cfg[model_name]['scheduler_name'] = 'LinearAnnealingLR'
     cfg[model_name]['scheduler_name'] = 'None'
 
@@ -52,7 +52,7 @@ def process_control():
         cfg['cola']['nesterov'] = True
         cfg['cola']['num_steps'] = int(ft_name_list[2])
         cfg['cola']['num_epochs'] = int(ft_name_list[3])
-        cfg['cola']['batch_size'] = {'train': 32, 'test': 32}
+        cfg['cola']['batch_size'] = {'train': 8, 'test': 32}
         cfg['cola']['scheduler_name'] = 'LinearAnnealingLR'
         cfg['cola_func'] = {}
         cfg['cola_func']['optimizer_name'] = 'AdamW'
@@ -71,10 +71,39 @@ def make_data_name():
                               'subset_name_dict': {'sa': {'subset_name': 'sentences_allagree',
                                                           'text_column': 'sentence',
                                                           'label_column': 'text_label'}}},
+                      # https://huggingface.co/datasets/wikisql
+                      'wikisql': {'data_name': 'wikisql',
+                              'subset_name_dict': {'main': {'subset_name': None,
+                                                          'text_column': ['question', 'table'],
+                                                          'label_column': 'sql'}}},
+                      # https://huggingface.co/datasets/samsum
+                      # https://paperswithcode.com/dataset/samsum-corpus
+                      # https://arxiv.org/src/1911.12237v2/anc
+                      'samsum': {'data_name': 'samsum',
+                              'subset_name_dict': {'main': {'subset_name': None,
+                                                          'text_column': 'dialogue',
+                                                          'label_column': 'summary'}}},
+                      # https://huggingface.co/datasets/e2e_nlg
+                      'e2enlg': {'data_name': 'e2e_nlg',
+                              'subset_name_dict': {'main': {'subset_name': None,
+                                                          'text_column': 'human_reference',
+                                                          'label_column': 'meaning_representation'}}},
+                      # https://huggingface.co/datasets/web_nlg/viewer/release_v3.0_en/
+                      'webnlg': {'data_name': 'web_nlg',
+                              'subset_name_dict': {'r3.0': {'subset_name': 'release_v3.0_en',
+                                                          'text_column': ['category', 'modified_triple_sets'],
+                                                          'label_column': 'lex'}}},    
+                      # https://huggingface.co/datasets/dart
+                      'dart': {'data_name': 'dart',
+                              'subset_name_dict': {'main': {'subset_name': None,
+                                                          'text_column': 'tripleset',
+                                                          'label_column': 'annotations'}}},
+
                       'raft': {'data_name': 'ought/raft',
                                'subset_name_dict': {'tc': {'subset_name': 'twitter_complaints',
                                                            'text_column': ['Tweet text'],
                                                            'label_column': 'text_label'}}},
+
                       'glue': {'data_name': 'glue',
                                'subset_name_dict': {'cola': {'subset_name': 'cola',
                                                              'text_column': ['sentence'],
