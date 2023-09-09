@@ -86,8 +86,8 @@ def make_data_name():
                       # https://huggingface.co/datasets/e2e_nlg
                       'e2enlg': {'data_name': 'e2e_nlg',
                               'subset_name_dict': {'main': {'subset_name': None,
-                                                          'text_column': 'human_reference',
-                                                          'label_column': 'meaning_representation'}}},
+                                                          'text_column': 'meaning_representation',
+                                                          'label_column': 'human_reference'}}},
                       # https://huggingface.co/datasets/web_nlg/viewer/release_v3.0_en/
                       'webnlg': {'data_name': 'web_nlg',
                               'subset_name_dict': {'r3.0': {'subset_name': 'release_v3.0_en',
@@ -96,8 +96,8 @@ def make_data_name():
                       # https://huggingface.co/datasets/dart
                       'dart': {'data_name': 'dart',
                               'subset_name_dict': {'main': {'subset_name': None,
-                                                          'text_column': 'tripleset',
-                                                          'label_column': 'annotations'}}},
+                                                          'text_column': 'hardcode, complex structure',
+                                                          'label_column': 'hardcode, complex structure'}}},
 
                       'raft': {'data_name': 'ought/raft',
                                'subset_name_dict': {'tc': {'subset_name': 'twitter_complaints',

@@ -268,12 +268,10 @@ def process_dataset(dataset, tokenizer):
         def preprocess_function_wikisql(examples):            
             batch_size = len(examples[label_column])
 
-            # inputs = examples[text_column]
             inputs = [(f"{' '.join([f'{col}: {examples[col][i]}' for col in text_column])}") for i in range(batch_size)]
-
             targets = examples[label_column]          
-            targets = [targets[i]['human_readable'] for i in range(batch_size)]
-            
+            targets = [str(x) for x in examples[label_column]]
+
             # Tokenizing inputs and targets
             model_inputs = tokenizer(inputs, max_length=max_length, padding="max_length", truncation=True, return_tensors="pt")
             labels = tokenizer(targets, max_length=max_length, padding="max_length", truncation=True, return_tensors="pt")
@@ -304,9 +302,6 @@ def process_dataset(dataset, tokenizer):
         def preprocess_function_samsum(examples):            
             inputs = examples[text_column]
             targets = examples[label_column]
-
-            # inputs = [' '.join([' '.join(triple) for triple in inputs[i]]) for i in range(batch_size)]                
-            # targets = [f"Source: {targets[i]['source']} Text: {targets[i]['text']}" for i in range(batch_size)]
             
             # Tokenizing inputs and targets
             model_inputs = tokenizer(inputs, max_length=max_length, padding="max_length", truncation=True, return_tensors="pt")
@@ -384,20 +379,16 @@ def process_dataset(dataset, tokenizer):
         max_length = cfg[cfg['model_name']]['max_length']
 
         def preprocess_function_webnlg(examples):            
-            batch_size = len(examples[label_column])
-
-            category, modified_triple_sets = examples['category'], examples['modified_triple_sets']
-            temp_targets = examples[label_column]
-
             inputs = []
             targets = []
-            for i in range(batch_size):
-                comment, text = temp_targets[i]['comment'], temp_targets[i]['text']
-                for j in range(len(comment)):
-                    if comment[j] == 'good':
-                        inputs.append(f'category: {category[i]}, mtriple_set: {modified_triple_sets[i]["mtriple_set"][0]}')
-                        targets.append(f"text: {text[j]}")
-            
+            for i in range(len(examples[label_column])):
+                entry = examples[label_column][i]
+                comment_list, text_list = entry['comment'], entry['text']
+                for comment, text in zip(comment_list, text_list):
+                    if comment == 'good':
+                        inputs.append(f"category: {examples['category'][i]}, mtriple_set: {examples['modified_triple_sets'][i]['mtriple_set']}")
+                        targets.append(text)
+
             # Tokenizing inputs and targets
             model_inputs = tokenizer(inputs, max_length=max_length, padding="max_length", truncation=True, return_tensors="pt")
             labels = tokenizer(targets, max_length=max_length, padding="max_length", truncation=True, return_tensors="pt")
@@ -429,14 +420,15 @@ def process_dataset(dataset, tokenizer):
         max_length = cfg[cfg['model_name']]['max_length']
 
         def preprocess_function_dart(examples):            
-            batch_size = len(examples[label_column])
+            batch_size = len(examples['annotations'])
 
-            inputs = examples[text_column]
-            targets = examples[label_column]
+            inputs = [
+                f"source: {examples['annotations'][i]['source'][0]}, tripleset: {'; '.join([' - '.join(triple) for triple in examples['tripleset'][i]])}" 
+                for i in range(batch_size)
+            ]   
+            # text list length is always 1
+            targets = [examples['annotations'][i]['text'][0] for i in range(batch_size)] 
 
-            inputs = [' '.join([' '.join(triple) for triple in inputs[i]]) for i in range(batch_size)]                
-            targets = [f"Source: {targets[i]['source']} Text: {targets[i]['text']}" for i in range(batch_size)]
-            
             # Tokenizing inputs and targets
             model_inputs = tokenizer(inputs, max_length=max_length, padding="max_length", truncation=True, return_tensors="pt")
             labels = tokenizer(targets, max_length=max_length, padding="max_length", truncation=True, return_tensors="pt")
