@@ -2,10 +2,11 @@ import copy
 import dataset
 import numpy as np
 import os
+import copy
 import torch
 from functools import partial
 from collections import defaultdict
-from datasets import load_dataset
+from datasets import load_dataset, concatenate_datasets
 from torchvision import transforms
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.dataloader import default_collate
@@ -72,6 +73,36 @@ def make_dataset(data_name, verbose=True):
             batched=True,
             num_proc=1,
         )
+    elif data_name in ['wikisql']:
+        dataset_ = load_dataset(cfg['hf_data_name'], cfg['hf_subset_name'], cache_dir=root)
+        dataset_['test'] = concatenate_datasets([dataset_['validation'], dataset_['test']])
+        del dataset_['validation']
+    elif data_name in ['samsum']:
+        dataset_ = load_dataset('json', data_files={
+            'train': f'{root}/train.json',
+            'validation': f'{root}/val.json',
+            'test': f'{root}/test.json'
+        })
+        dataset_['test'] = concatenate_datasets([dataset_['validation'], dataset_['test']])
+        del dataset_['validation']
+    elif data_name in ['e2enlg']:
+        dataset_ = load_dataset(cfg['hf_data_name'], cfg['hf_subset_name'], cache_dir=root)
+        dataset_['test'] = concatenate_datasets([dataset_['validation'], dataset_['test']]) 
+        del dataset_['validation']
+    elif data_name in ['webnlg']:
+        dataset_ = load_dataset(cfg['hf_data_name'], cfg['hf_subset_name'], cache_dir=root)
+        dataset_['test'] = dataset_['dev']
+        del dataset_['dev']
+    elif data_name in ['dart']:
+        dataset_ = load_dataset(cfg['hf_data_name'], cfg['hf_subset_name'], cache_dir=root)
+        dataset_['test'] = concatenate_datasets([dataset_['validation'], dataset_['test']]) 
+        del dataset_['validation']
+    # WikiSQL
+    # SAMSum 
+    # E2E NLG Challenge
+    # WebNLG
+    # DART
+
     elif data_name in ['glue']:
         dataset_ = load_dataset(cfg['hf_data_name'], cfg['hf_subset_name'], cache_dir=root)
         dataset_['test'] = dataset_['validation']
@@ -227,15 +258,221 @@ def process_dataset(dataset, tokenizer):
 
         processed_dataset = dataset.map(
             preprocess_function,
+            desc="Running tokenizer on wikisql dataset",
+        )
+        cfg['max_new_tokens'] = 40
+    elif cfg['data_name'] == 'wikisql':
+        '''
+        This example was too long and was cropped:
+
+        {
+            "phase": 1,
+            "question": "How would you answer a second test question?",
+            "sql": {
+                "agg": 0,
+                "conds": {
+                    "column_index": [2],
+                    "condition": ["Some Entity"],
+                    "operator_index": [0]
+                },
+                "human_readable": "SELECT Header1 FROM table WHERE Another Header = Some Entity",
+                "sel": 0
+            },
+            "table": "{\"caption\": \"L\", \"header\": [\"Header1\", \"Header 2\", \"Another Header\"], \"id\": \"1-10015132-9\", \"name\": \"table_10015132_11\", \"page_i..."
+        }
+        '''
+        max_length = cfg[cfg['model_name']]['max_length']
+
+        def preprocess_function_wikisql(examples):            
+            batch_size = len(examples[label_column])
+
+            inputs = [(f"{' '.join([f'{col}: {examples[col][i]}' for col in text_column])}") for i in range(batch_size)]
+            targets = examples[label_column]          
+            targets = [str(x) for x in examples[label_column]]
+
+            # Tokenizing inputs and targets
+            model_inputs = tokenizer(inputs, max_length=max_length, padding="max_length", truncation=True, return_tensors="pt")
+            labels = tokenizer(targets, max_length=max_length, padding="max_length", truncation=True, return_tensors="pt")
+
+            # Replace pad token id with -100
+            labels = labels["input_ids"]
+            labels[labels == tokenizer.pad_token_id] = -100
+            
+            model_inputs["labels"] = labels
+            
+            return model_inputs
+
+        processed_dataset = dataset.map(
+            preprocess_function_wikisql,
             batched=True,
             num_proc=1,
             remove_columns=dataset["train"].column_names,
             load_from_cache_file=False,
             desc="Running tokenizer on dataset",
         )
-        cfg['data_size'] = {k: len(processed_dataset[k]) for k in processed_dataset}
-        cfg['max_new_tokens'] = 40
+    elif cfg['data_name'] == 'samsum':
+        '''
+        {'id': '13818513', 'summary': 'Amanda baked cookies and will bring Jerry some tomorrow.', 
+        'dialogue': "Amanda: I baked cookies. Do you want some?\r\nJerry: Sure!\r\nAmanda: I'll bring you tomorrow :-)"}
+        '''
+        max_length = cfg[cfg['model_name']]['max_length']
+
+        def preprocess_function_samsum(examples):            
+            inputs = examples[text_column]
+            targets = examples[label_column]
+            
+            # Tokenizing inputs and targets
+            model_inputs = tokenizer(inputs, max_length=max_length, padding="max_length", truncation=True, return_tensors="pt")
+            labels = tokenizer(targets, max_length=max_length, padding="max_length", truncation=True, return_tensors="pt")
+
+            # Replace pad token id with -100
+            labels = labels["input_ids"]
+            labels[labels == tokenizer.pad_token_id] = -100
+            
+            model_inputs["labels"] = labels
+            
+            return model_inputs
+
+        processed_dataset = dataset.map(
+            preprocess_function_samsum,
+            batched=True,
+            num_proc=1,
+            remove_columns=dataset["train"].column_names,
+            load_from_cache_file=False,
+            desc="Running tokenizer on samsum dataset",
+        )
+    elif cfg['data_name'] == 'e2enlg':
+        '''
+        {'human_reference': 'The Vaults pub near Café Adriatic has a 5 star rating.  Prices start at £30.',
+        'meaning_representation': 'name[The Vaults], eatType[pub], priceRange[more than £30], customer rating[5 out of 5], near[Café Adriatic]'}
+        '''
+        max_length = cfg[cfg['model_name']]['max_length']
+
+        def preprocess_function_e2enlg(examples):            
+            inputs = examples[text_column]
+            targets = examples[label_column]
+            
+            # Tokenizing inputs and targets
+            model_inputs = tokenizer(inputs, max_length=max_length, padding="max_length", truncation=True, return_tensors="pt")
+            labels = tokenizer(targets, max_length=max_length, padding="max_length", truncation=True, return_tensors="pt")
+
+            # Replace pad token id with -100
+            labels = labels["input_ids"]
+            labels[labels == tokenizer.pad_token_id] = -100
+            
+            model_inputs["labels"] = labels
+            
+            return model_inputs
+
+        processed_dataset = dataset.map(
+            preprocess_function_e2enlg,
+            batched=True,
+            num_proc=1,
+            remove_columns=dataset["train"].column_names,
+            load_from_cache_file=False,
+            desc="Running tokenizer on e2enlg dataset",
+        )
+    elif cfg['data_name'] == 'webnlg':
+        '''
+        {'2017_test_category': '',
+        'category': 'Politician',
+        'eid': 'Id10',
+        'lex': {'comment': ['good', 'good', 'good'],
+                'lid': ['Id1', 'Id2', 'Id3'],
+                'text': ['World War II had Chiang Kai-shek as a commander and United States Army soldier Abner W. Sibal.',
+                        'Abner W. Sibal served in the United States Army during the Second World War and during that war Chiang Kai-shek was one of the commanders.',
+                        'Abner W. Sibal, served in the United States Army and fought in World War II, one of the commanders of which, was Chiang Kai-shek.']},
+        'modified_triple_sets': {'mtriple_set': [['Abner_W._Sibal | battle | World_War_II',
+                                                'World_War_II | commander | Chiang_Kai-shek',
+                                                'Abner_W._Sibal | militaryBranch | United_States_Army']]},
+        'original_triple_sets': {'otriple_set': [['Abner_W._Sibal | battles | World_War_II', 'World_War_II | commander | Chiang_Kai-shek', 'Abner_W._Sibal | branch | United_States_Army'],
+                                                ['Abner_W._Sibal | militaryBranch | United_States_Army',
+                                                'Abner_W._Sibal | battles | World_War_II',
+                                                'World_War_II | commander | Chiang_Kai-shek']]},
+        'shape': '(X (X) (X (X)))',
+        'shape_type': 'mixed',
+        'size': 3}
+        '''
+        max_length = cfg[cfg['model_name']]['max_length']
+
+        def preprocess_function_webnlg(examples):            
+            inputs = []
+            targets = []
+            for i in range(len(examples[label_column])):
+                entry = examples[label_column][i]
+                comment_list, text_list = entry['comment'], entry['text']
+                temp_triples = ''
+                for j in range(len(examples['modified_triple_sets'][i]['mtriple_set'])):
+                    if j > 0:
+                        temp_triples += ' ; '
+                    temp_triples += ' - '.join(examples['modified_triple_sets'][i]['mtriple_set'][j])
+                for comment, text in zip(comment_list, text_list):
+                    if comment == 'good':
+                        inputs.append(f"category: {examples['category'][i]}, mtriple_set: {temp_triples}")
+                        targets.append(text)
+
+            # Tokenizing inputs and targets
+            model_inputs = tokenizer(inputs, max_length=max_length, padding="max_length", truncation=True, return_tensors="pt")
+            labels = tokenizer(targets, max_length=max_length, padding="max_length", truncation=True, return_tensors="pt")
+
+            # Replace pad token id with -100
+            labels = labels["input_ids"]
+            labels[labels == tokenizer.pad_token_id] = -100
+            
+            model_inputs["labels"] = labels
+            
+            return model_inputs
+
+        processed_dataset = dataset.map(
+            preprocess_function_webnlg,
+            batched=True,
+            num_proc=1,
+            remove_columns=dataset["train"].column_names,
+            load_from_cache_file=False,
+            desc="Running tokenizer on webnlg dataset",
+        )
+    elif cfg['data_name'] == 'dart':
+        '''
+        {'annotations': {'source': ['WikiTableQuestions_mturk'],
+        'text': ['First Clearing\tbased on Callicoon, New York and location at On NYS 52 1 Mi. Youngsville']},
+        'subtree_was_extended': False,
+        'tripleset': [['First Clearing', 'LOCATION', 'On NYS 52 1 Mi. Youngsville'],
+        ['On NYS 52 1 Mi. Youngsville', 'CITY_OR_TOWN', 'Callicoon, New York']]}
+        '''
+        max_length = cfg[cfg['model_name']]['max_length']
+
+        def preprocess_function_dart(examples):            
+            batch_size = len(examples['annotations'])
+
+            inputs = [
+                f"source: {examples['annotations'][i]['source'][0]}, tripleset: {' ; '.join([' - '.join(triple) for triple in examples['tripleset'][i]])}" 
+                for i in range(batch_size)
+            ]   
+            # text list length is always 1
+            targets = [examples['annotations'][i]['text'][0] for i in range(batch_size)] 
+
+            # Tokenizing inputs and targets
+            model_inputs = tokenizer(inputs, max_length=max_length, padding="max_length", truncation=True, return_tensors="pt")
+            labels = tokenizer(targets, max_length=max_length, padding="max_length", truncation=True, return_tensors="pt")
+
+            # Replace pad token id with -100
+            labels = labels["input_ids"]
+            labels[labels == tokenizer.pad_token_id] = -100
+            
+            model_inputs["labels"] = labels
+            
+            return model_inputs
+
+        processed_dataset = dataset.map(
+            preprocess_function_dart,
+            batched=True,
+            num_proc=1,
+            remove_columns=dataset["train"].column_names,
+            load_from_cache_file=False,
+            desc="Running tokenizer on DART dataset",
+        )
     else:
         raise ValueError('Not valid data name')
+    cfg['data_size'] = {k: len(processed_dataset[k]) for k in processed_dataset}
     cfg['target_size'] = len(tokenizer)
     return processed_dataset

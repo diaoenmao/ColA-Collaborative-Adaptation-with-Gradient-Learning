@@ -80,6 +80,38 @@ def make_data_name():
                               'subset_name_dict': {'none': {'subset_name': None,
                                                             'text_column': 'sentence',
                                                             'label_column': None}}},
+                      # https://huggingface.co/datasets/wikisql
+                      'wikisql': {'data_name': 'wikisql',
+                              'subset_name_dict': {'main': {'subset_name': None,
+                                                          'text_column': ['question', 'table'],
+                                                          'label_column': 'sql'}}},
+                      # https://huggingface.co/datasets/samsum
+                      # https://paperswithcode.com/dataset/samsum-corpus
+                      # https://arxiv.org/src/1911.12237v2/anc
+                      'samsum': {'data_name': 'samsum',
+                              'subset_name_dict': {'main': {'subset_name': None,
+                                                          'text_column': 'dialogue',
+                                                          'label_column': 'summary'}}},
+                      # https://huggingface.co/datasets/e2e_nlg
+                      'e2enlg': {'data_name': 'e2e_nlg',
+                              'subset_name_dict': {'main': {'subset_name': None,
+                                                          'text_column': 'meaning_representation',
+                                                          'label_column': 'human_reference'}}},
+                      # https://huggingface.co/datasets/web_nlg
+                      'webnlg': {'data_name': 'web_nlg',
+                              'subset_name_dict': {'2017': {'subset_name': 'webnlg_challenge_2017',
+                                                          'text_column': ['category', 'modified_triple_sets'],
+                                                          'label_column': 'lex'}}},    
+                      # https://huggingface.co/datasets/dart
+                      'dart': {'data_name': 'dart',
+                              'subset_name_dict': {'main': {'subset_name': None,
+                                                          'text_column': 'hardcode, complex structure',
+                                                          'label_column': 'hardcode, complex structure'}}},
+
+                      'raft': {'data_name': 'ought/raft',
+                               'subset_name_dict': {'tc': {'subset_name': 'twitter_complaints',
+                                                           'text_column': ['Tweet text'],
+                                                           'label_column': 'text_label'}}},
                       'glue': {'data_name': 'glue',
                                'subset_name_dict': {'cola': {'subset_name': 'cola',
                                                              'text_column': ['sentence'],
