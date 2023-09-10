@@ -49,11 +49,11 @@ def main():
     resume_mode = [[resume_mode]]
     filename = '{}_{}_{}'.format(run, mode, task_name)
     if task_name == 's2s':
-        data_names = ['fpb-sa']
+        data_names = ['fpb-sa', 'wikisql', 'samsum', 'e2enlg', 'webnlg-2017', 'dart']
         model_names = ['bart-base', 't5-base']
     elif task_name == 'clm':
         data_names = ['ptb', 'dolly-15k']
-        model_names = ['gpt2', 'bloomz-560m']
+        model_names = ['gpt2']
     elif task_name == 'sc':
         data_names = ['glue-mrpc']
         model_names = ['roberta-base', 'gpt2']

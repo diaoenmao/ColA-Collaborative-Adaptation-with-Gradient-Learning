@@ -124,7 +124,7 @@ class Rouge:
         else:
             generate = output['generate']
             target = input['target']
-            generate, target = self.make_predictions_reference(generate, target)
+            generate, target = self.decode(generate, target)
             self.metric.add_batch(predictions=generate, references=target)
         return
 

@@ -6,7 +6,7 @@ import copy
 import torch
 from functools import partial
 from collections import defaultdict
-from datasets import load_dataset, concatenate_datasets
+from datasets import load_dataset
 from torchvision import transforms
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.dataloader import default_collate
@@ -75,19 +75,14 @@ def make_dataset(data_name, verbose=True):
         )
     elif data_name in ['wikisql']:
         dataset_ = load_dataset(cfg['hf_data_name'], cfg['hf_subset_name'], cache_dir=root)
-        dataset_['test'] = concatenate_datasets([dataset_['validation'], dataset_['test']])
         del dataset_['validation']
     elif data_name in ['samsum']:
         dataset_ = load_dataset('json', data_files={
             'train': f'{root}/train.json',
-            'validation': f'{root}/val.json',
             'test': f'{root}/test.json'
         })
-        dataset_['test'] = concatenate_datasets([dataset_['validation'], dataset_['test']])
-        del dataset_['validation']
     elif data_name in ['e2enlg']:
         dataset_ = load_dataset(cfg['hf_data_name'], cfg['hf_subset_name'], cache_dir=root)
-        dataset_['test'] = concatenate_datasets([dataset_['validation'], dataset_['test']]) 
         del dataset_['validation']
     elif data_name in ['webnlg']:
         dataset_ = load_dataset(cfg['hf_data_name'], cfg['hf_subset_name'], cache_dir=root)
@@ -95,14 +90,12 @@ def make_dataset(data_name, verbose=True):
         del dataset_['dev']
     elif data_name in ['dart']:
         dataset_ = load_dataset(cfg['hf_data_name'], cfg['hf_subset_name'], cache_dir=root)
-        dataset_['test'] = concatenate_datasets([dataset_['validation'], dataset_['test']]) 
         del dataset_['validation']
     # WikiSQL
     # SAMSum 
     # E2E NLG Challenge
     # WebNLG
     # DART
-
     elif data_name in ['glue']:
         dataset_ = load_dataset(cfg['hf_data_name'], cfg['hf_subset_name'], cache_dir=root)
         dataset_['test'] = dataset_['validation']
@@ -258,7 +251,11 @@ def process_dataset(dataset, tokenizer):
 
         processed_dataset = dataset.map(
             preprocess_function,
-            desc="Running tokenizer on wikisql dataset",
+            batched=True,
+            num_proc=1,
+            remove_columns=dataset["train"].column_names,
+            load_from_cache_file=False,
+            desc="Running tokenizer on dataset",
         )
         cfg['max_new_tokens'] = 40
     elif cfg['data_name'] == 'wikisql':
@@ -283,33 +280,35 @@ def process_dataset(dataset, tokenizer):
         '''
         max_length = cfg[cfg['model_name']]['max_length']
 
-        def preprocess_function_wikisql(examples):            
+        def preprocess_function(examples):
             batch_size = len(examples[label_column])
 
             inputs = [(f"{' '.join([f'{col}: {examples[col][i]}' for col in text_column])}") for i in range(batch_size)]
-            targets = examples[label_column]          
             targets = [str(x) for x in examples[label_column]]
 
             # Tokenizing inputs and targets
-            model_inputs = tokenizer(inputs, max_length=max_length, padding="max_length", truncation=True, return_tensors="pt")
-            labels = tokenizer(targets, max_length=max_length, padding="max_length", truncation=True, return_tensors="pt")
+            model_inputs = tokenizer(inputs, max_length=max_length, padding="max_length", truncation=True,
+                                     return_tensors="pt")
+            labels = tokenizer(targets, max_length=max_length, padding="max_length", truncation=True,
+                               return_tensors="pt")
 
             # Replace pad token id with -100
             labels = labels["input_ids"]
             labels[labels == tokenizer.pad_token_id] = -100
-            
+
             model_inputs["labels"] = labels
-            
+
             return model_inputs
 
         processed_dataset = dataset.map(
-            preprocess_function_wikisql,
+            preprocess_function,
             batched=True,
             num_proc=1,
             remove_columns=dataset["train"].column_names,
             load_from_cache_file=False,
             desc="Running tokenizer on dataset",
         )
+        cfg['max_new_tokens'] = 10
     elif cfg['data_name'] == 'samsum':
         '''
         {'id': '13818513', 'summary': 'Amanda baked cookies and will bring Jerry some tomorrow.', 
@@ -317,30 +316,33 @@ def process_dataset(dataset, tokenizer):
         '''
         max_length = cfg[cfg['model_name']]['max_length']
 
-        def preprocess_function_samsum(examples):            
+        def preprocess_function(examples):
             inputs = examples[text_column]
             targets = examples[label_column]
-            
+
             # Tokenizing inputs and targets
-            model_inputs = tokenizer(inputs, max_length=max_length, padding="max_length", truncation=True, return_tensors="pt")
-            labels = tokenizer(targets, max_length=max_length, padding="max_length", truncation=True, return_tensors="pt")
+            model_inputs = tokenizer(inputs, max_length=max_length, padding="max_length", truncation=True,
+                                     return_tensors="pt")
+            labels = tokenizer(targets, max_length=max_length, padding="max_length", truncation=True,
+                               return_tensors="pt")
 
             # Replace pad token id with -100
             labels = labels["input_ids"]
             labels[labels == tokenizer.pad_token_id] = -100
-            
+
             model_inputs["labels"] = labels
-            
+
             return model_inputs
 
         processed_dataset = dataset.map(
-            preprocess_function_samsum,
+            preprocess_function,
             batched=True,
             num_proc=1,
             remove_columns=dataset["train"].column_names,
             load_from_cache_file=False,
-            desc="Running tokenizer on samsum dataset",
+            desc="Running tokenizer on dataset",
         )
+        cfg['max_new_tokens'] = 10
     elif cfg['data_name'] == 'e2enlg':
         '''
         {'human_reference': 'The Vaults pub near Café Adriatic has a 5 star rating.  Prices start at £30.',
@@ -348,30 +350,33 @@ def process_dataset(dataset, tokenizer):
         '''
         max_length = cfg[cfg['model_name']]['max_length']
 
-        def preprocess_function_e2enlg(examples):            
+        def preprocess_function(examples):
             inputs = examples[text_column]
             targets = examples[label_column]
-            
+
             # Tokenizing inputs and targets
-            model_inputs = tokenizer(inputs, max_length=max_length, padding="max_length", truncation=True, return_tensors="pt")
-            labels = tokenizer(targets, max_length=max_length, padding="max_length", truncation=True, return_tensors="pt")
+            model_inputs = tokenizer(inputs, max_length=max_length, padding="max_length", truncation=True,
+                                     return_tensors="pt")
+            labels = tokenizer(targets, max_length=max_length, padding="max_length", truncation=True,
+                               return_tensors="pt")
 
             # Replace pad token id with -100
             labels = labels["input_ids"]
             labels[labels == tokenizer.pad_token_id] = -100
-            
+
             model_inputs["labels"] = labels
-            
+
             return model_inputs
 
         processed_dataset = dataset.map(
-            preprocess_function_e2enlg,
+            preprocess_function,
             batched=True,
             num_proc=1,
             remove_columns=dataset["train"].column_names,
             load_from_cache_file=False,
-            desc="Running tokenizer on e2enlg dataset",
+            desc="Running tokenizer on dataset",
         )
+        cfg['max_new_tokens'] = 10
     elif cfg['data_name'] == 'webnlg':
         '''
         {'2017_test_category': '',
@@ -395,7 +400,7 @@ def process_dataset(dataset, tokenizer):
         '''
         max_length = cfg[cfg['model_name']]['max_length']
 
-        def preprocess_function_webnlg(examples):            
+        def preprocess_function(examples):
             inputs = []
             targets = []
             for i in range(len(examples[label_column])):
@@ -412,25 +417,28 @@ def process_dataset(dataset, tokenizer):
                         targets.append(text)
 
             # Tokenizing inputs and targets
-            model_inputs = tokenizer(inputs, max_length=max_length, padding="max_length", truncation=True, return_tensors="pt")
-            labels = tokenizer(targets, max_length=max_length, padding="max_length", truncation=True, return_tensors="pt")
+            model_inputs = tokenizer(inputs, max_length=max_length, padding="max_length", truncation=True,
+                                     return_tensors="pt")
+            labels = tokenizer(targets, max_length=max_length, padding="max_length", truncation=True,
+                               return_tensors="pt")
 
             # Replace pad token id with -100
             labels = labels["input_ids"]
             labels[labels == tokenizer.pad_token_id] = -100
-            
+
             model_inputs["labels"] = labels
-            
+
             return model_inputs
 
         processed_dataset = dataset.map(
-            preprocess_function_webnlg,
+            preprocess_function,
             batched=True,
             num_proc=1,
             remove_columns=dataset["train"].column_names,
             load_from_cache_file=False,
-            desc="Running tokenizer on webnlg dataset",
+            desc="Running tokenizer on dataset",
         )
+        cfg['max_new_tokens'] = 10
     elif cfg['data_name'] == 'dart':
         '''
         {'annotations': {'source': ['WikiTableQuestions_mturk'],
@@ -441,36 +449,39 @@ def process_dataset(dataset, tokenizer):
         '''
         max_length = cfg[cfg['model_name']]['max_length']
 
-        def preprocess_function_dart(examples):            
+        def preprocess_function(examples):
             batch_size = len(examples['annotations'])
 
             inputs = [
-                f"source: {examples['annotations'][i]['source'][0]}, tripleset: {' ; '.join([' - '.join(triple) for triple in examples['tripleset'][i]])}" 
+                f"source: {examples['annotations'][i]['source'][0]}, tripleset: {' ; '.join([' - '.join(triple) for triple in examples['tripleset'][i]])}"
                 for i in range(batch_size)
-            ]   
+            ]
             # text list length is always 1
-            targets = [examples['annotations'][i]['text'][0] for i in range(batch_size)] 
+            targets = [examples['annotations'][i]['text'][0] for i in range(batch_size)]
 
             # Tokenizing inputs and targets
-            model_inputs = tokenizer(inputs, max_length=max_length, padding="max_length", truncation=True, return_tensors="pt")
-            labels = tokenizer(targets, max_length=max_length, padding="max_length", truncation=True, return_tensors="pt")
+            model_inputs = tokenizer(inputs, max_length=max_length, padding="max_length", truncation=True,
+                                     return_tensors="pt")
+            labels = tokenizer(targets, max_length=max_length, padding="max_length", truncation=True,
+                               return_tensors="pt")
 
             # Replace pad token id with -100
             labels = labels["input_ids"]
             labels[labels == tokenizer.pad_token_id] = -100
-            
+
             model_inputs["labels"] = labels
-            
+
             return model_inputs
 
         processed_dataset = dataset.map(
-            preprocess_function_dart,
+            preprocess_function,
             batched=True,
             num_proc=1,
             remove_columns=dataset["train"].column_names,
             load_from_cache_file=False,
-            desc="Running tokenizer on DART dataset",
+            desc="Running tokenizer on dataset",
         )
+        cfg['max_new_tokens'] = 10
     else:
         raise ValueError('Not valid data name')
     cfg['data_size'] = {k: len(processed_dataset[k]) for k in processed_dataset}
