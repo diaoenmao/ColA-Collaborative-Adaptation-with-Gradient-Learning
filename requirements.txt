@@ -1,2 +1,22 @@
-# environments: pip install -q transformers dataset evaluate seqeval accelerate torchinfo
+accelerate==0.22.0
+datasets==2.14.4
+evaluate==0.4.0
+huggingface-hub==0.16.4
+matplotlib==3.7.1
+numpy==1.24.3
+pandas==1.5.3
+peft==0.5.0
+Pillow==9.4.0
+PyYAML==6.0
+safetensors==0.3.3
+scikit-learn==1.3.0
+scipy==1.10.1
+torch==2.0.1+cu118
+torchinfo==1.8.0
+torchvision==0.15.2+cu118
+tqdm==4.65.0
+transformers==4.33.0
+rouge_score==0.1.2
+tensorboard==2.14.0
 
+# pip install transformers dataset evaluate seqeval accelerate torchinfo peft rouge_score tensorboard
