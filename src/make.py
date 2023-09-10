@@ -71,25 +71,26 @@ def main():
         control_name = [[data_names, model_names, [task_name], ft_name, batch_size]]
         controls = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode, control_name)
     elif mode == 'cola':
-        ft_name = ['cola-lr-1-1', 'cola-linear-1-1', 'cola-mlp-1-1', 'cola-skmlp-1-1']
+        ft_name = ['cola-lowrank-1-1', 'cola-linear-1-1', 'cola-mlp-1-1', 'cola-skmlp-1-1']
         batch_size = ['8']
         script_name = [['{}_cola.py'.format(run)]]
         control_name = [[data_names, model_names, [task_name], ft_name, batch_size]]
         controls = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode, control_name)
     elif mode == 'cola_step':
-        ft_name = ['cola-lr-1-1', 'cola-linear-2-1', 'cola-mlp-4-1', 'cola-skmlp-8-1']
+        ft_name = ['cola-lowrank-1-1', 'cola-lowrank-2-1', 'cola-lowrank-4-1', 'cola-lowrank-8-1']
         batch_size = ['1', '8']
         script_name = [['{}_cola.py'.format(run)]]
         control_name = [[data_names, model_names, [task_name], ft_name, batch_size]]
         controls = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode, control_name)
     elif mode == 'cola_iter':
-        ft_name = ['cola-lr-1-1', 'cola-linear-1-2', 'cola-mlp-1-4', 'cola-skmlp-1-8']
-        batch_size = ['32']
+        ft_name = ['cola-lowrank-1-2', 'cola-lowrank-1-4', 'cola-lowrank-4-2', 'cola-lowrank-4-4']
+        batch_size = ['1', '8']
         script_name = [['{}_cola.py'.format(run)]]
         control_name = [[data_names, model_names, [task_name], ft_name, batch_size]]
         controls = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode, control_name)
     elif mode == 'cola_dist':
-        ft_name = ['cola-lr-1-1', 'cola-lr~linear-1-1', 'cola-lr~mlp-1-1', 'cola-lr~skmlp-1-1']
+        data_names = ['dolly-15k']
+        ft_name = ['cola-lowrank-1-1', 'cola-lowrank~linear-1-1', 'cola-lowrank~mlp-1-1', 'cola-lowrank~skmlp-1-1']
         batch_size = ['8']
         dist_mode = ['alone', 'joint']
         script_name = [['{}_cola_dist.py'.format(run)]]

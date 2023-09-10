@@ -99,21 +99,43 @@ class GLUE:
 
 class Rouge:
     def __init__(self, tokenizer):
-        self.metric = evaluate.load('rouge')
+        if 'num_split' in cfg:
+            self.metric = [evaluate.load('rouge') for _ in range(cfg['num_split'])]
+        else:
+            self.metric = evaluate.load('rouge')
         self.tokenizer = tokenizer
 
+    def decode(self, generate, target):
+        generate = generate[:, -cfg['max_new_tokens']:]
+        target[target < 0] = cfg['pad_token_id']
+        generate = self.tokenizer.batch_decode(generate.detach().cpu().numpy(), skip_special_tokens=True)
+        target = self.tokenizer.batch_decode(target.detach().cpu().numpy(), skip_special_tokens=True)
+        return generate, target
+
     def add(self, input, output):
-        predictions = output['generate']
-        references = input['target']
-        predictions = predictions[:, -cfg['max_new_tokens']:]
-        references[references < 0] = cfg['pad_token_id']
-        predictions = self.tokenizer.batch_decode(predictions.detach().cpu().numpy(), skip_special_tokens=True)
-        references = self.tokenizer.batch_decode(references.detach().cpu().numpy(), skip_special_tokens=True)
-        self.metric.add_batch(predictions=predictions, references=references)
+        if 'num_split' in cfg:
+            for i in range(cfg['num_split']):
+                generate_i = output['generate'][i]
+                if generate_i is None:
+                    continue
+                target_i = input['target'][i]
+                generate_i, target_i = self.decode(generate_i, target_i)
+                self.metric[i].add_batch(predictions=generate_i, references=target_i)
+        else:
+            generate = output['generate']
+            target = input['target']
+            generate, target = self.make_predictions_reference(generate, target)
+            self.metric.add_batch(predictions=generate, references=target)
         return
 
     def __call__(self, *args, **kwargs):
-        rouge = self.metric.compute()['rougeL']
+        if 'num_split' in cfg:
+            rouge = []
+            for i in range(cfg['num_split']):
+                rouge_i = self.metric[i].compute()['rougeL']
+                rouge.append(rouge_i)
+        else:
+            rouge = self.metric.compute()['rougeL']
         return rouge
 
 

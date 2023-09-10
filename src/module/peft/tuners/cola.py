@@ -562,6 +562,7 @@ class Linear(nn.Linear, ColaLayer):
             out_features: int,
             cola_alpha: float = 1.,
             fan_in_fan_out: bool = False,
+            is_target_conv_1d_layer: bool = False,
             # Set this to True if the layer to replace stores weight like (fan_in, fan_out),
             key: str = None,  # key of current layer
             **kwargs,
@@ -578,6 +579,7 @@ class Linear(nn.Linear, ColaLayer):
         nn.Linear.reset_parameters(self)
         self.update_layer(adapter_name, cola_alpha)
         self.active_adapter = adapter_name
+        self.is_target_conv_1d_layer = is_target_conv_1d_layer
 
     def merge(self, delta_weight):
         # if self.active_adapter:

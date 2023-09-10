@@ -122,14 +122,21 @@ def test_each(data_loader, model, cola_base, metric, logger):
                 output_target[unique_value] = output['logits'][indices_i_j]
             input_ = {'target': input_target}
             output_ = {'target': output_target, 'loss': output['loss']}
-            if cfg['task_name'] == 's2s':
-                output_['generate'] = model.generate(input_ids=input["input_ids"],
-                                                     max_new_tokens=cfg['max_new_tokens'])
-            elif cfg['task_name'] == 'clm':
-                output_['generate'] = model.generate(input_ids=input["input_ids"],
-                                                     attention_mask=input["attention_mask"],
-                                                     max_new_tokens=cfg['max_new_tokens'],
-                                                     eos_token_id=cfg['pad_token_id'])
+            if cfg['task_name'] in ['s2s', 'clm']:
+                if cfg['task_name'] == 's2s':
+                    output_generate_ = model.generate(input_ids=input["input_ids"],
+                                                                   max_new_tokens=cfg['max_new_tokens'])
+                elif cfg['task_name'] == 'clm':
+                    output_generate_ = model.generate(input_ids=input["input_ids"],
+                                                                   attention_mask=input["attention_mask"],
+                                                                   max_new_tokens=cfg['max_new_tokens'],
+                                                                   eos_token_id=cfg['pad_token_id'])
+                output_generate = [None for _ in range(cfg['num_split'])]
+                for j in range(len(cola_base[k].indices)):
+                    unique_value = cola_base[k].unique_split[j]
+                    indices_i_j = cola_base[k].indices[j]
+                    output_generate[unique_value] = output_generate_[indices_i_j]
+                output_['generate'] = output_generate
             metric.add('test', input_, output_)
             evaluation = metric.evaluate('test', 'batch', input_, output_)
             logger.append(evaluation, 'test', input_size)
