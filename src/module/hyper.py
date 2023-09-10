@@ -88,9 +88,9 @@ def make_data_name():
                               'subset_name_dict': {'main': {'subset_name': None,
                                                           'text_column': 'meaning_representation',
                                                           'label_column': 'human_reference'}}},
-                      # https://huggingface.co/datasets/web_nlg/viewer/release_v3.0_en/
+                      # https://huggingface.co/datasets/web_nlg
                       'webnlg': {'data_name': 'web_nlg',
-                              'subset_name_dict': {'r3.0': {'subset_name': 'release_v3.0_en',
+                              'subset_name_dict': {'2017': {'subset_name': 'webnlg_challenge_2017',
                                                           'text_column': ['category', 'modified_triple_sets'],
                                                           'label_column': 'lex'}}},    
                       # https://huggingface.co/datasets/dart

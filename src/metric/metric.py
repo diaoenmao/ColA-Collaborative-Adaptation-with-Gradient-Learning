@@ -23,7 +23,7 @@ def make_metric(metric_name):
         else:
             raise ValueError('Not valid data name')
     elif cfg['task_name'] == 's2s':
-        if cfg['data_name'] in ['fpb']:
+        if cfg['data_name'] in ['fpb', 'wikisql', 'samsum', 'e2enlg', 'webnlg', 'dart']:
             pivot = -float('inf')
             pivot_direction = 'up'
             pivot_name = 'Accuracy'

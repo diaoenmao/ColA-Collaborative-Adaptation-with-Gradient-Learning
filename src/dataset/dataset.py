@@ -95,7 +95,7 @@ def make_dataset(data_name, verbose=True):
         del dataset_['validation']
     elif data_name in ['webnlg']:
         dataset_ = load_dataset(cfg['hf_data_name'], cfg['hf_subset_name'], cache_dir=root)
-        dataset_['test'] = concatenate_datasets([dataset_['dev'], dataset_['test']])
+        dataset_['test'] = dataset_['dev']
         del dataset_['dev']
     elif data_name in ['dart']:
         dataset_ = load_dataset(cfg['hf_data_name'], cfg['hf_subset_name'], cache_dir=root)
@@ -384,9 +384,14 @@ def process_dataset(dataset, tokenizer):
             for i in range(len(examples[label_column])):
                 entry = examples[label_column][i]
                 comment_list, text_list = entry['comment'], entry['text']
+                temp_triples = ''
+                for j in range(len(examples['modified_triple_sets'][i]['mtriple_set'])):
+                    if j > 0:
+                        temp_triples += ' ; '
+                    temp_triples += ' - '.join(examples['modified_triple_sets'][i]['mtriple_set'][j])
                 for comment, text in zip(comment_list, text_list):
                     if comment == 'good':
-                        inputs.append(f"category: {examples['category'][i]}, mtriple_set: {examples['modified_triple_sets'][i]['mtriple_set']}")
+                        inputs.append(f"category: {examples['category'][i]}, mtriple_set: {temp_triples}")
                         targets.append(text)
 
             # Tokenizing inputs and targets
@@ -407,7 +412,7 @@ def process_dataset(dataset, tokenizer):
             num_proc=1,
             remove_columns=dataset["train"].column_names,
             load_from_cache_file=False,
-            desc="Running tokenizer on DART dataset",
+            desc="Running tokenizer on webnlg dataset",
         )
     elif cfg['data_name'] == 'dart':
         '''
@@ -423,7 +428,7 @@ def process_dataset(dataset, tokenizer):
             batch_size = len(examples['annotations'])
 
             inputs = [
-                f"source: {examples['annotations'][i]['source'][0]}, tripleset: {'; '.join([' - '.join(triple) for triple in examples['tripleset'][i]])}" 
+                f"source: {examples['annotations'][i]['source'][0]}, tripleset: {' ; '.join([' - '.join(triple) for triple in examples['tripleset'][i]])}" 
                 for i in range(batch_size)
             ]   
             # text list length is always 1

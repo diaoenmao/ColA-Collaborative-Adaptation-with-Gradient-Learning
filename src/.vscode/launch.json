@@ -25,25 +25,6 @@
         },
         
         {
-            "name": "train_peft_fpb-sa",
-            "type": "python",
-            "request": "launch",
-            "console": "integratedTerminal",
-            "program": "${workspaceFolder}/train_peft.py",
-            "justMyCode": true,
-            "args": [
-                "--device",
-                "cpu",
-                "--init_seed",
-                "0",
-                "--control_name",
-                "fpb-sa_bart-base_s2s_cola-lr-1-1",
-               
-            // python train_classifier_fl.py --control_name 
-            ]
-        },
-
-        {
             "name": "train_cola_raft-tc",
             "type": "python",
             "request": "launch",
@@ -132,7 +113,7 @@
                 "--init_seed",
                 "0",
                 "--control_name",
-                "webnlg-r3.0_bart-base_s2s_cola-lr-1-1",
+                "webnlg-2017_bart-base_s2s_cola-lr-1-1",
                
             // python train_classifier_fl.py --control_name 
             ]
