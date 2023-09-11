@@ -4,7 +4,7 @@ import os
 import torch
 from functools import partial
 from collections import defaultdict
-from datasets import load_dataset
+from datasets import load_dataset, concatenate_datasets
 from torchvision import transforms
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.dataloader import default_collate
@@ -18,7 +18,7 @@ data_stats = {'MNIST': ((0.1307,), (0.3081,)), 'FashionMNIST': ((0.2860,), (0.35
               'SVHN': ((0.4377, 0.4438, 0.4728), (0.1980, 0.2010, 0.1970))}
 
 
-def make_dataset(data_name, verbose=True):
+def make_dataset(data_name, subset_name=None, verbose=True):
     dataset_ = {}
     if verbose:
         print('fetching data {}...'.format(data_name))
@@ -78,8 +78,15 @@ def make_dataset(data_name, verbose=True):
         )
     elif data_name in ['glue']:
         dataset_ = load_dataset(cfg['hf_data_name'], cfg['hf_subset_name'], cache_dir=root)
-        dataset_['test'] = dataset_['validation']
-        del dataset_['validation']
+        if subset_name in ['mnli']:
+            dataset_['test'] = concatenate_datasets([dataset_['validation_matched'], dataset_['validation_mismatched']])
+            del dataset_['test_matched']
+            del dataset_['test_mismatched']
+            del dataset_['validation_matched']
+            del dataset_['validation_mismatched']
+        else:
+            dataset_['test'] = dataset_['validation']
+            del dataset_['validation']
     else:
         raise ValueError('Not valid dataset name')
     if verbose:

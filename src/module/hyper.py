@@ -4,7 +4,7 @@ from config import cfg
 def process_control():
     make_data_name()
     if cfg['data_name'] in ['glue']:
-        cfg['collate_mode'] = 'pad'
+        cfg['collate_mode'] = 'pad' #sw: collate_mode for processing text?
     else:
         cfg['collate_mode'] = 'transformer'
     cfg['bart-base'] = {'max_length': 128}
@@ -20,13 +20,13 @@ def process_control():
     if cfg['ft_name'] == 'full':
         cfg[model_name]['lr'] = 5e-5
     else:
-        cfg[model_name]['lr'] = 1e-3
+        cfg[model_name]['lr'] = 2e-4
     cfg[model_name]['momentum'] = 0.9
     cfg[model_name]['betas'] = (0.9, 0.999)
     cfg[model_name]['weight_decay'] = 5e-4
     cfg[model_name]['nesterov'] = True
     cfg[model_name]['num_epochs'] = 8
-    cfg[model_name]['batch_size'] = {'train': 32, 'test': 32}
+    cfg[model_name]['batch_size'] = {'train': 16, 'test': 16}
     cfg[model_name]['scheduler_name'] = 'LinearAnnealingLR'
     cfg[model_name]['scheduler_name'] = 'None'
 
@@ -81,7 +81,7 @@ def make_data_name():
                                                              'label_column': 'label'},
                                                     'mnli': {'subset_name': 'mnli',
                                                              'text_column': ['premise', 'hypothesis'],
-                                                             'label_column': 'label'},
+                                                             'label_column': 'label'}, #validation/test set = validation/test_matched + validation/test_mismatched; multi_classification
                                                     'mnlim': {'subset_name': 'mnli_matched',
                                                               'text_column': ['premise', 'hypothesis'],
                                                               'label_column': 'label'},
@@ -105,10 +105,10 @@ def make_data_name():
                                                              'label_column': 'label'},
                                                     'stsb': {'subset_name': 'stsb',
                                                              'text_column': ['sentence1', 'sentence2'],
-                                                             'label_column': 'label'},
+                                                             'label_column': 'label'}, #regression
                                                     'wnli': {'subset_name': 'wnli',
                                                              'text_column': ['sentence1', 'sentence2'],
-                                                             'label_column': 'label'}
+                                                             'label_column': 'label'} #datasize is small - not reported in LORA paper
                                                     }
                                }
                       }
