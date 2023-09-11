@@ -85,7 +85,7 @@ class GLUE:
     def __call__(self, *args, **kwargs):
         glue = self.metric.compute()
         glue = sum(glue.values()) / len(glue)
-        #sw: we are taking the average of all metric? need to change - may only report accuracy or f1 score - otherwise it is not consistent and weired in evaluation
+        #sw: we are taking the average of all metric? need to change - may only report accuracy or f1 score - otherwise it is not consistent and wrong in evaluation
         return glue
 
 
