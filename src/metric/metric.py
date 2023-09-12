@@ -84,9 +84,13 @@ def RMSE(output, target):
 class GLUE:
     def __init__(self, subset_name):
         self.metric = evaluate.load('glue', subset_name)
+        self.subset_name = subset_name
 
     def add(self, input, output):
-        predictions = output['target'].argmax(dim=-1)
+        if self.subset_name in ['stsb']:
+            predictions = output['target']
+        else:
+            predictions = output['target'].argmax(dim=-1)
         references = input['target']
         self.metric.add_batch(predictions=predictions, references=references)
         return
@@ -94,6 +98,7 @@ class GLUE:
     def __call__(self, *args, **kwargs):
         glue = self.metric.compute()
         glue = sum(glue.values()) / len(glue)
+        #sw: we are taking the average of all metric? need to change - may only report accuracy or f1 score - otherwise it is not consistent and wrong in evaluation
         return glue
 
 

@@ -40,8 +40,8 @@ def runExperiment():
     model_tag_path = os.path.join(model_path, cfg['model_tag'])
     checkpoint_path = os.path.join(model_tag_path, 'checkpoint')
     best_path = os.path.join(model_tag_path, 'best')
-    dataset = make_dataset(cfg['data_name'])
-    model, tokenizer = make_model(cfg['model_name'])
+    dataset = make_dataset(cfg['data_name'], cfg['subset_name'])
+    model, tokenizer = make_model(cfg['model_name'], cfg['subset_name'])
     dataset = process_dataset(dataset, tokenizer)
     data_loader = make_data_loader(dataset, tokenizer, cfg['model_name'])
     result = resume(os.path.join(checkpoint_path, 'model'), resume_mode=cfg['resume_mode'])
@@ -116,7 +116,6 @@ def train(data_loader, model, optimizer, scheduler, metric, logger):
             logger.append(info, 'train')
             print(logger.write('train', metric.metric_name['train']))
     return
-
 
 def test(data_loader, model, metric, logger):
     with torch.no_grad():

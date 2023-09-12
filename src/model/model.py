@@ -9,8 +9,8 @@ from module.peft import get_peft_model, TaskType, LoraConfig, AdaLoraConfig, IA3
     PromptTuningConfig, PrefixTuningConfig, PromptEncoderConfig, ColaConfig
 
 
-def make_model(model_name):
-    model, tokenizer = make_hf_model(model_name)
+def make_model(model_name, data_name):
+    model, tokenizer = make_hf_model(model_name, data_name)
     return model, tokenizer
 
 

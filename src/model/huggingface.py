@@ -5,8 +5,11 @@ from config import cfg
 from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM, AutoModelForSequenceClassification, AutoTokenizer
 
 
-def make_hf_model(model_name):
-    if 'bloom' in model_name:
+def make_hf_model(model_name, data_name):
+    if 'bart' in model_name:
+        cfg['model_name_or_path'] = 'facebook/{}'.format(model_name)
+        cfg['tokenizer_name_or_path'] = 'facebook/{}'.format(model_name)
+    elif 'bloom' in model_name:
         cfg['model_name_or_path'] = 'bigscience/{}'.format(model_name)
         cfg['tokenizer_name_or_path'] = 'bigscience/{}'.format(model_name)
     elif 'bart' in model_name:
@@ -30,8 +33,16 @@ def make_hf_model(model_name):
     elif cfg['task_name'] == 's2s':
         model = AutoModelForSeq2SeqLM.from_pretrained(cfg['model_name_or_path'], cache_dir=cfg['cache_model_path'])
     elif cfg['task_name'] == 'sc':
-        model = AutoModelForSequenceClassification.from_pretrained(cfg['model_name_or_path'],
-                                                                   cache_dir=cfg['cache_model_path'])
+        if data_name in ['mnli']:
+            model = AutoModelForSequenceClassification.from_pretrained(cfg['model_name_or_path'],
+                                                                       cache_dir=cfg['cache_model_path'],
+                                                                       num_labels=3)  # "num_labels" is set up in model.config
+        elif data_name in ['stsb']:
+            model = AutoModelForSequenceClassification.from_pretrained(cfg['model_name_or_path'],
+                                                                       cache_dir=cfg['cache_model_path'], num_labels=1)
+        else:
+            model = AutoModelForSequenceClassification.from_pretrained(cfg['model_name_or_path'],
+                                                                       cache_dir=cfg['cache_model_path'])
     else:
         raise ValueError('Not valid task name')
     if any(k in cfg['model_name_or_path'] for k in ("gpt", "opt", "bloom")):
