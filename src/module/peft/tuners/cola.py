@@ -100,7 +100,7 @@ class ColaModel(torch.nn.Module):
             config = self._prepare_cola_config(config, model_config)
             self.peft_config[adapter_name] = config
         self._find_and_replace(adapter_name)
-        mark_only_cola_as_trainable(self.model)
+        mark_no_trainable(self.model)
         if self.peft_config[adapter_name].inference_mode:
             _freeze_adapter(self.model, adapter_name)
 
@@ -509,7 +509,7 @@ class ColaModel(torch.nn.Module):
         return
 
 
-def mark_only_cola_as_trainable(model: nn.Module) -> None:
+def mark_no_trainable(model: nn.Module) -> None:
     for n, p in model.named_parameters():
         p.requires_grad = False
     return

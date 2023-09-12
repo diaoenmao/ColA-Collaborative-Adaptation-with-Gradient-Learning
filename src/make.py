@@ -62,37 +62,37 @@ def main():
         raise ValueError('Not valid task name')
     if mode == 'full':
         script_name = [['{}_model.py'.format(run)]]
-        batch_size = ['8']
+        batch_size = ['32']
         control_name = [[data_names, model_names, [task_name], ['full'], batch_size]]
         controls = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode, control_name)
     elif mode == 'peft':
         ft_name = ['lora', 'adalora', 'ia3', 'promptune', 'ptune']
-        batch_size = ['8']
+        batch_size = ['32']
         script_name = [['{}_peft.py'.format(run)]]
         control_name = [[data_names, model_names, [task_name], ft_name, batch_size]]
         controls = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode, control_name)
     elif mode == 'cola':
         ft_name = ['cola-lowrank-1-1', 'cola-linear-1-1', 'cola-mlp-1-1', 'cola-skmlp-1-1']
-        batch_size = ['8']
+        batch_size = ['32']
         script_name = [['{}_cola.py'.format(run)]]
         control_name = [[data_names, model_names, [task_name], ft_name, batch_size]]
         controls = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode, control_name)
     elif mode == 'cola_step':
         ft_name = ['cola-lowrank-1-1', 'cola-lowrank-2-1', 'cola-lowrank-4-1', 'cola-lowrank-8-1']
-        batch_size = ['1', '8']
+        batch_size = ['1', '8', '16', '32']
         script_name = [['{}_cola.py'.format(run)]]
         control_name = [[data_names, model_names, [task_name], ft_name, batch_size]]
         controls = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode, control_name)
     elif mode == 'cola_iter':
         ft_name = ['cola-lowrank-1-2', 'cola-lowrank-1-4', 'cola-lowrank-4-2', 'cola-lowrank-4-4']
-        batch_size = ['1', '8']
+        batch_size = ['1', '8', '16', '32']
         script_name = [['{}_cola.py'.format(run)]]
         control_name = [[data_names, model_names, [task_name], ft_name, batch_size]]
         controls = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode, control_name)
     elif mode == 'cola_dist':
         data_names = ['dolly-15k']
         ft_name = ['cola-lowrank-1-1', 'cola-lowrank~linear-1-1', 'cola-lowrank~mlp-1-1', 'cola-lowrank~skmlp-1-1']
-        batch_size = ['8']
+        batch_size = ['32']
         dist_mode = ['alone', 'joint']
         script_name = [['{}_cola_dist.py'.format(run)]]
         control_name = [[data_names, model_names, [task_name], ft_name, batch_size, dist_mode]]

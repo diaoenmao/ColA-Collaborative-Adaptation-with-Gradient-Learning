@@ -281,7 +281,7 @@ def make_cola(model, model_name, dist_mode='joint'):
         cfg['cola']['model_name'] = make_model_name(model_name)
     cola = {}
     for name, module in model.base_model.named_modules():
-        if isinstance(module, ColaLayer):
+        if 'original_module' not in name and isinstance(module, ColaLayer):
             input_size = module.in_features
             output_size = module.out_features
             if dist_mode in ['alone', 'col']:

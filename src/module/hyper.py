@@ -8,7 +8,6 @@ def process_control():
     else:
         cfg['collate_mode'] = 'transformer'
     cfg['bart-base'] = {'max_length': 128}
-    cfg['bloomz-560m'] = {'max_length': 64}
     cfg['roberta-base'] = {'max_length': 128}
     cfg['gpt2'] = {'max_length': 128}
     cfg['t5-base'] = {'max_length': 128}
@@ -27,24 +26,24 @@ def process_control():
     if cfg['ft_name'] == 'full':
         cfg[model_name]['lr'] = 5e-5
     else:
-        cfg[model_name]['lr'] = 2e-4
+        cfg[model_name]['lr'] = 3e-4
     cfg[model_name]['momentum'] = 0.9
     cfg[model_name]['betas'] = (0.9, 0.999)
     cfg[model_name]['weight_decay'] = 5e-4
     cfg[model_name]['nesterov'] = True
-    cfg[model_name]['num_epochs'] = 1
+    cfg[model_name]['num_epochs'] = 40
     cfg[model_name]['batch_size'] = {'train': cfg['batch_size'], 'test': cfg['batch_size']}
     cfg[model_name]['scheduler_name'] = 'LinearAnnealingLR'
     if ft_name_list[0] == 'cola' and len(ft_name_list) > 1:
         cfg['cola'] = {}
-        cfg['cola']['lowrank'] = {'hidden_size': 64, 'dropout': 0.0}
+        cfg['cola']['lowrank'] = {'hidden_size': 64, 'dropout': 0.01}
         cfg['cola']['linear'] = {}
         cfg['cola']['mlp'] = {'hidden_size': 128, 'scale_factor': 2, 'num_layers': 2, 'activation': 'relu'}
         cfg['cola']['skmlp'] = {}
         cfg['cola']['model_name'] = ft_name_list[1]
         cfg['cola']['shuffle'] = {'train': True, 'test': False}
         cfg['cola']['optimizer_name'] = 'AdamW'
-        cfg['cola']['lr'] = 1
+        cfg['cola']['lr'] = 0.5
         cfg['cola']['momentum'] = 0.9
         cfg['cola']['betas'] = (0.9, 0.999)
         cfg['cola']['weight_decay'] = 5e-4
@@ -52,10 +51,10 @@ def process_control():
         cfg['cola']['num_steps'] = int(ft_name_list[2])
         cfg['cola']['num_epochs'] = int(ft_name_list[3])
         cfg['cola']['batch_size'] = {'train': cfg['batch_size'], 'test': cfg['batch_size']}
-        cfg['cola']['scheduler_name'] = 'LinearAnnealingLR'
+        cfg['cola']['scheduler_name'] = 'None'
         cfg['cola_func'] = {}
         cfg['cola_func']['optimizer_name'] = 'AdamW'
-        cfg['cola_func']['lr'] = 2e-4
+        cfg['cola_func']['lr'] = 3e-4
         cfg['cola_func']['momentum'] = 0.9
         cfg['cola_func']['betas'] = (0.9, 0.999)
         cfg['cola_func']['weight_decay'] = 5e-4
