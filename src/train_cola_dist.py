@@ -9,7 +9,7 @@ from collections import defaultdict
 from config import cfg, process_args
 from dataset import make_dataset, make_data_loader, process_dataset, collate
 from metric import make_metric, make_logger
-from model import make_model, make_optimizer, make_scheduler, make_ft_model
+from model import make_model, make_optimizer, make_scheduler, make_ft_model, make_cola
 from module import save, to_device, process_control, resume, makedir_exist_ok, PeftModel
 
 cudnn.benchmark = True
@@ -40,8 +40,8 @@ def runExperiment():
     model_tag_path = os.path.join(model_path, cfg['model_tag'])
     checkpoint_path = os.path.join(model_tag_path, 'checkpoint')
     best_path = os.path.join(model_tag_path, 'best')
-    dataset = make_dataset(cfg['data_name'], cfg['subset_name'])
-    model, tokenizer = make_model(cfg['model_name'], cfg['subset_name'])
+    dataset = make_dataset(cfg['data_name'])
+    model, tokenizer = make_model(cfg['model_name'])
     dataset = process_dataset(dataset, tokenizer)
     data_loader = make_data_loader(dataset, tokenizer, cfg['model_name'])
     result = resume(os.path.join(checkpoint_path, 'model'), resume_mode=cfg['resume_mode'])
@@ -52,26 +52,61 @@ def runExperiment():
         model = make_ft_model(model)
         model = model.to(cfg['device'])
         model.print_trainable_parameters()
-        optimizer = make_optimizer(model.parameters(), cfg['model_name'])
-        scheduler = make_scheduler(optimizer, cfg['model_name'])
+        cola_base = make_cola(model, cfg['cola']['model_name'], cfg['dist_mode'])
+        model.load_cola_base(cola_base)
+        optimizer = make_optimizer([torch.tensor([0.0], requires_grad=True)], 'cola')
+        scheduler = make_scheduler(optimizer, 'cola')
+        func_optimizer = defaultdict(list)
+        func_scheduler = defaultdict(list)
+        for k in cola_base:
+            for i in range(cfg['num_split']):
+                if cfg['cola']['model_name'][i] in ['lowrank', 'linear', 'mlp']:
+                    cola_base[k].model[i] = cola_base[k].model[i].to(cfg['device'])
+                    cola_param_k_i = cola_base[k].model[i].parameters()
+                    func_optimizer[k].append(make_optimizer(cola_param_k_i, 'cola_func'))
+                    func_scheduler[k].append(make_scheduler(func_optimizer[k][i], 'cola_func'))
+                else:
+                    func_optimizer[i][k] = None
+                    func_scheduler[i][k] = None
     else:
         cfg['epoch'] = result['epoch']
         model = PeftModel.from_pretrained(model, os.path.join(checkpoint_path, 'adapter'), is_trainable=True)
         model = model.to(cfg['device'])
         model.print_trainable_parameters()
-        optimizer = make_optimizer(model.parameters(), cfg['model_name'])
-        if cfg['ft_name'] not in ['adalora']:
-            optimizer.load_state_dict(result['optimizer_state_dict'])
-        scheduler = make_scheduler(optimizer, cfg['model_name'])
+        cola_base = make_cola(model, cfg['cola']['model_name'], cfg['dist_mode'])
+        for k in cola_base:
+            cola_base[k].load_state_dict(result['cola_base_state_dict'][k])
+        model.load_cola_base(cola_base)
+        optimizer = make_optimizer([torch.tensor([0.0], requires_grad=True)], 'cola')
+        scheduler = make_scheduler(optimizer, 'cola')
+        optimizer.load_state_dict(result['optimizer_state_dict'])
         scheduler.load_state_dict(result['scheduler_state_dict'])
+        func_optimizer = defaultdict(list)
+        func_scheduler = defaultdict(list)
+        for k in cola_base:
+            for i in range(cfg['num_split']):
+                if cfg['cola']['model_name'][i] in ['lowrank', 'linear', 'mlp']:
+                    cola_base[k].model[i] = cola_base[k].model[i].to(cfg['device'])
+                    cola_param_k_i = cola_base[k].model[i].parameters()
+                    func_optimizer[k].append(make_optimizer(cola_param_k_i, 'cola_func'))
+                    func_scheduler[k].append(make_scheduler(func_optimizer[k][i], 'cola_func'))
+                else:
+                    func_optimizer[i][k] = None
+                    func_scheduler[i][k] = None
         metric.load_state_dict(result['metric_state_dict'])
         logger.load_state_dict(result['logger_state_dict'])
     for epoch in range(cfg['epoch'], cfg[cfg['model_name']]['num_epochs'] + 1):
         cfg['epoch'] = epoch
-        train(data_loader['train'], model, optimizer, scheduler, metric, logger)
-        test(data_loader['test'], model, metric, logger)
+        train(data_loader['train'], model, cola_base, optimizer, scheduler, func_optimizer, func_scheduler, metric,
+              logger)
+        test(data_loader['test'], model, cola_base, metric, logger)
         result = {'cfg': cfg, 'epoch': cfg['epoch'] + 1,
+                  'cola_base_state_dict': {k: cola_base[k].state_dict() for k in cola_base},
                   'optimizer_state_dict': optimizer.state_dict(), 'scheduler_state_dict': scheduler.state_dict(),
+                  'func_optimizer_state_dict': {k: [func_optimizer[k][i].state_dict() for i in
+                                                    range(len(func_optimizer[k]))] for k in func_optimizer},
+                  'func_scheduler_state_dict': {k: [func_scheduler[k][i].state_dict() for i in
+                                                    range(len(func_scheduler[k]))] for k in func_scheduler},
                   'metric_state_dict': metric.state_dict(), 'logger_state_dict': logger.state_dict()}
         save(result, os.path.join(checkpoint_path, 'model'))
         model.save_pretrained(os.path.join(checkpoint_path, 'adapter'))
@@ -86,10 +121,21 @@ def runExperiment():
     return
 
 
-def train(data_loader, model, optimizer, scheduler, metric, logger):
+def train(data_loader, model, cola_base, optimizer, scheduler, func_optimizer, func_scheduler, metric,
+          logger):
     model.train(True)
     start_time = time.time()
+    input_buffer = defaultdict(list)
+    output_target_buffer = defaultdict(list)
+    split_buffer = defaultdict(list)
     for i, input in enumerate(data_loader):
+        lr = optimizer.param_groups[0]['lr']
+        model.load_lr(lr)
+        split_i = input['split']
+        for k in cola_base:
+            func_lr = func_optimizer[k][0].param_groups[0]['lr'] if func_optimizer[k][0] is not None else 0
+            cola_base[k].train(False)
+            cola_base[k].make_split(split_i)
         input_size = input['labels'].size(0)
         input = {'input_ids': input['input_ids'], 'attention_mask': input['attention_mask'],
                  'labels': input['labels']}
@@ -98,29 +144,49 @@ def train(data_loader, model, optimizer, scheduler, metric, logger):
         input_ = {'target': input['labels']}
         output_ = {'target': output['logits'], 'loss': output['loss']}
         output['loss'].backward()
-        optimizer.step()
-        scheduler.step()
         optimizer.zero_grad()
-        evaluation = metric.evaluate('train', 'batch', input_, output_)
-        logger.append(evaluation, 'train', n=input_size)
+        input_i, output_target_i = model.flush()
+        for k in input_i:
+            input_buffer[k].append(input_i[k])
+            output_target_buffer[k].append(output_target_i[k])
+            split_buffer[k].append(split_i)
+        if (i + 1) % cfg['cola']['num_steps'] == 0:
+            for k in input_buffer:
+                input_cola = torch.cat(input_buffer[k], dim=0)
+                output_target_cola = torch.cat(output_target_buffer[k], dim=0)
+                split_cola = torch.cat(split_buffer[k], dim=0)
+                cola_base[k].make_split(split_cola)
+                input_cola = {'data': input_cola, 'target': output_target_cola}
+                for _ in range(cfg['cola']['num_epochs']):
+                    cola_base[k].fit(input_cola, func_optimizer[k], func_scheduler[k])
+            input_buffer = defaultdict(list)
+            output_target_buffer = defaultdict(list)
+            split_buffer = defaultdict(list)
+            scheduler.step()
+            evaluation = metric.evaluate('train', 'batch', input_, output_)
+            logger.append(evaluation, 'train', n=input_size)
         if i % int((len(data_loader) * cfg['log_interval']) + 1) == 0:
             batch_time = (time.time() - start_time) / (i + 1)
-            lr = optimizer.param_groups[0]['lr']
             epoch_finished_time = datetime.timedelta(seconds=round(batch_time * (len(data_loader) - i - 1)))
             exp_finished_time = epoch_finished_time + datetime.timedelta(
-                seconds=round((cfg[cfg['model_name']]['num_epochs'] - cfg['epoch']) * batch_time * len(data_loader)))
+                seconds=round(
+                    (cfg[cfg['model_name']]['num_epochs'] - cfg['epoch']) * batch_time * len(data_loader)))
             info = {'info': ['Model: {}'.format(cfg['model_tag']),
                              'Train Epoch: {}({:.0f}%)'.format(cfg['epoch'], 100. * i / len(data_loader)),
-                             'Learning rate: {:.6f}'.format(lr), 'Epoch Finished Time: {}'.format(epoch_finished_time),
+                             'Learning rate: {:.6f}|{:.6f}'.format(lr, func_lr),
+                             'Epoch Finished Time: {}'.format(epoch_finished_time),
                              'Experiment Finished Time: {}'.format(exp_finished_time)]}
             logger.append(info, 'train')
             print(logger.write('train', metric.metric_name['train']))
     return
 
-def test(data_loader, model, metric, logger):
+
+def test(data_loader, model, cola_base, metric, logger):
     with torch.no_grad():
         model.train(False)
         for i, input in enumerate(data_loader):
+            for k in cola_base:
+                cola_base[k].make_split(input['split'])
             input_size = input['labels'].size(0)
             input = {'input_ids': input['input_ids'], 'attention_mask': input['attention_mask'],
                      'labels': input['labels']}

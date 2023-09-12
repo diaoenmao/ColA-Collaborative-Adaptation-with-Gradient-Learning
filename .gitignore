@@ -121,5 +121,16 @@ tmp/
 res/
 
 .idea/
+.vscode/
 .DS_Store
+scripts/
 
+# Ignore all files with .pbs ending
+*.pbs
+
+# Ignore folders starting with msiexp
+msiout*/
+
+# Ignore files starting with .__
+.__*
+._*

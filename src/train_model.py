@@ -45,7 +45,7 @@ def runExperiment():
     dataset = process_dataset(dataset, tokenizer)
     data_loader = make_data_loader(dataset, tokenizer, cfg['model_name'])
     result = resume(os.path.join(checkpoint_path, 'model'), resume_mode=cfg['resume_mode'])
-    metric = make_metric({'train': ['Loss'], 'test': ['Loss']})
+    metric = make_metric({'train': ['Loss'], 'test': ['Loss']}, tokenizer)
     logger = make_logger(os.path.join('output', 'runs', 'train_{}'.format(cfg['model_tag'])))
     if result is None:
         cfg['epoch'] = 1
@@ -83,6 +83,8 @@ def train(data_loader, model, optimizer, scheduler, metric, logger):
     start_time = time.time()
     for i, input in enumerate(data_loader):
         input_size = input['labels'].size(0)
+        input = {'input_ids': input['input_ids'], 'attention_mask': input['attention_mask'],
+                 'labels': input['labels']}
         input = to_device(input, cfg['device'])
         output = model(**input)
         input_ = {'target': input['labels']}
@@ -113,10 +115,20 @@ def test(data_loader, model, metric, logger):
         model.train(False)
         for i, input in enumerate(data_loader):
             input_size = input['labels'].size(0)
+            input = {'input_ids': input['input_ids'], 'attention_mask': input['attention_mask'],
+                     'labels': input['labels']}
             input = to_device(input, cfg['device'])
             output = model(**input)
             input_ = {'target': input['labels']}
             output_ = {'target': output['logits'], 'loss': output['loss']}
+            if cfg['task_name'] == 's2s':
+                output_['generate'] = model.generate(input_ids=input["input_ids"],
+                                                     max_new_tokens=cfg['max_new_tokens'])
+            elif cfg['task_name'] == 'clm':
+                output_['generate'] = model.generate(input_ids=input["input_ids"],
+                                                     attention_mask=input["attention_mask"],
+                                                     max_new_tokens=cfg['max_new_tokens'],
+                                                     eos_token_id=cfg['pad_token_id'])
             metric.add('test', input_, output_)
             evaluation = metric.evaluate('test', 'batch', input_, output_)
             logger.append(evaluation, 'test', input_size)

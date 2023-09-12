@@ -146,19 +146,22 @@ def make_ft_model(model):
 
 def make_config_clm():
     if cfg['ft_name'] == 'lora':
-        peft_config = LoraConfig(task_type=TaskType.CAUSAL_LM, inference_mode=False, r=8, lora_alpha=32,
-                                 lora_dropout=0.1)
+        peft_config = LoraConfig(
+            task_type=TaskType.CAUSAL_LM,
+            r=64,
+            lora_alpha=32,
+            lora_dropout=0.01,
+            inference_mode=False,
+        )
     elif cfg['ft_name'] == 'adalora':
         peft_config = AdaLoraConfig(
-            init_r=12,
+            init_r=64,
             target_r=8,
             beta1=0.85,
             beta2=0.85,
-            # tinit=200,
-            # tfinal=1000,
             deltaT=10,
             lora_alpha=32,
-            lora_dropout=0.1,
+            lora_dropout=0.01,
             task_type=TaskType.CAUSAL_LM,
             inference_mode=False,
         )
@@ -169,7 +172,7 @@ def make_config_clm():
             task_type=TaskType.CAUSAL_LM,
             prompt_tuning_init=PromptTuningInit.TEXT,
             num_virtual_tokens=20,
-            prompt_tuning_init_text=" ",  # Classify if the tweet is a complaint or not:
+            prompt_tuning_init_text="Label: ",
             tokenizer_name_or_path=cfg['tokenizer_name_or_path'],
         )
     elif cfg['ft_name'] == 'prefixtune':
@@ -190,21 +193,18 @@ def make_config_s2s():
             task_type=TaskType.SEQ_2_SEQ_LM,
             r=64,
             lora_alpha=32,
-            # target_modules=["q_proj", "v_proj"],
             lora_dropout=0.01,
-            bias="none",
+            inference_mode=False,
         )
     elif cfg['ft_name'] == 'adalora':
         peft_config = AdaLoraConfig(
-            init_r=12,
+            init_r=64,
             target_r=8,
             beta1=0.85,
             beta2=0.85,
-            # tinit=200,
-            # tfinal=1000,
             deltaT=10,
             lora_alpha=32,
-            lora_dropout=0.1,
+            lora_dropout=0.01,
             task_type=TaskType.SEQ_2_SEQ_LM,
             inference_mode=False,
         )
@@ -215,7 +215,7 @@ def make_config_s2s():
             task_type=TaskType.SEQ_2_SEQ_LM,
             prompt_tuning_init=PromptTuningInit.TEXT,
             num_virtual_tokens=20,
-            prompt_tuning_init_text=" ",  # "What is the sentiment of this article?\n"
+            prompt_tuning_init_text="Label: ",
             inference_mode=False,
             tokenizer_name_or_path=cfg['tokenizer_name_or_path'],
         )
@@ -237,21 +237,18 @@ def make_config_sc():
             task_type=TaskType.SEQ_CLS,
             r=64,
             lora_alpha=32,
-            # target_modules=["q_proj", "v_proj"],
             lora_dropout=0.01,
-            bias="none",
+            inference_mode=False,
         )
     elif cfg['ft_name'] == 'adalora':
         peft_config = AdaLoraConfig(
-            init_r=12,
+            init_r=64,
             target_r=8,
             beta1=0.85,
             beta2=0.85,
-            # tinit=200,
-            # tfinal=1000,
             deltaT=10,
             lora_alpha=32,
-            lora_dropout=0.1,
+            lora_dropout=0.01,
             task_type=TaskType.SEQ_CLS,
             inference_mode=False,
         )
@@ -262,7 +259,7 @@ def make_config_sc():
             task_type=TaskType.SEQ_CLS,
             prompt_tuning_init=PromptTuningInit.TEXT,
             num_virtual_tokens=20,
-            prompt_tuning_init_text=" ",  # "What is the sentiment of this article?\n"
+            prompt_tuning_init_text="Label: ",
             inference_mode=False,
             tokenizer_name_or_path=cfg['tokenizer_name_or_path'],
         )
@@ -271,6 +268,8 @@ def make_config_sc():
     elif cfg['ft_name'] == 'ptune':
         peft_config = PromptEncoderConfig(task_type=TaskType.SEQ_CLS, inference_mode=False, num_virtual_tokens=20,
                                           encoder_hidden_size=128)
+    elif cfg['ft_name'] == 'cola':
+        peft_config = ColaConfig(task_type=TaskType.SEQ_CLS, inference_mode=False)
     else:
         raise ValueError('Not valid ft name')
     return peft_config

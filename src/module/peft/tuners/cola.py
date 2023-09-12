@@ -351,10 +351,11 @@ class ColaModel(torch.nn.Module):
         if getattr(self.model, "is_loaded_in_8bit", False) or getattr(self.model, "is_loaded_in_4bit", False):
             raise ValueError("Cannot merge ColA layers when the model is loaded in 8-bit mode")
 
-        key_list = [key for key, _ in self.model.named_modules() if "cola" not in key]
+        # key_list = [key for key, _ in self.model.named_modules() if "cola" not in key]
+        key_list = [key for key, _ in self.named_modules()]
         for key in key_list:
             try:
-                parent, target, target_name = _get_submodules(self.model, key)
+                parent, target, target_name = _get_submodules(self, key)
             except AttributeError:
                 continue
             if isinstance(target, ColaLayer):
@@ -507,12 +508,6 @@ class ColaModel(torch.nn.Module):
                 module.lr = lr
         return
 
-    def input_buffer(self, flag):
-        for name, module in self.named_modules():
-            if isinstance(module, ColaLayer):
-                module.if_input_buffer = flag
-        return
-
 
 def mark_only_cola_as_trainable(model: nn.Module) -> None:
     for n, p in model.named_parameters():
@@ -534,7 +529,6 @@ class ColaLayer:
         self.input = []
         self.output_target = []
         self.lr = 1.
-        self.if_input_buffer = False
 
         self.hook = self.register_forward_hook(self.forward_hook)
 
@@ -545,7 +539,7 @@ class ColaLayer:
         self.to(self.weight.device)
 
     def forward_hook(self, module, input, output):
-        if self.training or self.if_input_buffer:
+        if self.training:
             input_ = input[0].detach().to('cpu')
             self.input.append(input_)
             output.requires_grad_(True)
@@ -568,6 +562,7 @@ class Linear(nn.Linear, ColaLayer):
             out_features: int,
             cola_alpha: float = 1.,
             fan_in_fan_out: bool = False,
+            is_target_conv_1d_layer: bool = False,
             # Set this to True if the layer to replace stores weight like (fan_in, fan_out),
             key: str = None,  # key of current layer
             **kwargs,
@@ -584,13 +579,15 @@ class Linear(nn.Linear, ColaLayer):
         nn.Linear.reset_parameters(self)
         self.update_layer(adapter_name, cola_alpha)
         self.active_adapter = adapter_name
+        self.is_target_conv_1d_layer = is_target_conv_1d_layer
 
     def merge(self, delta_weight):
-        if self.active_adapter:
-            return
+        # if self.active_adapter:
+        #     return
         if self.merged:
             warnings.warn("Already merged. Nothing to do.")
             return
+
         self.weight.data += self.get_delta_weight(delta_weight, self.active_adapter)
         self.merged = True
         return

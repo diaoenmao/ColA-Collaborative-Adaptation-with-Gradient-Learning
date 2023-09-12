@@ -5,6 +5,8 @@ control:
   model_name: bart-base
   task_name: s2s
   ft_name: cola-lr-1-1
+  batch_size: 8
+  dist_mode: joint
 # experiment
 pin_memory: True
 num_workers: 0

@@ -41,7 +41,7 @@ def runExperiment():
     model, tokenizer = make_model(cfg['model_name'], cfg['subset_name'])
     dataset = process_dataset(dataset, tokenizer)
     data_loader = make_data_loader(dataset, tokenizer, cfg['model_name'])
-    metric = make_metric({'train': ['Loss'], 'test': ['Loss']})
+    metric = make_metric({'train': ['Loss'], 'test': ['Loss']}, tokenizer)
     result = resume(os.path.join(best_path, 'model'))
     model = PeftModel.from_pretrained(model, os.path.join(best_path, 'adapter'))
     model = model.to(cfg['device'])
@@ -67,10 +67,20 @@ def test(data_loader, model, metric, logger):
         model.train(False)
         for i, input in enumerate(data_loader):
             input_size = input['labels'].size(0)
+            input = {'input_ids': input['input_ids'], 'attention_mask': input['attention_mask'],
+                     'labels': input['labels']}
             input = to_device(input, cfg['device'])
             output = model(**input)
             input_ = {'target': input['labels']}
             output_ = {'target': output['logits'], 'loss': output['loss']}
+            if cfg['task_name'] == 's2s':
+                output_['generate'] = model.generate(input_ids=input["input_ids"],
+                                                     max_new_tokens=cfg['max_new_tokens'])
+            elif cfg['task_name'] == 'clm':
+                output_['generate'] = model.generate(input_ids=input["input_ids"],
+                                                     attention_mask=input["attention_mask"],
+                                                     max_new_tokens=cfg['max_new_tokens'],
+                                                     eos_token_id=cfg['pad_token_id'])
             metric.add('test', input_, output_)
             evaluation = metric.evaluate('test', 'batch', input_, output_)
             logger.append(evaluation, 'test', input_size)

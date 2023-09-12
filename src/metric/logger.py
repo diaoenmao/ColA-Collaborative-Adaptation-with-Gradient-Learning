@@ -35,16 +35,17 @@ class Logger:
             if isinstance(result[k], Number):
                 self.counter[name] += n
                 self.mean[name] = ((self.counter[name] - n) * self.mean[name] + n * result[k]) / self.counter[name]
-            elif isinstance(result[k], list) and len(result[k]) > 0 and isinstance(result[k][0], Number):
+            elif isinstance(result[k], list) and len(result[k]) > 0:
                 if name not in self.mean:
                     self.counter[name] = [0 for _ in range(len(result[k]))]
                     self.mean[name] = [0 for _ in range(len(result[k]))]
                 _ntuple = ntuple(len(result[k]))
                 n = _ntuple(n)
                 for i in range(len(result[k])):
-                    self.counter[name][i] += n[i]
-                    self.mean[name][i] = ((self.counter[name][i] - n[i]) * self.mean[name][i] + n[i] *
-                                          result[k][i]) / self.counter[name][i]
+                    if isinstance(result[k][i], Number):
+                        self.counter[name][i] += n[i]
+                        self.mean[name][i] = ((self.counter[name][i] - n[i]) * self.mean[name][i] + n[i] *
+                                              result[k][i]) / self.counter[name][i]
         return
 
     def write(self, tag, metric_names):
