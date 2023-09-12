@@ -98,7 +98,6 @@ def make_dataset(data_name, subset_name=None, verbose=True):
     # DART
     elif data_name in ['glue']:
         dataset_ = load_dataset(cfg['hf_data_name'], cfg['hf_subset_name'], cache_dir=root)
-        dataset_['test'] = dataset_['validation']
         if subset_name in ['mnli']:
             dataset_['test'] = concatenate_datasets([dataset_['validation_matched'], dataset_['validation_mismatched']])
             del dataset_['test_matched']
@@ -108,7 +107,6 @@ def make_dataset(data_name, subset_name=None, verbose=True):
         else:
             dataset_['test'] = dataset_['validation']
             del dataset_['validation']
-        del dataset_['validation']
     elif data_name in ['dolly']:
         dataset_ = load_dataset(cfg['hf_data_name'], cfg['hf_subset_name'], cache_dir=root)
         dataset_ = dataset_['train'].train_test_split(test_size=0.1, seed=cfg['seed'])

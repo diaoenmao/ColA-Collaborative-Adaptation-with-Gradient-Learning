@@ -55,7 +55,7 @@ def process_control():
         cfg['cola']['scheduler_name'] = 'LinearAnnealingLR'
         cfg['cola_func'] = {}
         cfg['cola_func']['optimizer_name'] = 'AdamW'
-        cfg['cola_func']['lr'] = 1e-3
+        cfg['cola_func']['lr'] = 2e-4
         cfg['cola_func']['momentum'] = 0.9
         cfg['cola_func']['betas'] = (0.9, 0.999)
         cfg['cola_func']['weight_decay'] = 5e-4
@@ -117,13 +117,6 @@ def make_data_name():
                                       'mnli': {'subset_name': 'mnli',
                                                'text_column': ['premise', 'hypothesis'],
                                                'label_column': 'label'},
-                                      # validation/test set = validation/test_matched + validation/test_mismatched; multi_classification
-                                      'mnlim': {'subset_name': 'mnli_matched',
-                                                'text_column': ['premise', 'hypothesis'],
-                                                'label_column': 'label'},
-                                      'mnlimm': {'subset_name': 'mnli_mismatched',
-                                                 'text_column': ['premise', 'hypothesis'],
-                                                 'label_column': 'label'},
                                       'mrpc': {'subset_name': 'mrpc',
                                                'text_column': ['sentence1', 'sentence2'],
                                                'label_column': 'label'},
