@@ -57,7 +57,7 @@ def main():
     elif task_name == 'sc':
         data_names = ['glue-cola', 'glue-mnli', 'glue-mrpc', 'glue-qnli', 'glue-qqp', 'glue-rte', 'glue-sst2',
                       'glue-stsb', 'glue-wnli']
-        model_names = ['roberta-base', 'gpt2']
+        model_names = ['roberta-base']
     else:
         raise ValueError('Not valid task name')
     if mode == 'full':

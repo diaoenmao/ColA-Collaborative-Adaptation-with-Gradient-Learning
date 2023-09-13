@@ -1,4 +1,5 @@
 import copy
+import math
 import numpy as np
 import torch
 import torch.nn as nn
@@ -25,6 +26,12 @@ class LowRank(nn.Module):
             self.dropout = nn.Identity()
         self.cola_A = nn.Linear(input_size, hidden_size, bias=False)
         self.cola_B = nn.Linear(hidden_size, output_size, bias=False)
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        nn.init.kaiming_uniform_(self.cola_A.weight, a=math.sqrt(5))
+        nn.init.zeros_(self.cola_B.weight)
+        return
 
     def fit(self, input, optimizer, scheduler):
         self.train(True)
@@ -33,7 +40,7 @@ class LowRank(nn.Module):
         for _ in range(cfg['cola']['num_epochs']):
             x = input['data']
             output['target'] = self.forward(x)
-            output['loss'] = F.mse_loss(output['target'], input['target'])
+            output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='sum')
             output['loss'].backward()
             optimizer.step()
             optimizer.zero_grad()
@@ -64,7 +71,7 @@ class Linear(nn.Module):
         for _ in range(cfg['cola']['num_epochs']):
             x = input['data']
             output['target'] = self.forward(x)
-            output['loss'] = F.mse_loss(output['target'], input['target'])
+            output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='sum')
             output['loss'].backward()
             optimizer.step()
             optimizer.zero_grad()
@@ -105,7 +112,7 @@ class MLP(nn.Module):
         for _ in range(cfg['cola']['num_epochs']):
             x = input['data']
             output['target'] = self.forward(x)
-            output['loss'] = F.mse_loss(output['target'], input['target'])
+            output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='sum')
             output['loss'].backward()
             optimizer.step()
             optimizer.zero_grad()

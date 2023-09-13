@@ -123,7 +123,8 @@ def make_scheduler(optimizer, tag):
     elif cfg[tag]['scheduler_name'] == 'CyclicLR':
         scheduler = optim.lr_scheduler.CyclicLR(optimizer, base_lr=cfg[tag]['lr'], max_lr=10 * cfg[tag]['lr'])
     elif cfg[tag]['scheduler_name'] == 'LinearAnnealingLR':
-        scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=0,
+        scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=int(
+            cfg['num_steps']['train'] * cfg[cfg['model_name']]['num_epochs'] * cfg[tag]['warmup_ratio']),
                                                     num_training_steps=cfg['num_steps']['train'] *
                                                                        cfg[cfg['model_name']]['num_epochs'])
     else:
@@ -194,9 +195,12 @@ def make_config_s2s():
     if cfg['ft_name'] == 'lora':
         peft_config = LoraConfig(
             task_type=TaskType.SEQ_2_SEQ_LM,
-            r=64,
-            lora_alpha=32,
-            lora_dropout=0.01,
+            # r=64,
+            # lora_alpha=32,
+            # lora_dropout=0.01,
+            r=8,
+            lora_alpha=4,
+            lora_dropout=0.0,
             inference_mode=False,
         )
     elif cfg['ft_name'] == 'adalora':
@@ -238,9 +242,12 @@ def make_config_sc():
     if cfg['ft_name'] == 'lora':
         peft_config = LoraConfig(
             task_type=TaskType.SEQ_CLS,
-            r=64,
-            lora_alpha=32,
-            lora_dropout=0.01,
+            # r=64,
+            # lora_alpha=32,
+            # lora_dropout=0.01,
+            r=8,
+            lora_alpha=4,
+            lora_dropout=0.0,
             inference_mode=False,
         )
     elif cfg['ft_name'] == 'adalora':
