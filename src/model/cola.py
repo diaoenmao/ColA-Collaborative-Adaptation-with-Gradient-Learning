@@ -37,13 +37,12 @@ class LowRank(nn.Module):
         self.train(True)
         input = to_device(input, cfg['device'])
         output = {}
-        for _ in range(cfg['cola']['num_epochs']):
-            x = input['data']
-            output['target'] = self.forward(x)
-            output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='sum')
-            output['loss'].backward()
-            optimizer.step()
-            optimizer.zero_grad()
+        x = input['data']
+        output['target'] = self.forward(x)
+        output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'])
+        output['loss'].backward()
+        optimizer.step()
+        optimizer.zero_grad()
         scheduler.step()
         return output
 
@@ -63,18 +62,22 @@ class Linear(nn.Module):
         self.input_size = input_size
         self.output_size = output_size
         self.linear = nn.Linear(input_size, output_size, bias=False)
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        nn.init.zeros_(self.linear.weight)
+        return
 
     def fit(self, input, optimizer, scheduler):
         self.train(True)
         input = to_device(input, cfg['device'])
         output = {}
-        for _ in range(cfg['cola']['num_epochs']):
-            x = input['data']
-            output['target'] = self.forward(x)
-            output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='sum')
-            output['loss'].backward()
-            optimizer.step()
-            optimizer.zero_grad()
+        x = input['data']
+        output['target'] = self.forward(x)
+        output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'])
+        output['loss'].backward()
+        optimizer.step()
+        optimizer.zero_grad()
         scheduler.step()
         return output
 
@@ -104,18 +107,23 @@ class MLP(nn.Module):
             hidden_size = int(hidden_size * scale_factor)
         self.blocks = nn.Sequential(*blocks)
         self.linear = nn.Linear(input_size, output_size)
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        for n, p in self.named_parameters():
+            nn.init.zeros_(p)
+        return
 
     def fit(self, input, optimizer, scheduler):
         self.train(True)
         input = to_device(input, cfg['device'])
         output = {}
-        for _ in range(cfg['cola']['num_epochs']):
-            x = input['data']
-            output['target'] = self.forward(x)
-            output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='sum')
-            output['loss'].backward()
-            optimizer.step()
-            optimizer.zero_grad()
+        x = input['data']
+        output['target'] = self.forward(x)
+        output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'])
+        output['loss'].backward()
+        optimizer.step()
+        optimizer.zero_grad()
         scheduler.step()
         return output
 
@@ -129,35 +137,48 @@ class MLP(nn.Module):
 
 
 class SK(nn.Module):
-    def __init__(self, input_size, output_size, model_name, max_iter=1):
+    def __init__(self, input_size, output_size, model_name):
         super().__init__()
         self.model_name = model_name
         self.input_size = input_size
         self.output_size = output_size
-        self.max_iter = max_iter
         if model_name == 'skmlp':
-            model = MLPRegressor(max_iter=self.max_iter, warm_start=True)
+            model = MLPRegressor(max_iter=1, warm_start=True)
+
         else:
             raise ValueError('Not valid model name')
         self.model = model
+        self.reset_parameters()
 
-    def state_dict(self):
-        return self.model.get_params()
-
-    def load_state_dict(self, state_dict):
-        self.model.set_params(**state_dict)
+    def reset_parameters(self):
+        data = np.zeros([1, self.input_size])
+        target = np.zeros([1, self.output_size])
+        self.model.fit(data, target)
+        for i in range(len(self.model.coefs_)):
+            self.model.coefs_[i] = np.zeros(self.model.coefs_[i].shape)
+            self.model.intercepts_[i] = np.zeros(self.model.intercepts_[i].shape)
         return
 
-    def fit(self, input, optimizer=None, scheduler=None):
+    def state_dict(self):
+        return self.model
+
+    def load_state_dict(self, state_dict):
+        self.model = state_dict
+        return
+
+    def fit(self, input, optimizer, scheduler):
         output = {}
         data, target = input['data'].cpu().numpy(), input['target'].cpu().numpy()
         data = data.reshape(-1, self.input_size)
         target = target.reshape(-1, self.output_size)
+        lr = optimizer.param_groups[0]['lr']
+        self.model.set_params(learning_rate_init=lr)
         self.model.fit(data, target)
         output_target = self.model.predict(data)
         output_target = output_target.reshape(input['target'].shape)
         output['target'] = input['target'].new_tensor(output_target)
-        output['loss'] = F.mse_loss(output['target'], input['target'])
+        output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='sum')
+        scheduler.step()
         return output
 
     def make_delta_weight(self):
@@ -265,7 +286,7 @@ def make_cola_model(model_name, input_size, output_size):
         model = MLP(input_size, hidden_size, scale_factor, num_layers, activation, output_size)
         model.apply(init_param)
     elif model_name in ['skmlp']:
-        model = SK(input_size, output_size, model_name, max_iter=cfg['cola']['num_epochs'])
+        model = SK(input_size, output_size, model_name)
     else:
         raise ValueError('Not valid model name')
     return model

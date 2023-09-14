@@ -41,7 +41,7 @@ def runExperiment():
     checkpoint_path = os.path.join(model_tag_path, 'checkpoint')
     best_path = os.path.join(model_tag_path, 'best')
     dataset = make_dataset(cfg['data_name'], cfg['subset_name'])
-    model, tokenizer = make_model(cfg['model_name'], cfg['subset_name'])
+    model, tokenizer = make_model(cfg['model_name'])
     dataset = process_dataset(dataset, tokenizer)
     data_loader = make_data_loader(dataset, tokenizer, cfg['model_name'])
     result = resume(os.path.join(checkpoint_path, 'model'), resume_mode=cfg['resume_mode'])

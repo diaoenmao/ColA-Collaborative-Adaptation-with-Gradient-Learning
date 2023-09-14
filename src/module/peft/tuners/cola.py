@@ -502,12 +502,6 @@ class ColaModel(torch.nn.Module):
                     module.update_layer(cola_base=cola_base[name])
         return
 
-    def load_lr(self, lr):
-        for name, module in self.named_modules():
-            if isinstance(module, ColaLayer):
-                module.lr = lr
-        return
-
 
 def mark_no_trainable(model: nn.Module) -> None:
     for n, p in model.named_parameters():
@@ -528,7 +522,6 @@ class ColaLayer:
 
         self.input = []
         self.output_target = []
-        self.lr = 1.
 
         self.hook = self.register_forward_hook(self.forward_hook)
 
@@ -549,7 +542,7 @@ class ColaLayer:
     def backward_hook(self, grad):
         if self.training:
             grad_ = grad.detach().to('cpu')
-            self.output_target[-1] = (self.output_target[-1] - self.lr * grad_).detach()
+            self.output_target[-1] = (self.output_target[-1] - grad_).detach()
         return
 
 
