@@ -104,7 +104,7 @@ class GLUE:
 
 class Rouge:
     def __init__(self, tokenizer):
-        if 'num_split' in cfg:
+        if cfg['dist_mode'] in ['alone', 'assist']:
             self.metric = [evaluate.load('rouge') for _ in range(cfg['num_split'])]
         else:
             self.metric = evaluate.load('rouge')
@@ -118,7 +118,7 @@ class Rouge:
         return generate, target
 
     def add(self, input, output):
-        if 'num_split' in cfg:
+        if cfg['dist_mode'] in ['alone', 'assist']:
             for i in range(cfg['num_split']):
                 generate_i = output['generate'][i]
                 if generate_i is None:
@@ -134,7 +134,7 @@ class Rouge:
         return
 
     def __call__(self, *args, **kwargs):
-        if 'num_split' in cfg:
+        if cfg['dist_mode'] in ['alone', 'assist']:
             rouge = []
             for i in range(cfg['num_split']):
                 rouge_i = self.metric[i].compute()['rougeL']
