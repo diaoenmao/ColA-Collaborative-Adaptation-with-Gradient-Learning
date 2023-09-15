@@ -50,7 +50,7 @@ def main():
     filename = '{}_{}_{}'.format(run, mode, task_name)
     if task_name == 's2s':
         data_names = ['fpb-sa', 'wikisql', 'samsum', 'e2enlg', 'webnlg-2017', 'dart']
-        model_names = ['bart-base', 't5-base']
+        model_names = ['bart-base']
     elif task_name == 'clm':
         data_names = ['ptb', 'dolly-15k']
         model_names = ['gpt2']
@@ -104,7 +104,7 @@ def main():
             s = s[:-2] + '\nwait\n'
             if j % split_round == 0:
                 print(s)
-                run_file = open('{}_{}.sh'.format(filename, k), 'w')
+                run_file = open(os.path.join('scripts', '{}_{}.sh'.format(filename, k)), 'w')
                 run_file.write(s)
                 run_file.close()
                 s = '#!/bin/bash\n'

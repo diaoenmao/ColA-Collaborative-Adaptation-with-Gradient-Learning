@@ -3,14 +3,10 @@ from config import cfg
 
 def process_control():
     make_data_name()
-    if cfg['data_name'] in ['glue']:
-        cfg['collate_mode'] = 'pad'
-    else:
-        cfg['collate_mode'] = 'transformer'
+    cfg['collate_mode'] = 'transformer'
     cfg['bart-base'] = {'max_length': 128}
     cfg['roberta-base'] = {'max_length': 128}
     cfg['gpt2'] = {'max_length': 128}
-    cfg['t5-base'] = {'max_length': 128}
     cfg['model_name'] = cfg['control']['model_name']
     cfg['task_name'] = cfg['control']['task_name']
     cfg['batch_size'] = int(cfg['control']['batch_size'])
@@ -31,10 +27,10 @@ def process_control():
     cfg[model_name]['betas'] = (0.9, 0.999)
     cfg[model_name]['weight_decay'] = 5e-4
     cfg[model_name]['nesterov'] = True
-    cfg[model_name]['num_epochs'] = 10
+    cfg[model_name]['num_epochs'] = 40
     cfg[model_name]['batch_size'] = {'train': cfg['batch_size'], 'test': cfg['batch_size']}
     cfg[model_name]['scheduler_name'] = 'LinearAnnealingLR'
-    cfg[model_name]['warmup_ratio'] = 0.0
+    cfg[model_name]['warmup_ratio'] = 0.05
     if ft_name_list[0] == 'cola' and len(ft_name_list) > 1:
         cfg['cola'] = {}
         cfg['cola']['num_steps'] = int(ft_name_list[2])
@@ -51,7 +47,7 @@ def process_control():
         cfg['cola']['weight_decay'] = 5e-4
         cfg['cola']['nesterov'] = True
         cfg['cola']['scheduler_name'] = 'LinearAnnealingLR'
-        cfg['cola']['warmup_ratio'] = 0.0
+        cfg['cola']['warmup_ratio'] = 0.05
         cfg['cola']['batch_size'] = {'train': cfg['batch_size'], 'test': cfg['batch_size']}
     return
 

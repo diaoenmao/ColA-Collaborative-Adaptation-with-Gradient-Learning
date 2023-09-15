@@ -121,10 +121,6 @@ def input_collate(batch):
     return {key: [b[key] for b in batch] for key in batch[0]}
 
 
-def pad_collate(batch, tokenizer):
-    return tokenizer.pad(batch, padding="longest", return_tensors="pt")
-
-
 def make_data_collate(collate_mode, tokenizer=None):
     if collate_mode == 'dict':
         return input_collate
@@ -211,10 +207,14 @@ def process_dataset(dataset, tokenizer):
         )
         cfg['max_new_tokens'] = 10
     elif cfg['data_name'] == 'glue':
+        max_length = cfg[cfg['model_name']]['max_length']
+
         def tokenize_function(examples):
-            # max_length=None => use the model max length (it's actually the default)
-            text_inputs = [examples[k] for k in cfg['text_column']]
-            model_inputs = tokenizer(*text_inputs, truncation=True, max_length=None)
+            batch_size = len(examples[label_column])
+
+            inputs = [(f"{' '.join([f'{col}: {examples[col][i]}' for col in text_column])}") for i in range(batch_size)]
+            model_inputs = tokenizer(inputs, max_length=max_length, padding="max_length", truncation=True,
+                                     return_tensors="pt")
             model_inputs["labels"] = examples["label"]
             return model_inputs
 

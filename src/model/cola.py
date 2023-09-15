@@ -172,8 +172,9 @@ class SK(nn.Module):
         data = data.reshape(-1, self.input_size)
         target = target.reshape(-1, self.output_size)
         lr = optimizer.param_groups[0]['lr']
-        self.model.set_params(learning_rate_init=lr)
-        self.model.fit(data, target)
+        if lr > 0:
+            self.model.set_params(learning_rate_init=lr)
+            self.model.fit(data, target)
         output_target = self.model.predict(data)
         output_target = output_target.reshape(input['target'].shape)
         output['target'] = input['target'].new_tensor(output_target)
