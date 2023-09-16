@@ -42,7 +42,10 @@ def runExperiment():
     model, tokenizer = make_model(cfg['model_name'])
     dataset = process_dataset(dataset, tokenizer)
     data_loader = make_data_loader(dataset, tokenizer, cfg['model_name'])
+    cfg['split_metric'] = False
     metric = make_metric({'train': ['Loss'], 'test': ['Loss']}, tokenizer)
+    cfg['split_metric'] = True
+    split_metric = make_metric({'train': ['Loss'], 'test': ['Loss']}, tokenizer)
     result = resume(os.path.join(best_path, 'model'))
     model = PeftModel.from_pretrained(model, os.path.join(best_path, 'adapter'))
     model = model.to(cfg['device'])
@@ -56,7 +59,7 @@ def runExperiment():
     test_each_logger = make_logger(os.path.join('output', 'runs', 'test_each_{}'.format(cfg['model_tag'])))
     test_merge_logger = make_logger(os.path.join('output', 'runs', 'test_merge_{}'.format(cfg['model_tag'])))
     test(data_loader['test'], model, cola_base, metric, test_logger)
-    test_each(data_loader['test'], model, cola_base, metric, test_each_logger)
+    test_each(data_loader['test'], model, cola_base, split_metric, test_each_logger)
     if cfg['ft_name'] in ['cola']:
         delta_weight = make_delta_weight(cola_base)
         model = model.merge_and_unload(delta_weight)
@@ -91,6 +94,14 @@ def test(data_loader, model, cola_base, metric, logger):
             output = model(**input)
             input_ = {'target': input['labels']}
             output_ = {'target': output['logits'], 'loss': output['loss']}
+            if cfg['task_name'] == 's2s':
+                output_['generate'] = model.generate(input_ids=input["input_ids"],
+                                                     max_new_tokens=cfg['max_new_tokens'])
+            elif cfg['task_name'] == 'clm':
+                output_['generate'] = model.generate(input_ids=input["input_ids"],
+                                                     attention_mask=input["attention_mask"],
+                                                     max_new_tokens=cfg['max_new_tokens'],
+                                                     eos_token_id=cfg['pad_token_id'])
             metric.add('test', input_, output_)
             evaluation = metric.evaluate('test', 'batch', input_, output_)
             logger.append(evaluation, 'test', input_size)
