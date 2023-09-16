@@ -16,6 +16,7 @@ def process_control():
         cfg['dist_mode'] = cfg['control']['dist_mode']
     else:
         cfg['dist_mode'] = 'joint'
+    cfg['split_metric'] = False
     model_name = cfg['model_name']
     cfg[model_name]['shuffle'] = {'train': True, 'test': False}
     cfg[model_name]['optimizer_name'] = 'AdamW'

@@ -42,7 +42,6 @@ def runExperiment():
     model, tokenizer = make_model(cfg['model_name'])
     dataset = process_dataset(dataset, tokenizer)
     data_loader = make_data_loader(dataset, tokenizer, cfg['model_name'])
-    cfg['split_metric'] = False
     metric = make_metric({'train': ['Loss'], 'test': ['Loss']}, tokenizer)
     cfg['split_metric'] = True
     split_metric = make_metric({'train': ['Loss'], 'test': ['Loss']}, tokenizer)

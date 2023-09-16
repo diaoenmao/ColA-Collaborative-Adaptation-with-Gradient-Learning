@@ -79,7 +79,7 @@ def main():
         controls = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode, control_name)
     elif mode == 'cola_step':
         ft_name = ['cola-lowrank-1', 'cola-lowrank-2', 'cola-lowrank-4', 'cola-lowrank-8']
-        batch_size = ['1', '8', '16', '32']
+        batch_size = ['1', '8']
         script_name = [['{}_cola.py'.format(run)]]
         control_name = [[data_names, model_names, [task_name], ft_name, batch_size]]
         controls = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode, control_name)
