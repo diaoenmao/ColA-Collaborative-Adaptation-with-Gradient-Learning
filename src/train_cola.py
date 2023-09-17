@@ -76,8 +76,11 @@ def runExperiment():
         optimizer = {}
         scheduler = {}
         for k in cola_base:
-            cola_base[k] = cola_base[k].to(cfg['device'])
-            cola_param_k = cola_base[k].parameters()
+            if cfg['cola']['model_name'] in ['lowrank', 'linear', 'mlp']:
+                cola_base[k] = cola_base[k].to(cfg['device'])
+                cola_param_k = cola_base[k].parameters()
+            else:
+                cola_param_k = [torch.tensor([0.0], requires_grad=True)]
             optimizer[k] = make_optimizer(cola_param_k, 'cola')
             scheduler[k] = make_scheduler(optimizer[k], 'cola')
             optimizer[k].load_state_dict(result['optimizer_state_dict'][k])

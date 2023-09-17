@@ -72,14 +72,18 @@ def runExperiment():
         model.print_trainable_parameters()
         cola_base = make_cola(model, cfg['cola']['model_name'], cfg['dist_mode'])
         for k in cola_base:
-            cola_base[k].load_state_dict(result['cola_base_state_dict'][k])
+            for i in range(cfg['num_split']):
+                cola_base[k].model[i].load_state_dict(result['cola_base_state_dict'][k][i])
         model.load_cola_base(cola_base)
         optimizer = defaultdict(list)
         scheduler = defaultdict(list)
         for k in cola_base:
             for i in range(cfg['num_split']):
-                cola_base[k].model[i] = cola_base[k].model[i].to(cfg['device'])
-                cola_param_k_i = cola_base[k].model[i].parameters()
+                if cfg['cola']['model_name'][i] in ['lowrank', 'linear', 'mlp']:
+                    cola_base[k].model[i] = cola_base[k].model[i].to(cfg['device'])
+                    cola_param_k_i = cola_base[k].model[i].parameters()
+                else:
+                    cola_param_k_i = [torch.tensor([0.0], requires_grad=True)]
                 optimizer[k].append(make_optimizer(cola_param_k_i, 'cola'))
                 scheduler[k].append(make_scheduler(optimizer[k][i], 'cola'))
                 optimizer[k][i].load_state_dict(result['optimizer_state_dict'][k][i])
@@ -91,7 +95,8 @@ def runExperiment():
         train(data_loader['train'], model, cola_base, optimizer, scheduler, metric, logger)
         test(data_loader['test'], model, cola_base, metric, logger)
         result = {'cfg': cfg, 'epoch': cfg['epoch'] + 1,
-                  'cola_base_state_dict': {k: cola_base[k].state_dict() for k in cola_base},
+                  'cola_base_state_dict': {k: [cola_base[k].model[i].state_dict() for i in
+                                               range(len(cola_base[k].model))] for k in cola_base},
                   'optimizer_state_dict': {k: [optimizer[k][i].state_dict() for i in
                                                range(len(optimizer[k]))] for k in optimizer},
                   'scheduler_state_dict': {k: [scheduler[k][i].state_dict() for i in
