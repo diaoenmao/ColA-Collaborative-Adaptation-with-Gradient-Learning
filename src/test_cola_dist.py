@@ -6,7 +6,7 @@ from collections import defaultdict
 from config import cfg, process_args
 from dataset import make_dataset, make_data_loader, process_dataset
 from metric import make_metric, make_logger
-from model import make_model, make_cola
+from model import make_model, freeze_model, make_cola
 from module import save, to_device, process_control, resume, PeftModel
 
 cudnn.benchmark = True
@@ -47,11 +47,13 @@ def runExperiment():
     split_metric = make_metric({'train': ['Loss'], 'test': ['Loss']}, tokenizer)
     result = resume(os.path.join(best_path, 'model'))
     model = PeftModel.from_pretrained(model, os.path.join(best_path, 'adapter'))
+    freeze_model(model)
     model = model.to(cfg['device'])
     cola_base = make_cola(model, cfg['cola']['model_name'], cfg['dist_mode'])
     for k in cola_base:
-        cola_base[k].load_state_dict(result['cola_base_state_dict'][k])
-        cola_base[k] = cola_base[k].to(cfg['device'])
+        for i in range(cfg['num_split']):
+            cola_base[k].model[i].load_state_dict(result['cola_base_state_dict'][k][i])
+            cola_base[k].model[i] = cola_base[k].model[i].to(cfg['device'])
     model.load_cola_base(cola_base)
     cfg['epoch'] = result['epoch']
     test_logger = make_logger(os.path.join('output', 'runs', 'test_{}'.format(cfg['model_tag'])))
@@ -59,7 +61,7 @@ def runExperiment():
     test_merge_logger = make_logger(os.path.join('output', 'runs', 'test_merge_{}'.format(cfg['model_tag'])))
     test(data_loader['test'], model, cola_base, metric, test_logger)
     test_each(data_loader['test'], model, cola_base, split_metric, test_each_logger)
-    if cfg['ft_name'] in ['cola']:
+    if cfg['ft_name'] in ['cola'] and 'mlp' not in cfg['cola']['model_name']:
         delta_weight = make_delta_weight(cola_base)
         model = model.merge_and_unload(delta_weight)
         test(data_loader['test'], model, cola_base, metric, test_merge_logger)

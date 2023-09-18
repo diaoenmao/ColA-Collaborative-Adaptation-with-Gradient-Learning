@@ -142,10 +142,14 @@ def make_ft_model(model):
     else:
         raise ValueError('Not valid task name')
     model = get_peft_model(model, peft_config)
+    return model
+
+
+def freeze_model(model):
     if cfg['ft_name'] == 'cola':
         for n, p in model.named_parameters():
             p.requires_grad = False
-    return model
+    return
 
 
 def make_config_clm():

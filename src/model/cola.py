@@ -39,7 +39,7 @@ class LowRank(nn.Module):
         output = {}
         x = input['data']
         output['target'] = self.forward(x)
-        output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'])
+        output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='sum')
         output['loss'].backward()
         optimizer.step()
         optimizer.zero_grad()
@@ -74,7 +74,7 @@ class Linear(nn.Module):
         output = {}
         x = input['data']
         output['target'] = self.forward(x)
-        output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'])
+        output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='sum')
         output['loss'].backward()
         optimizer.step()
         optimizer.zero_grad()
@@ -120,7 +120,7 @@ class MLP(nn.Module):
         output = {}
         x = input['data']
         output['target'] = self.forward(x)
-        output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'])
+        output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='sum')
         output['loss'].backward()
         optimizer.step()
         optimizer.zero_grad()
@@ -133,67 +133,6 @@ class MLP(nn.Module):
     def forward(self, x):
         x = self.blocks(x)
         x = self.linear(x)
-        return x
-
-
-class SK(nn.Module):
-    def __init__(self, input_size, output_size, model_name):
-        super().__init__()
-        self.model_name = model_name
-        self.input_size = input_size
-        self.output_size = output_size
-        if model_name == 'skmlp':
-            model = MLPRegressor(max_iter=1, warm_start=True)
-
-        else:
-            raise ValueError('Not valid model name')
-        self.model = model
-        self.reset_parameters()
-
-    def reset_parameters(self):
-        data = np.zeros([1, self.input_size])
-        target = np.zeros([1, self.output_size])
-        self.model.fit(data, target)
-        for i in range(len(self.model.coefs_)):
-            self.model.coefs_[i] = np.zeros(self.model.coefs_[i].shape)
-            self.model.intercepts_[i] = np.zeros(self.model.intercepts_[i].shape)
-        return
-
-    def state_dict(self):
-        return self.model
-
-    def load_state_dict(self, state_dict):
-        self.model = state_dict
-        return
-
-    def fit(self, input, optimizer, scheduler):
-        output = {}
-        data, target = input['data'].cpu().numpy(), input['target'].cpu().numpy()
-        data = data.reshape(-1, self.input_size)
-        target = target.reshape(-1, self.output_size)
-        lr = optimizer.param_groups[0]['lr']
-        if lr > 0:
-            self.model.set_params(learning_rate_init=lr)
-            self.model.fit(data, target)
-        output_target = self.model.predict(data)
-        output_target = output_target.reshape(input['target'].shape)
-        output['target'] = input['target'].new_tensor(output_target)
-        output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='sum')
-        scheduler.step()
-        return output
-
-    def make_delta_weight(self):
-        raise NotImplementedError
-
-    def forward(self, input):
-        x = input.cpu().numpy()
-        x = x.reshape(-1, self.input_size)
-        try:
-            x = self.model.predict(x)
-            x = x.reshape((*input.shape[:-1], self.output_size))
-        except NotFittedError:
-            x = np.zeros((*input.shape[:-1], self.output_size))
-        x = input.new_tensor(x)
         return x
 
 
@@ -286,8 +225,6 @@ def make_cola_model(model_name, input_size, output_size):
         activation = cfg['cola']['mlp']['activation']
         model = MLP(input_size, hidden_size, scale_factor, num_layers, activation, output_size)
         model.apply(init_param)
-    elif model_name in ['skmlp']:
-        model = SK(input_size, output_size, model_name)
     else:
         raise ValueError('Not valid model name')
     return model

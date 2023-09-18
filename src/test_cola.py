@@ -6,7 +6,7 @@ from collections import defaultdict
 from config import cfg, process_args
 from dataset import make_dataset, make_data_loader, process_dataset
 from metric import make_metric, make_logger
-from model import make_model, make_cola
+from model import make_model, freeze_model, make_cola
 from module import save, to_device, process_control, resume, PeftModel
 
 cudnn.benchmark = True
@@ -45,6 +45,7 @@ def runExperiment():
     metric = make_metric({'train': ['Loss'], 'test': ['Loss']}, tokenizer)
     result = resume(os.path.join(best_path, 'model'))
     model = PeftModel.from_pretrained(model, os.path.join(best_path, 'adapter'))
+    freeze_model(model)
     model = model.to(cfg['device'])
     cola_base = make_cola(model, cfg['cola']['model_name'])
     for k in cola_base:
@@ -55,7 +56,7 @@ def runExperiment():
     test_logger = make_logger(os.path.join('output', 'runs', 'test_{}'.format(cfg['model_tag'])))
     test_merge_logger = make_logger(os.path.join('output', 'runs', 'test_merge_{}'.format(cfg['model_tag'])))
     test(data_loader['test'], model, metric, test_logger)
-    if cfg['ft_name'] in ['cola']:
+    if cfg['ft_name'] in ['cola'] and 'mlp' not in cfg['cola']['model_name']:
         delta_weight = make_delta_weight(cola_base)
         model = model.merge_and_unload(delta_weight)
         test(data_loader['test'], model, metric, test_merge_logger)

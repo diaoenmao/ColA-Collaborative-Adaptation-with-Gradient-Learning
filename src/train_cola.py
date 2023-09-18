@@ -9,7 +9,7 @@ from collections import defaultdict
 from config import cfg, process_args
 from dataset import make_dataset, make_data_loader, process_dataset, collate
 from metric import make_metric, make_logger
-from model import make_model, make_optimizer, make_scheduler, make_ft_model, make_cola
+from model import make_model, make_optimizer, make_scheduler, make_ft_model, freeze_model, make_cola
 from module import save, to_device, process_control, resume, makedir_exist_ok, PeftModel
 
 cudnn.benchmark = True
@@ -50,6 +50,7 @@ def runExperiment():
     if result is None:
         cfg['epoch'] = 1
         model = make_ft_model(model)
+        freeze_model(model)
         model = model.to(cfg['device'])
         model.print_trainable_parameters()
         cola_base = make_cola(model, cfg['cola']['model_name'])
@@ -57,30 +58,25 @@ def runExperiment():
         optimizer = {}
         scheduler = {}
         for k in cola_base:
-            if cfg['cola']['model_name'] in ['lowrank', 'linear', 'mlp']:
-                cola_base[k] = cola_base[k].to(cfg['device'])
-                cola_param_k = cola_base[k].parameters()
-            else:
-                cola_param_k = [torch.tensor([0.0], requires_grad=True)]
+            cola_base[k] = cola_base[k].to(cfg['device'])
+            cola_param_k = cola_base[k].parameters()
             optimizer[k] = make_optimizer(cola_param_k, 'cola')
             scheduler[k] = make_scheduler(optimizer[k], 'cola')
     else:
         cfg['epoch'] = result['epoch']
         model = PeftModel.from_pretrained(model, os.path.join(checkpoint_path, 'adapter'), is_trainable=True)
+        freeze_model(model)
         model = model.to(cfg['device'])
         model.print_trainable_parameters()
-        cola_base = make_cola(model, cfg['cola']['model']['name']) if cfg['ft_name'] == 'cola' else None
+        cola_base = make_cola(model, cfg['cola']['model_name'])
         for k in cola_base:
             cola_base[k].load_state_dict(result['cola_base_state_dict'][k])
         model.load_cola_base(cola_base)
         optimizer = {}
         scheduler = {}
         for k in cola_base:
-            if cfg['cola']['model_name'] in ['lowrank', 'linear', 'mlp']:
-                cola_base[k] = cola_base[k].to(cfg['device'])
-                cola_param_k = cola_base[k].parameters()
-            else:
-                cola_param_k = [torch.tensor([0.0], requires_grad=True)]
+            cola_base[k] = cola_base[k].to(cfg['device'])
+            cola_param_k = cola_base[k].parameters()
             optimizer[k] = make_optimizer(cola_param_k, 'cola')
             scheduler[k] = make_scheduler(optimizer[k], 'cola')
             optimizer[k].load_state_dict(result['optimizer_state_dict'][k])
@@ -125,7 +121,6 @@ def train(data_loader, model, cola_base, optimizer, scheduler, metric, logger):
         output = model(**input)
         input_ = {'target': input['labels']}
         output_ = {'target': output['logits'], 'loss': output['loss']}
-        output['loss'] = output['loss'] * torch.prod(torch.tensor(output['logits'].shape[:-1]))
         output['loss'].backward()
         model.zero_grad()
         input_i, output_target_i = model.flush()

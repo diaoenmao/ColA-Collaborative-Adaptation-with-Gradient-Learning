@@ -49,7 +49,7 @@ def runExperiment():
     test_logger = make_logger(os.path.join('output', 'runs', 'test_{}'.format(cfg['model_tag'])))
     test_merge_logger = make_logger(os.path.join('output', 'runs', 'test_merge_{}'.format(cfg['model_tag'])))
     test(data_loader['test'], model, metric, test_logger)
-    if cfg['ft_name'] in ['lora', 'adalora', 'ia3']:
+    if cfg['ft_name'] in ['lora']:
         model = model.merge_and_unload()
         test(data_loader['test'], model, metric, test_merge_logger)
     result = resume(os.path.join(checkpoint_path, 'model'))
