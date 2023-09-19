@@ -205,7 +205,6 @@ def process_dataset(dataset, tokenizer):
             load_from_cache_file=False,
             desc="Running tokenizer on dataset",
         )
-        cfg['max_new_tokens'] = 10
     elif cfg['data_name'] == 'glue':
         max_length = cfg[cfg['model_name']]['max_length']
 
@@ -228,7 +227,7 @@ def process_dataset(dataset, tokenizer):
     elif cfg['data_name'] == 'dolly':
         max_length = cfg[cfg['model_name']]['max_length']
 
-        def preprocess_function(examples):
+        def preprocess_function_train(examples):
             batch_size = len(examples[text_column[0]])
             inputs = [(f"{' '.join([f'{col}: {examples[col][i]}' for col in text_column])} "
                        f"response: ") for i in range(batch_size)]
@@ -252,15 +251,47 @@ def process_dataset(dataset, tokenizer):
             model_inputs["labels"] = labels["input_ids"]
             return model_inputs
 
+        def preprocess_function_test(examples):
+            batch_size = len(examples[text_column[0]])
+            inputs = [(f"{' '.join([f'{col}: {examples[col][i]}' for col in text_column])} "
+                       f"response: ") for i in range(batch_size)]
+            targets = [str(x) for x in examples[label_column]]
+            model_inputs = tokenizer(inputs, max_length=max_length, padding='max_length', truncation=True)
+            labels = tokenizer(targets, max_length=max_length, padding='do_not_pad', truncation=True)
+
+            model_inputs["split"] = []
+            for i in range(batch_size):
+                sample_input_ids = model_inputs["input_ids"][i]
+                sample_attention_mask = model_inputs["attention_mask"][i]
+                label_input_ids = labels["input_ids"][i]
+                model_inputs["input_ids"][i] = sample_input_ids
+                model_inputs["attention_mask"][i] = sample_attention_mask
+                labels["input_ids"][i] = [-100] * len(sample_input_ids) + label_input_ids
+                model_inputs["split"].append(cfg['task_label'][examples['category'][i]])
+                model_inputs["input_ids"][i] = torch.tensor(model_inputs["input_ids"][i][-max_length:])
+                model_inputs["attention_mask"][i] = torch.tensor(model_inputs["attention_mask"][i][-max_length:])
+                labels["input_ids"][i] = torch.tensor(labels["input_ids"][i][-max_length:])
+            model_inputs["labels"] = labels["input_ids"]
+            return model_inputs
+
         cfg['task_value'] = list(set(dataset['train']['category']))
         cfg['task_label'] = {category: idx for idx, category in enumerate(cfg['task_value'])}
         cfg['num_split'] = len(cfg['task_label'])
 
-        processed_dataset = dataset.map(
-            preprocess_function,
+        processed_dataset = {}
+        processed_dataset['train'] = dataset['train'].map(
+            preprocess_function_train,
             batched=True,
             num_proc=1,
             remove_columns=dataset["train"].column_names,
+            load_from_cache_file=False,
+            desc="Running tokenizer on dataset",
+        )
+        processed_dataset['test'] = dataset['test'].map(
+            preprocess_function_test,
+            batched=True,
+            num_proc=1,
+            remove_columns=dataset["test"].column_names,
             load_from_cache_file=False,
             desc="Running tokenizer on dataset",
         )

@@ -15,18 +15,16 @@ def make_metric(metric_name, tokenizer):
             metric_name[k].extend(['Accuracy'])
     if cfg['task_name'] == 'clm':
         if cfg['data_name'] in ['ptb']:
-            pivot = -float('inf')
-            pivot_direction = 'up'
-            pivot_name = 'Rouge'
+            pivot = float('inf')
+            pivot_direction = 'down'
+            pivot_name = 'Perplexity'
             for k in metric_name:
                 metric_name[k].extend(['Perplexity'])
-            metric_name['test'].extend(['Rouge'])
         elif cfg['data_name'] in ['dolly']:
             pivot = -float('inf')
             pivot_direction = 'up'
             pivot_name = 'Rouge'
-            for k in metric_name:
-                metric_name[k].extend(['Perplexity'])
+            metric_name['train'].extend(['Perplexity'])
             metric_name['test'].extend(['Rouge'])
         else:
             raise ValueError('Not valid data name')
@@ -116,6 +114,8 @@ class Rouge:
         target[target < 0] = cfg['pad_token_id']
         generate = self.tokenizer.batch_decode(generate.detach().cpu().numpy(), skip_special_tokens=True)
         target = self.tokenizer.batch_decode(target.detach().cpu().numpy(), skip_special_tokens=True)
+        # print("AAAA : {}".format(generate[0]))
+        # print("BBBB : {}".format(target[0]))
         return generate, target
 
     def add(self, input, output):

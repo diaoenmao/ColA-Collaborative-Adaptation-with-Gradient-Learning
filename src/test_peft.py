@@ -77,10 +77,12 @@ def test(data_loader, model, metric, logger):
                 output_['generate'] = model.generate(input_ids=input["input_ids"],
                                                      max_new_tokens=cfg['max_new_tokens'])
             elif cfg['task_name'] == 'clm':
-                output_['generate'] = model.generate(input_ids=input["input_ids"],
-                                                     attention_mask=input["attention_mask"],
-                                                     max_new_tokens=cfg['max_new_tokens'],
-                                                     eos_token_id=cfg['pad_token_id'])
+                if cfg['data_name'] in ['dolly']:
+                    output_['generate'] = model.generate(input_ids=input["input_ids"],
+                                                         attention_mask=input["attention_mask"],
+                                                         max_new_tokens=cfg['max_new_tokens'],
+                                                         eos_token_id=cfg['pad_token_id'],
+                                                         no_repeat_ngram_size=2)
             metric.add('test', input_, output_)
             evaluation = metric.evaluate('test', 'batch', input_, output_)
             logger.append(evaluation, 'test', input_size)
