@@ -35,7 +35,11 @@ def process_control():
     if ft_name_list[0] == 'cola' and len(ft_name_list) > 1:
         cfg['cola'] = {}
         cfg['cola']['num_steps'] = int(ft_name_list[2])
-        cfg['cola']['lowrank'] = {'hidden_size': 8, 'dropout': 0.0}
+        if cfg['task_name'] in ['sc', 's2s']:
+            hidden_size = 8
+        else:
+            hidden_size = 64
+        cfg['cola']['lowrank'] = {'hidden_size': hidden_size, 'dropout': 0.0}
         cfg['cola']['linear'] = {}
         cfg['cola']['mlp'] = {'hidden_size': 128, 'scale_factor': 2, 'num_layers': 2, 'activation': 'relu'}
         cfg['cola']['model_name'] = ft_name_list[1]

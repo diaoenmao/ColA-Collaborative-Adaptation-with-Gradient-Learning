@@ -114,8 +114,6 @@ class Rouge:
         target[target < 0] = cfg['pad_token_id']
         generate = self.tokenizer.batch_decode(generate.detach().cpu().numpy(), skip_special_tokens=True)
         target = self.tokenizer.batch_decode(target.detach().cpu().numpy(), skip_special_tokens=True)
-        # print("AAAA : {}".format(generate[0]))
-        # print("BBBB : {}".format(target[0]))
         return generate, target
 
     def add(self, input, output):
