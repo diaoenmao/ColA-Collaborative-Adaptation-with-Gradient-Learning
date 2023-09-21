@@ -156,19 +156,19 @@ def make_config_clm():
     if cfg['ft_name'] == 'lora':
         peft_config = LoraConfig(
             task_type=TaskType.CAUSAL_LM,
-            r=64,
-            lora_alpha=32,
+            r=8,
+            lora_alpha=8,
             lora_dropout=0.0,
             inference_mode=False,
         )
     elif cfg['ft_name'] == 'adalora':
         peft_config = AdaLoraConfig(
             init_r=64,
-            target_r=64,
+            target_r=8,
             beta1=0.85,
             beta2=0.85,
             deltaT=10,
-            lora_alpha=32,
+            lora_alpha=8,
             lora_dropout=0.0,
             task_type=TaskType.CAUSAL_LM,
             inference_mode=False,

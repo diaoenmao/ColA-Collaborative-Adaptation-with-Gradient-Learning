@@ -149,7 +149,6 @@ def train(data_loader, model, cola_base, optimizer, scheduler, metric, logger):
                              'Experiment Finished Time: {}'.format(exp_finished_time)]}
             logger.append(info, 'train')
             print(logger.write('train', metric.metric_name['train']), flush=True)
-        break
     return
 
 
@@ -177,7 +176,6 @@ def test(data_loader, model, metric, logger):
             metric.add('test', input_, output_)
             evaluation = metric.evaluate('test', 'batch', input_, output_)
             logger.append(evaluation, 'test', input_size)
-            break
         evaluation = metric.evaluate('test', 'full')
         logger.append(evaluation, 'test')
         info = {'info': ['Model: {}'.format(cfg['model_tag']), 'Test Epoch: {}({:.0f}%)'.format(cfg['epoch'], 100.)]}
