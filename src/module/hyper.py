@@ -23,10 +23,7 @@ def process_control():
     if cfg['ft_name'] == 'full':
         cfg[model_name]['lr'] = 5e-5
     else:
-        if cfg['task_name'] == 'clm':
-            cfg[model_name]['lr'] = 5e-5
-        else:
-            cfg[model_name]['lr'] = 3e-4
+        cfg[model_name]['lr'] = 3e-4
     cfg[model_name]['momentum'] = 0.9
     cfg[model_name]['betas'] = (0.9, 0.999)
     cfg[model_name]['weight_decay'] = 5e-4
@@ -45,10 +42,7 @@ def process_control():
         cfg['cola']['model_name'] = ft_name_list[1]
         cfg['cola']['shuffle'] = {'train': True, 'test': False}
         cfg['cola']['optimizer_name'] = 'AdamW'
-        if cfg['task_name'] == 'clm':
-            cfg['cola']['lr'] = 5e-5
-        else:
-            cfg['cola']['lr'] = 3e-4
+        cfg['cola']['lr'] = 3e-4
         cfg['cola']['momentum'] = 0.9
         cfg['cola']['betas'] = (0.9, 0.999)
         cfg['cola']['weight_decay'] = 5e-4

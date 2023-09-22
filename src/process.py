@@ -10,7 +10,7 @@ from collections import defaultdict
 result_path = os.path.join('output', 'result')
 save_format = 'png'
 vis_path = os.path.join('output', 'vis', '{}'.format(save_format))
-num_experiments = 4
+num_experiments = 1
 exp = [str(x) for x in list(range(num_experiments))]
 dpi = 300
 matplotlib.rcParams['font.sans-serif'] = 'Arial'
@@ -23,7 +23,7 @@ matplotlib.rcParams['xtick.labelsize'] = 'large'
 matplotlib.rcParams['ytick.labelsize'] = 'large'
 
 
-def make_control(control_name):
+def make_controls(control_name):
     control_names = []
     for i in range(len(control_name)):
         control_names.extend(list('_'.join(x) for x in itertools.product(*control_name[i])))
@@ -32,26 +32,63 @@ def make_control(control_name):
     return controls
 
 
-def make_all_controls(mode):
-    if mode == 'base':
-        data_names = ['MNIST', 'CIFAR10']
-        model_names = ['linear', 'mlp', 'cnn', 'resnet18']
-        control_name = [[data_names, model_names]]
-        controls = make_control(control_name)
+def make_all_controls(mode, task_name):
+    if task_name == 's2s':
+        data_names = ['fpb-sa', 'wikisql', 'samsum', 'e2enlg', 'webnlg-2017', 'dart']
+        model_names = ['bart-base']
+    elif task_name == 'clm':
+        data_names = ['dolly-15k']
+        model_names = ['gpt2']
+    elif task_name == 'sc':
+        data_names = ['glue-cola', 'glue-mnli', 'glue-mrpc', 'glue-qnli', 'glue-qqp', 'glue-rte', 'glue-sst2',
+                      'glue-stsb', 'glue-wnli']
+        model_names = ['roberta-base']
+    else:
+        raise ValueError('Not valid task name')
+    if mode == 'full':
+        batch_size = ['32']
+        control_name = [[data_names, model_names, [task_name], ['full'], batch_size]]
+        controls = make_controls(control_name)
+    elif mode == 'peft':
+        ft_name = ['lora', 'adalora', 'ia3', 'promptune', 'ptune']
+        batch_size = ['32']
+        control_name = [[data_names, model_names, [task_name], ft_name, batch_size]]
+        controls = make_controls(control_name)
+    elif mode == 'cola':
+        ft_name = ['cola-lowrank-1', 'cola-linear-1', 'cola-mlp-1']
+        batch_size = ['32']
+        control_name = [[data_names, model_names, [task_name], ft_name, batch_size]]
+        controls = make_controls(control_name)
+    elif mode == 'cola_step':
+        ft_name = ['cola-lowrank-1', 'cola-lowrank-2', 'cola-lowrank-4', 'cola-lowrank-8']
+        batch_size = ['8']
+        control_name = [[data_names, model_names, [task_name], ft_name, batch_size]]
+        controls = make_controls(control_name)
+    elif mode == 'cola_dist':
+        data_names = ['dolly-15k']
+        ft_name = ['cola-lowrank-1', 'cola-lowrank~linear-1', 'cola-lowrank~mlp-1']
+        batch_size = ['32']
+        dist_mode = ['alone', 'col']
+        control_name = [[data_names, model_names, [task_name], ft_name, batch_size, dist_mode]]
+        controls = make_controls(control_name)
     else:
         raise ValueError('Not valid mode')
     return controls
 
 
 def main():
-    modes = ['base']
+    modes = ['full', 'peft', 'cola', 'cola_step', 'cola_dist']
+    task_names = ['s2s', 'sc', 'clm']
     controls = []
     for mode in modes:
-        controls += make_all_controls(mode)
+        for task_name in task_names:
+            controls += make_all_controls(mode, task_name)
     processed_result = process_result(controls)
     df_mean = make_df(processed_result, 'mean')
     df_history = make_df(processed_result, 'history')
-    make_vis_history(df_history)
+    make_vis_method(df_history)
+    exit()
+    make_vis_step(df_history)
     return
 
 
@@ -112,11 +149,11 @@ def extract_result(extracted_processed_result, processed_result, control):
     def extract(split, metric_name, mode):
         output = False
         if split == 'train':
-            if metric_name in ['test/Loss', 'test/Accuracy']:
+            if metric_name in ['test/Rouge', 'test/GLUE']:
                 if mode == 'history':
                     output = True
         elif split == 'test':
-            if metric_name in ['test/Loss', 'test/Accuracy']:
+            if metric_name in ['test/Rouge', 'test/GLUE']:
                 if mode == 'mean':
                     output = True
         return output
@@ -152,7 +189,8 @@ def make_df(processed_result, mode):
     return df
 
 
-def make_vis_history(df_history):
+def make_vis_method(df_history):
+    ft_name = ['full', 'lora', 'adalora', 'ia3', 'promptune', 'ptune', 'cola']
     label_dict = {'linear': 'Linear', 'mlp': 'MLP', 'cnn': 'CNN', 'resnet18': 'ResNet18'}
     color_dict = {'linear': 'red', 'mlp': 'orange', 'cnn': 'blue', 'resnet18': 'dodgerblue'}
     linestyle_dict = {'linear': '-', 'mlp': '--', 'cnn': ':', 'resnet18': '-.'}
@@ -191,7 +229,7 @@ def make_vis_history(df_history):
     for fig_name in fig:
         fig[fig_name] = plt.figure(fig_name)
         ax_dict_1[fig_name].grid(linestyle='--', linewidth='0.5')
-        dir_name = 'lc'
+        dir_name = 'method'
         dir_path = os.path.join(vis_path, dir_name)
         fig_path = os.path.join(dir_path, '{}.{}'.format(fig_name, save_format))
         makedir_exist_ok(dir_path)

@@ -52,11 +52,11 @@ def main():
         data_names = ['fpb-sa', 'wikisql', 'samsum', 'e2enlg', 'webnlg-2017', 'dart']
         model_names = ['bart-base']
     elif task_name == 'clm':
-        data_names = ['ptb', 'dolly-15k']
+        data_names = ['dolly-15k']
         model_names = ['gpt2']
     elif task_name == 'sc':
         data_names = ['glue-cola', 'glue-mnli', 'glue-mrpc', 'glue-qnli', 'glue-qqp', 'glue-rte', 'glue-sst2',
-                      'glue-stsb', 'glue-wnli']
+                      'glue-stsb']
         model_names = ['roberta-base']
     else:
         raise ValueError('Not valid task name')

@@ -14,13 +14,7 @@ def make_metric(metric_name, tokenizer):
         for k in metric_name:
             metric_name[k].extend(['Accuracy'])
     if cfg['task_name'] == 'clm':
-        if cfg['data_name'] in ['ptb']:
-            pivot = float('inf')
-            pivot_direction = 'down'
-            pivot_name = 'Perplexity'
-            for k in metric_name:
-                metric_name[k].extend(['Perplexity'])
-        elif cfg['data_name'] in ['dolly']:
+        if cfg['data_name'] in ['dolly']:
             pivot = -float('inf')
             pivot_direction = 'up'
             pivot_name = 'Rouge'
