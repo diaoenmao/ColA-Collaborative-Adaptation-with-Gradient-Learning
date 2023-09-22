@@ -7,6 +7,8 @@ import matplotlib.pyplot as plt
 from module import save, load, makedir_exist_ok
 from collections import defaultdict
 
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+
 result_path = os.path.join('output', 'result')
 save_format = 'png'
 vis_path = os.path.join('output', 'vis', '{}'.format(save_format))
@@ -50,7 +52,7 @@ def make_all_controls(mode, task_name):
         control_name = [[data_names, model_names, [task_name], ['full'], batch_size]]
         controls = make_controls(control_name)
     elif mode == 'peft':
-        ft_name = ['lora', 'adalora', 'ia3', 'promptune', 'ptune']
+        ft_name = ['lora', 'adalora', 'ia3', 'promptune', 'prefixtune', 'ptune']
         batch_size = ['32']
         control_name = [[data_names, model_names, [task_name], ft_name, batch_size]]
         controls = make_controls(control_name)
@@ -87,7 +89,6 @@ def main():
     df_mean = make_df(processed_result, 'mean')
     df_history = make_df(processed_result, 'history')
     make_vis_method(df_history)
-    exit()
     make_vis_step(df_history)
     return
 
@@ -190,24 +191,31 @@ def make_df(processed_result, mode):
 
 
 def make_vis_method(df_history):
-    ft_name = ['full', 'lora', 'adalora', 'ia3', 'promptune', 'ptune', 'cola']
-    label_dict = {'linear': 'Linear', 'mlp': 'MLP', 'cnn': 'CNN', 'resnet18': 'ResNet18'}
-    color_dict = {'linear': 'red', 'mlp': 'orange', 'cnn': 'blue', 'resnet18': 'dodgerblue'}
-    linestyle_dict = {'linear': '-', 'mlp': '--', 'cnn': ':', 'resnet18': '-.'}
-    marker_dict = {'linear': 'o', 'mlp': 's', 'cnn': 'p', 'resnet18': 'd'}
-    loc_dict = {'Accuracy': 'lower right', 'Loss': 'upper right'}
+    mode_name = ['full', 'lora', 'adalora', 'ia3', 'promptune', 'ptune', 'cola']
+    label_dict = {'full': 'FT', 'lora': 'LoRA', 'adalora': 'AdaLorA', 'ia3': 'IA3', 'promptune': 'Promp Tuning',
+                  'prefixtune': 'Prefix Tuning', 'ptune': 'P-Tuning', 'cola': 'ColA (Low Rank)'}
+    color_dict = {'full': 'black', 'lora': 'red', 'adalora': 'orange', 'ia3': 'green', 'promptune': 'blue',
+                  'prefixtune': 'dodgerblue', 'ptune': 'lightblue', 'cola': 'gold'}
+    linestyle_dict = {'full': '-', 'lora': '--', 'adalora': ':', 'ia3': '-.', 'promptune': '--',
+                      'prefixtune': ':', 'ptune': '-.', 'cola': '-'}
+    marker_dict = {'full': 'D', 'lora': 's', 'adalora': 'p', 'ia3': 'd', 'promptune': 'd',
+                   'prefixtune': 'p', 'ptune': 's', 'cola': 'o'}
+    loc_dict = {'Rouge': 'lower right', 'GLUE': 'lower right'}
     fontsize_dict = {'legend': 12, 'label': 16, 'ticks': 16}
     figsize = (5, 4)
     fig = {}
     ax_dict_1 = {}
     for df_name in df_history:
         df_name_list = df_name.split('_')
-        metric_name, stat = df_name_list[-2], df_name_list[-1]
-        mask = metric_name not in ['Loss'] and stat == 'mean'
+        mode, batch_size, metric_name, stat = df_name_list[3], df_name_list[4], df_name_list[-2], df_name_list[-1]
+        mask = len(df_name_list) - 2 == 5 and stat == 'mean'
+        if 'cola' in mode:
+            if 'cola-lowrank-1' not in mode or batch_size != '32':
+                mask = False
+            mode = 'cola'
         if mask:
-            model_name = df_name_list[1]
             df_name_std = '_'.join([*df_name_list[:-1], 'std'])
-            fig_name = '_'.join([df_name_list[0], *df_name_list[2:]])
+            fig_name = '_'.join([*df_name_list[:3], *df_name_list[4:-1]])
             fig[fig_name] = plt.figure(fig_name, figsize=figsize)
             if fig_name not in ax_dict_1:
                 ax_dict_1[fig_name] = fig[fig_name].add_subplot(111)
@@ -216,7 +224,7 @@ def make_vis_method(df_history):
             y_err = df_history[df_name_std].iloc[0].to_numpy()
             x = np.arange(len(y))
             xlabel = 'Epoch'
-            pivot = model_name
+            pivot = mode
             ylabel = metric_name
             ax_1.plot(x, y, label=label_dict[pivot], color=color_dict[pivot],
                       linestyle=linestyle_dict[pivot])
@@ -230,6 +238,58 @@ def make_vis_method(df_history):
         fig[fig_name] = plt.figure(fig_name)
         ax_dict_1[fig_name].grid(linestyle='--', linewidth='0.5')
         dir_name = 'method'
+        dir_path = os.path.join(vis_path, dir_name)
+        fig_path = os.path.join(dir_path, '{}.{}'.format(fig_name, save_format))
+        makedir_exist_ok(dir_path)
+        plt.tight_layout()
+        plt.savefig(fig_path, dpi=dpi, bbox_inches='tight', pad_inches=0.03)
+        plt.close(fig_name)
+    return
+
+
+def make_vis_step(df_history):
+    mode_name = ['1', '2', '4', '8']
+    label_dict = {'1': '$B=1$', '2': '$B=1$', '4': '$B=4$', '8': '$B=8$'}
+    color_dict = {'1': 'black', '2': 'red', '4': 'orange', '8': 'gold'}
+    linestyle_dict = {'1': '-', '2': '--', '4': ':', '8': '-'}
+    marker_dict = {'1': 'D', '2': 's', '4': 'p', '8': 'o'}
+    loc_dict = {'Rouge': 'lower right', 'GLUE': 'lower right'}
+    fontsize_dict = {'legend': 12, 'label': 16, 'ticks': 16}
+    figsize = (5, 4)
+    fig = {}
+    ax_dict_1 = {}
+    for df_name in df_history:
+        df_name_list = df_name.split('_')
+        method, batch_size, metric_name, stat = df_name_list[3], df_name_list[4], df_name_list[-2], df_name_list[-1]
+        mask = len(df_name_list) - 2 == 5 and stat == 'mean' and 'cola' in method
+        if 'cola-lowrank' not in method or batch_size != '8':
+            mask = False
+        mode = method.split('-')[-1]
+        if mask:
+            df_name_std = '_'.join([*df_name_list[:-1], 'std'])
+            fig_name = '_'.join([*df_name_list[:3], *df_name_list[4:-1]])
+            fig[fig_name] = plt.figure(fig_name, figsize=figsize)
+            if fig_name not in ax_dict_1:
+                ax_dict_1[fig_name] = fig[fig_name].add_subplot(111)
+            ax_1 = ax_dict_1[fig_name]
+            y = df_history[df_name].iloc[0].to_numpy()
+            y_err = df_history[df_name_std].iloc[0].to_numpy()
+            x = np.arange(len(y))
+            xlabel = 'Epoch'
+            pivot = mode
+            ylabel = metric_name
+            ax_1.plot(x, y, label=label_dict[pivot], color=color_dict[pivot],
+                      linestyle=linestyle_dict[pivot])
+            ax_1.fill_between(x, (y - y_err), (y + y_err), color=color_dict[pivot], alpha=.1)
+            ax_1.set_xlabel(xlabel, fontsize=fontsize_dict['label'])
+            ax_1.set_ylabel(ylabel, fontsize=fontsize_dict['label'])
+            ax_1.xaxis.set_tick_params(labelsize=fontsize_dict['ticks'])
+            ax_1.yaxis.set_tick_params(labelsize=fontsize_dict['ticks'])
+            ax_1.legend(loc=loc_dict[metric_name], fontsize=fontsize_dict['legend'])
+    for fig_name in fig:
+        fig[fig_name] = plt.figure(fig_name)
+        ax_dict_1[fig_name].grid(linestyle='--', linewidth='0.5')
+        dir_name = 'step'
         dir_path = os.path.join(vis_path, dir_name)
         fig_path = os.path.join(dir_path, '{}.{}'.format(fig_name, save_format))
         makedir_exist_ok(dir_path)
