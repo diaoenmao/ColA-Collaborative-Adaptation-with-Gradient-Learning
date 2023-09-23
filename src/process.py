@@ -15,15 +15,16 @@ vis_path = os.path.join('output', 'vis', '{}'.format(save_format))
 num_experiments = 1
 exp = [str(x) for x in list(range(num_experiments))]
 dpi = 300
-matplotlib.rcParams['font.sans-serif'] = 'Arial'
-matplotlib.rcParams['font.family'] = 'sans-serif'
+# matplotlib.rcParams['font.sans-serif'] = 'Arial'
+# matplotlib.rcParams['font.family'] = 'sans-serif'
 matplotlib.rcParams['font.weight'] = 'bold'
 matplotlib.rcParams['axes.labelweight'] = 'bold'
 matplotlib.rcParams['axes.titleweight'] = 'bold'
 matplotlib.rcParams['axes.linewidth'] = 1.5
 matplotlib.rcParams['xtick.labelsize'] = 'large'
 matplotlib.rcParams['ytick.labelsize'] = 'large'
-
+matplotlib.rcParams["font.family"] = "Times New Roman"
+matplotlib.rcParams["font.serif"] = "Times New Roman"
 
 def make_controls(control_name):
     control_names = []
@@ -43,7 +44,7 @@ def make_all_controls(mode, task_name):
         model_names = ['gpt2']
     elif task_name == 'sc':
         data_names = ['glue-cola', 'glue-mnli', 'glue-mrpc', 'glue-qnli', 'glue-qqp', 'glue-rte', 'glue-sst2',
-                      'glue-stsb', 'glue-wnli']
+                      'glue-stsb']
         model_names = ['roberta-base']
     else:
         raise ValueError('Not valid task name')
@@ -249,7 +250,7 @@ def make_vis_method(df_history):
 
 def make_vis_step(df_history):
     mode_name = ['1', '2', '4', '8']
-    label_dict = {'1': '$B=1$', '2': '$B=1$', '4': '$B=4$', '8': '$B=8$'}
+    label_dict = {'1': '$I=1$', '2': '$I=1$', '4': '$I=4$', '8': '$I=8$'}
     color_dict = {'1': 'black', '2': 'red', '4': 'orange', '8': 'gold'}
     linestyle_dict = {'1': '-', '2': '--', '4': ':', '8': '-'}
     marker_dict = {'1': 'D', '2': 's', '4': 'p', '8': 'o'}

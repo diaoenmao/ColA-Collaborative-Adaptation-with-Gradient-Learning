@@ -66,8 +66,7 @@ def main():
         control_name = [[data_names, model_names, [task_name], ['full'], batch_size]]
         controls = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode, control_name)
     elif mode == 'peft':
-        # ft_name = ['lora', 'adalora', 'ia3', 'promptune', 'prefixtune', 'ptune']
-        ft_name = ['prefixtune']
+        ft_name = ['lora', 'adalora', 'ia3', 'promptune', 'prefixtune', 'ptune']
         batch_size = ['32']
         script_name = [['{}_peft.py'.format(run)]]
         control_name = [[data_names, model_names, [task_name], ft_name, batch_size]]
