@@ -12,11 +12,9 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 result_path = os.path.join('output', 'result')
 save_format = 'png'
 vis_path = os.path.join('output', 'vis', '{}'.format(save_format))
-num_experiments = 1
+num_experiments = 3
 exp = [str(x) for x in list(range(num_experiments))]
 dpi = 300
-# matplotlib.rcParams['font.sans-serif'] = 'Arial'
-# matplotlib.rcParams['font.family'] = 'sans-serif'
 matplotlib.rcParams['font.weight'] = 'bold'
 matplotlib.rcParams['axes.labelweight'] = 'bold'
 matplotlib.rcParams['axes.titleweight'] = 'bold'
@@ -125,10 +123,10 @@ def gather_result(control, model_tag, processed_result):
                         = base_result['logger_state_dict'][split]['history'][metric_name]
         else:
             print('Missing {}'.format(base_result_path_i))
+            pass
     else:
         gather_result([control[0]] + control[2:], model_tag, processed_result[control[1]])
     return
-
 
 def summarize_result(key, value):
     if key in ['mean', 'history']:

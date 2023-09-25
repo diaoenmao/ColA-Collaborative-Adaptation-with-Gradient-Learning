@@ -81,7 +81,6 @@ def runExperiment():
             shutil.copy(os.path.join(checkpoint_path, 'model'), os.path.join(best_path, 'model'))
             shutil.copytree(os.path.join(checkpoint_path, 'adapter'), os.path.join(best_path, 'adapter'),
                             dirs_exist_ok=True)
-        logger.save(True)
         logger.reset()
     return
 
@@ -147,6 +146,7 @@ def test(data_loader, model, metric, logger):
         info = {'info': ['Model: {}'.format(cfg['model_tag']), 'Test Epoch: {}({:.0f}%)'.format(cfg['epoch'], 100.)]}
         logger.append(info, 'test')
         print(logger.write('test', metric.metric_name['test']))
+        logger.save(True)
     return
 
 

@@ -39,7 +39,8 @@ class LowRank(nn.Module):
         output = {}
         x = input['data']
         output['target'] = self.forward(x)
-        output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='sum')
+        # output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='sum')
+        output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='mean')
         output['loss'].backward()
         optimizer.step()
         optimizer.zero_grad()
@@ -74,7 +75,8 @@ class Linear(nn.Module):
         output = {}
         x = input['data']
         output['target'] = self.forward(x)
-        output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='sum')
+        # output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='sum')
+        output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='mean')
         output['loss'].backward()
         optimizer.step()
         optimizer.zero_grad()
@@ -110,8 +112,7 @@ class MLP(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self):
-        for n, p in self.named_parameters():
-            nn.init.zeros_(p)
+        nn.init.zeros_(self.linear.weight)
         return
 
     def fit(self, input, optimizer, scheduler):
@@ -120,7 +121,8 @@ class MLP(nn.Module):
         output = {}
         x = input['data']
         output['target'] = self.forward(x)
-        output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='sum')
+        # output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='sum')
+        output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='mean')
         output['loss'].backward()
         optimizer.step()
         optimizer.zero_grad()

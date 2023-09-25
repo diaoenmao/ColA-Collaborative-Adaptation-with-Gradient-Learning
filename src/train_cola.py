@@ -105,6 +105,21 @@ def runExperiment():
     return
 
 
+def sum_loss(logits, labels):
+    num_labels = logits.size(-1)
+    if labels is not None:
+        if num_labels == 1:
+            #  We are doing regression
+            loss_fct = torch.nn.MSELoss(reduction='sum')
+            loss = loss_fct(logits.view(-1), labels.view(-1))
+        else:
+            loss_fct = torch.nn.CrossEntropyLoss(reduction='sum')
+            loss = loss_fct(logits.view(-1, num_labels), labels.view(-1))
+    else:
+        loss = 0
+    return loss
+
+
 def train(data_loader, model, cola_base, optimizer, scheduler, metric, logger):
     model.train(True)
     start_time = time.time()
@@ -121,7 +136,8 @@ def train(data_loader, model, cola_base, optimizer, scheduler, metric, logger):
         output = model(**input)
         input_ = {'target': input['labels']}
         output_ = {'target': output['logits'], 'loss': output['loss']}
-        output['loss'].backward()
+        loss = sum_loss(output['logits'], input['labels'])
+        loss.backward()
         model.zero_grad()
         input_i, output_target_i = model.flush()
         for k in input_i:
@@ -181,6 +197,7 @@ def test(data_loader, model, metric, logger):
         info = {'info': ['Model: {}'.format(cfg['model_tag']), 'Test Epoch: {}({:.0f}%)'.format(cfg['epoch'], 100.)]}
         logger.append(info, 'test')
         print(logger.write('test', metric.metric_name['test']), flush=True)
+        logger.save(True)
     return
 
 

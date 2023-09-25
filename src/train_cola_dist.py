@@ -197,6 +197,7 @@ def test(data_loader, model, cola_base, metric, logger):
         info = {'info': ['Model: {}'.format(cfg['model_tag']), 'Test Epoch: {}({:.0f}%)'.format(cfg['epoch'], 100.)]}
         logger.append(info, 'test')
         print(logger.write('test', metric.metric_name['test']))
+        logger.save(True)
     return
 
 
