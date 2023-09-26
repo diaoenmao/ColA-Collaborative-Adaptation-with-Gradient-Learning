@@ -346,7 +346,7 @@ def process_dataset(dataset, tokenizer):
             load_from_cache_file=False,
             desc="Running tokenizer on dataset",
         )
-        cfg['max_new_tokens'] = 10
+        cfg['max_new_tokens'] = max_length
     elif cfg['data_name'] == 'samsum':
         '''
         {'id': '13818513', 'summary': 'Amanda baked cookies and will bring Jerry some tomorrow.', 
@@ -380,7 +380,7 @@ def process_dataset(dataset, tokenizer):
             load_from_cache_file=False,
             desc="Running tokenizer on dataset",
         )
-        cfg['max_new_tokens'] = 10
+        cfg['max_new_tokens'] = max_length
     elif cfg['data_name'] == 'e2enlg':
         '''
         {'human_reference': 'The Vaults pub near Café Adriatic has a 5 star rating.  Prices start at £30.',
@@ -414,7 +414,7 @@ def process_dataset(dataset, tokenizer):
             load_from_cache_file=False,
             desc="Running tokenizer on dataset",
         )
-        cfg['max_new_tokens'] = 10
+        cfg['max_new_tokens'] = max_length
     elif cfg['data_name'] == 'webnlg':
         '''
         {'2017_test_category': '',
@@ -476,7 +476,7 @@ def process_dataset(dataset, tokenizer):
             load_from_cache_file=False,
             desc="Running tokenizer on dataset",
         )
-        cfg['max_new_tokens'] = 10
+        cfg['max_new_tokens'] = max_length
     elif cfg['data_name'] == 'dart':
         '''
         {'annotations': {'source': ['WikiTableQuestions_mturk'],
@@ -519,7 +519,7 @@ def process_dataset(dataset, tokenizer):
             load_from_cache_file=False,
             desc="Running tokenizer on dataset",
         )
-        cfg['max_new_tokens'] = 10
+        cfg['max_new_tokens'] = max_length
     else:
         raise ValueError('Not valid data name')
     cfg['data_size'] = {k: len(processed_dataset[k]) for k in processed_dataset}

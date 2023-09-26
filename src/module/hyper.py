@@ -21,7 +21,7 @@ def process_control():
     cfg[model_name]['shuffle'] = {'train': True, 'test': False}
     cfg[model_name]['optimizer_name'] = 'AdamW'
     if cfg['ft_name'] == 'full':
-        cfg[model_name]['lr'] = 5e-5
+        cfg[model_name]['lr'] = 5e-6
     else:
         cfg[model_name]['lr'] = 3e-4
     cfg[model_name]['momentum'] = 0.9

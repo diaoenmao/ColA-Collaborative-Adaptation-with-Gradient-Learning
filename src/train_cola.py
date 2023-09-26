@@ -113,6 +113,9 @@ def sum_loss(logits, labels):
             loss_fct = torch.nn.MSELoss(reduction='sum')
             loss = loss_fct(logits.view(-1), labels.view(-1))
         else:
+            if cfg['task_name'] == 'clm':
+                logits = logits[..., :-1, :].contiguous()
+                labels = labels[..., 1:].contiguous()
             loss_fct = torch.nn.CrossEntropyLoss(reduction='sum')
             loss = loss_fct(logits.view(-1, num_labels), labels.view(-1))
     else:
