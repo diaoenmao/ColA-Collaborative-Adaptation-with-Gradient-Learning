@@ -296,6 +296,7 @@ TRANSFORMERS_MODELS_TO_COLA_TARGET_MODULES_MAPPING = {
     "gpt_neox": ["query_key_value"],
     "gpt_neo": ["q_proj", "v_proj"],
     "bert": ["query", "value"],
+    # "roberta": ["query", "value"],
     "roberta": ["query", "value", "classifier.dense", "classifier.out_proj"],
     "xlm-roberta": ["query", "value"],
     "electra": ["query", "value"],

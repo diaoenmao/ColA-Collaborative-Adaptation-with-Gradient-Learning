@@ -57,11 +57,15 @@ def runExperiment():
         model.load_cola_base(cola_base)
         optimizer = {}
         scheduler = {}
+        num_params = 0
         for k in cola_base:
+            for n, p in cola_base[k].named_parameters():
+                num_params += p.numel()
             cola_base[k] = cola_base[k].to(cfg['device'])
             cola_param_k = cola_base[k].parameters()
             optimizer[k] = make_optimizer(cola_param_k, 'cola')
             scheduler[k] = make_scheduler(optimizer[k], 'cola')
+        print("Number of ColA trainable parameters: {}".format(num_params))
     else:
         cfg['epoch'] = result['epoch']
         model = PeftModel.from_pretrained(model, os.path.join(checkpoint_path, 'adapter'), is_trainable=True)
@@ -74,13 +78,17 @@ def runExperiment():
         model.load_cola_base(cola_base)
         optimizer = {}
         scheduler = {}
+        num_params = 0
         for k in cola_base:
+            for n, p in cola_base[k].named_parameters():
+                num_params += p.numel()
             cola_base[k] = cola_base[k].to(cfg['device'])
             cola_param_k = cola_base[k].parameters()
             optimizer[k] = make_optimizer(cola_param_k, 'cola')
             scheduler[k] = make_scheduler(optimizer[k], 'cola')
             optimizer[k].load_state_dict(result['optimizer_state_dict'][k])
             scheduler[k].load_state_dict(result['scheduler_state_dict'][k])
+        print("Number of ColA trainable parameters: {}".format(num_params))
         metric.load_state_dict(result['metric_state_dict'])
         logger.load_state_dict(result['logger_state_dict'])
     for epoch in range(cfg['epoch'], cfg[cfg['model_name']]['num_epochs'] + 1):
@@ -100,7 +108,6 @@ def runExperiment():
             shutil.copy(os.path.join(checkpoint_path, 'model'), os.path.join(best_path, 'model'))
             shutil.copytree(os.path.join(checkpoint_path, 'adapter'), os.path.join(best_path, 'adapter'),
                             dirs_exist_ok=True)
-        logger.save(True)
         logger.reset()
     return
 

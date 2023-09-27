@@ -39,7 +39,6 @@ class LowRank(nn.Module):
         output = {}
         x = input['data']
         output['target'] = self.forward(x)
-        # output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='sum')
         output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='mean')
         output['loss'].backward()
         optimizer.step()
@@ -58,11 +57,11 @@ class LowRank(nn.Module):
 
 
 class Linear(nn.Module):
-    def __init__(self, input_size, output_size):
+    def __init__(self, input_size, output_size, bias=False):
         super().__init__()
         self.input_size = input_size
         self.output_size = output_size
-        self.linear = nn.Linear(input_size, output_size, bias=False)
+        self.linear = nn.Linear(input_size, output_size, bias=bias)
         self.reset_parameters()
 
     def reset_parameters(self):
@@ -75,7 +74,6 @@ class Linear(nn.Module):
         output = {}
         x = input['data']
         output['target'] = self.forward(x)
-        # output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='sum')
         output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='mean')
         output['loss'].backward()
         optimizer.step()
@@ -121,7 +119,6 @@ class MLP(nn.Module):
         output = {}
         x = input['data']
         output['target'] = self.forward(x)
-        # output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='sum')
         output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='mean')
         output['loss'].backward()
         optimizer.step()
@@ -147,6 +144,9 @@ class Router(nn.Module):
         self.unique_split = None
         self.indices = None
         self.sorted_indices = None
+        if self.dist_mode == 'col':
+            for i in range(len(self.model)):
+                self.model[i].col_weight = nn.Parameter(torch.ones(len(self.model)).log()).to(cfg['device'])
 
     def make_split(self, split):
         self.split = split
@@ -165,12 +165,30 @@ class Router(nn.Module):
             for i in range(len(self.unique_split)):
                 data_i, target_i = input['data'][self.indices[i]], input['target'][self.indices[i]]
                 input_i = {'data': data_i, 'target': target_i}
-                self.model[self.unique_split[i]].fit(input_i, optimizer[i], scheduler[i])
+                self.model[self.unique_split[i]].fit(input_i, optimizer[self.unique_split[i]],
+                                                     scheduler[self.unique_split[i]])
         elif self.dist_mode == 'col':
             for i in range(len(self.unique_split)):
                 data_i, target_i = input['data'][self.indices[i]], input['target'][self.indices[i]]
                 input_i = {'data': data_i, 'target': target_i}
-                self.model[self.unique_split[i]].fit(input_i, optimizer[i], scheduler[i])
+                input_i = to_device(input_i, cfg['device'])
+                output_i = {'target': []}
+                for j in range(len(self.model)):
+                    if j != self.unique_split[i]:
+                        with torch.no_grad():
+                            output_target_i_j = self.model[j].forward(input_i['data']).detach()
+                    else:
+                        self.model[j].train(True)
+                        output_target_i_j = self.model[j].forward(input_i['data'])
+                    output_i['target'].append(output_target_i_j)
+                output_i['target'] = torch.stack(output_i['target'], dim=-1)
+                output_i['target'] = output_i['target'] * self.model[self.unique_split[i]].col_weight.softmax(dim=-1)
+                output_i['target'] = output_i['target'].sum(dim=-1)
+                output_i['loss'] = 0.5 * F.mse_loss(output_i['target'], input_i['target'], reduction='mean')
+                output_i['loss'].backward()
+                optimizer[self.unique_split[i]].step()
+                optimizer[self.unique_split[i]].zero_grad()
+                scheduler[self.unique_split[i]].step()
         else:
             raise ValueError('Not valid dist mode')
         return
@@ -202,7 +220,9 @@ class Router(nn.Module):
                     if j != self.unique_split[i]:
                         x_i_j = x_i_j.detach()
                     x_i_.append(x_i_j)
-                x_i = torch.stack(x_i_, dim=0).mean(dim=0)
+                x_i = torch.stack(x_i_, dim=-1)
+                x_i = x_i * self.model[self.unique_split[i]].col_weight.softmax(dim=-1)
+                x_i = x_i.sum(dim=-1)
                 x_.append(x_i)
             x_ = torch.cat(x_, dim=0)
             x = x_[self.sorted_indices]
@@ -211,21 +231,30 @@ class Router(nn.Module):
         return x
 
 
-def make_cola_model(model_name, input_size, output_size):
+def make_cola_model(name, model_name, input_size, output_size):
     if model_name == 'lowrank':
         hidden_size = cfg['cola']['lowrank']['hidden_size']
         dropout = cfg['cola']['lowrank']['dropout']
-        model = LowRank(input_size, hidden_size, output_size, dropout)
+        if 'classifier' in name:
+            model = Linear(input_size, output_size, True)
+        else:
+            model = LowRank(input_size, hidden_size, output_size, dropout)
         model.apply(init_param)
     elif model_name == 'linear':
-        model = Linear(input_size, output_size)
+        if 'classifier' in name:
+            model = Linear(input_size, output_size, True)
+        else:
+            model = Linear(input_size, output_size)
         model.apply(init_param)
     elif model_name == 'mlp':
         hidden_size = cfg['cola']['mlp']['hidden_size']
         scale_factor = cfg['cola']['mlp']['scale_factor']
         num_layers = cfg['cola']['mlp']['num_layers']
         activation = cfg['cola']['mlp']['activation']
-        model = MLP(input_size, hidden_size, scale_factor, num_layers, activation, output_size)
+        if 'classifier' in name:
+            model = Linear(input_size, output_size, True)
+        else:
+            model = MLP(input_size, hidden_size, scale_factor, num_layers, activation, output_size)
         model.apply(init_param)
     else:
         raise ValueError('Not valid model name')
@@ -255,9 +284,9 @@ def make_cola(model, model_name, dist_mode='joint'):
             if dist_mode in ['alone', 'col']:
                 cola[name] = []
                 for i in range(cfg['num_split']):
-                    cola_model_i = make_cola_model(cfg['cola']['model_name'][i], input_size, output_size)
+                    cola_model_i = make_cola_model(name, cfg['cola']['model_name'][i], input_size, output_size)
                     cola[name].append(cola_model_i)
                 cola[name] = Router(cola[name], dist_mode)
             else:
-                cola[name] = make_cola_model(model_name, input_size, output_size)
+                cola[name] = make_cola_model(name, model_name, input_size, output_size)
     return cola

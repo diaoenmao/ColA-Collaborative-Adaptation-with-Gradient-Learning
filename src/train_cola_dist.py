@@ -106,7 +106,6 @@ def runExperiment():
             shutil.copy(os.path.join(checkpoint_path, 'model'), os.path.join(best_path, 'model'))
             shutil.copytree(os.path.join(checkpoint_path, 'adapter'), os.path.join(best_path, 'adapter'),
                             dirs_exist_ok=True)
-        logger.save(True)
         logger.reset()
     return
 

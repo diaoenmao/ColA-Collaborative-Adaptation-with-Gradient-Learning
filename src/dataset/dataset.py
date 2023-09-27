@@ -274,7 +274,8 @@ def process_dataset(dataset, tokenizer):
             model_inputs["labels"] = labels["input_ids"]
             return model_inputs
 
-        cfg['task_value'] = list(set(dataset['train']['category']))
+        cfg['task_value'] = ['classification', 'information_extraction', 'summarization', 'brainstorming',
+                             'creative_writing', 'open_qa', 'closed_qa', 'general_qa']
         cfg['task_label'] = {category: idx for idx, category in enumerate(cfg['task_value'])}
         cfg['num_split'] = len(cfg['task_label'])
 

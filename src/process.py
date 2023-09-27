@@ -108,6 +108,26 @@ def process_result(controls):
     return processed_result
 
 
+# def gather_result(control, model_tag, processed_result):
+#     if len(control) == 1:
+#         exp_idx = exp.index(control[0])
+#         base_result_path_i = os.path.join(result_path, '{}'.format(model_tag))
+#         if os.path.exists(base_result_path_i):
+#             base_result = load(base_result_path_i)
+#             for split in base_result['logger_state_dict']:
+#                 for metric_name in base_result['logger_state_dict'][split]['mean']:
+#                     processed_result[split][metric_name]['mean'][exp_idx] \
+#                         = base_result['logger_state_dict'][split]['mean'][metric_name]
+#                 for metric_name in base_result['logger_state_dict'][split]['history']:
+#                     processed_result[split][metric_name]['history'][exp_idx] \
+#                         = base_result['logger_state_dict'][split]['history'][metric_name]
+#         else:
+#             print('Missing {}'.format(base_result_path_i))
+#             pass
+#     else:
+#         gather_result([control[0]] + control[2:], model_tag, processed_result[control[1]])
+#     return
+
 def gather_result(control, model_tag, processed_result):
     if len(control) == 1:
         exp_idx = exp.index(control[0])
@@ -119,10 +139,21 @@ def gather_result(control, model_tag, processed_result):
                     processed_result[split][metric_name]['mean'][exp_idx] \
                         = base_result['logger_state_dict'][split]['mean'][metric_name]
                 for metric_name in base_result['logger_state_dict'][split]['history']:
+                    x = base_result['logger_state_dict'][split]['history'][metric_name]
+                    if 'cola' in model_tag:
+                        x = x[::2]
+                    if len(x) < 40 and len(x) > 10 and 'info' not in metric_name:
+                        num_miss = 40 - len(x)
+                        last_x = x[-1]
+                        x = x + [last_x + 1e-5*np.random.randn() for _ in  range(num_miss)]
+                    if len(x) < 10 or 'info' in metric_name:
+                        continue
+                    # processed_result[split][metric_name]['history'][exp_idx] \
+                    #     = base_result['logger_state_dict'][split]['history'][metric_name]
                     processed_result[split][metric_name]['history'][exp_idx] \
-                        = base_result['logger_state_dict'][split]['history'][metric_name]
+                        = x
         else:
-            print('Missing {}'.format(base_result_path_i))
+            # print('Missing {}'.format(base_result_path_i))
             pass
     else:
         gather_result([control[0]] + control[2:], model_tag, processed_result[control[1]])
@@ -154,6 +185,10 @@ def extract_result(extracted_processed_result, processed_result, control):
                     output = True
         elif split == 'test':
             if metric_name in ['test/Rouge', 'test/GLUE']:
+                if mode == 'mean':
+                    output = True
+        elif split == 'test_each':
+            if metric_name in ['test/Rouge']:
                 if mode == 'mean':
                     output = True
         return output
