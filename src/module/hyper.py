@@ -18,7 +18,8 @@ def process_control():
         cfg['dist_mode'] = 'joint'
     cfg['split_metric'] = False
     model_name = cfg['model_name']
-    cfg[model_name]['shuffle'] = {'train': True, 'test': False}
+    # cfg[model_name]['shuffle'] = {'train': True, 'test': False}
+    cfg[model_name]['shuffle'] = {'train': False, 'test': False}
     cfg[model_name]['optimizer_name'] = 'AdamW'
     if cfg['ft_name'] == 'full':
         cfg[model_name]['lr'] = 5e-6
@@ -40,7 +41,8 @@ def process_control():
         cfg['cola']['linear'] = {}
         cfg['cola']['mlp'] = {'hidden_size': 128, 'scale_factor': 2, 'num_layers': 2, 'activation': 'relu'}
         cfg['cola']['model_name'] = ft_name_list[1]
-        cfg['cola']['shuffle'] = {'train': True, 'test': False}
+        # cfg['cola']['shuffle'] = {'train': True, 'test': False}
+        cfg['cola']['shuffle'] = {'train': False, 'test': False}
         cfg['cola']['optimizer_name'] = 'AdamW'
         cfg['cola']['lr'] = 3e-4
         cfg['cola']['momentum'] = 0.9

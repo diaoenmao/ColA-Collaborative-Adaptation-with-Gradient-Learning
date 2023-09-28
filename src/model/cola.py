@@ -30,6 +30,7 @@ class LowRank(nn.Module):
 
     def reset_parameters(self):
         nn.init.kaiming_uniform_(self.cola_A.weight, a=math.sqrt(5))
+        # torch.nn.init.constant_(self.cola_A.weight, 1)
         nn.init.zeros_(self.cola_B.weight)
         return
 
@@ -39,11 +40,13 @@ class LowRank(nn.Module):
         output = {}
         x = input['data']
         output['target'] = self.forward(x)
-        output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='mean')
+        output['loss'] = F.mse_loss(output['target'], input['target'], reduction='mean')
         output['loss'].backward()
+        for n, p in self.named_parameters():
+            print(n, p.size(), p.grad.abs().sum().item())
         optimizer.step()
-        optimizer.zero_grad()
         scheduler.step()
+        optimizer.zero_grad()
         return output
 
     def make_delta_weight(self):
@@ -74,11 +77,13 @@ class Linear(nn.Module):
         output = {}
         x = input['data']
         output['target'] = self.forward(x)
-        output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='mean')
+        output['loss'] = F.mse_loss(output['target'], input['target'], reduction='mean')
         output['loss'].backward()
+        for n, p in self.named_parameters():
+            print(n, p.size(), p.grad.abs().sum().item())
         optimizer.step()
-        optimizer.zero_grad()
         scheduler.step()
+        optimizer.zero_grad()
         return output
 
     def make_delta_weight(self):
@@ -122,8 +127,8 @@ class MLP(nn.Module):
         output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='mean')
         output['loss'].backward()
         optimizer.step()
-        optimizer.zero_grad()
         scheduler.step()
+        optimizer.zero_grad()
         return output
 
     def make_delta_weight(self):
@@ -144,9 +149,6 @@ class Router(nn.Module):
         self.unique_split = None
         self.indices = None
         self.sorted_indices = None
-        if self.dist_mode == 'col':
-            for i in range(len(self.model)):
-                self.model[i].col_weight = nn.Parameter(torch.ones(len(self.model)).log()).to(cfg['device'])
 
     def make_split(self, split):
         self.split = split
@@ -181,14 +183,12 @@ class Router(nn.Module):
                         self.model[j].train(True)
                         output_target_i_j = self.model[j].forward(input_i['data'])
                     output_i['target'].append(output_target_i_j)
-                output_i['target'] = torch.stack(output_i['target'], dim=-1)
-                output_i['target'] = output_i['target'] * self.model[self.unique_split[i]].col_weight.softmax(dim=-1)
-                output_i['target'] = output_i['target'].sum(dim=-1)
+                output_i['target'] = torch.stack(output_i['target'], dim=-1).mean(dim=-1)
                 output_i['loss'] = 0.5 * F.mse_loss(output_i['target'], input_i['target'], reduction='mean')
                 output_i['loss'].backward()
                 optimizer[self.unique_split[i]].step()
-                optimizer[self.unique_split[i]].zero_grad()
                 scheduler[self.unique_split[i]].step()
+                optimizer[self.unique_split[i]].zero_grad()
         else:
             raise ValueError('Not valid dist mode')
         return
@@ -216,13 +216,12 @@ class Router(nn.Module):
                 x_i = x[self.indices[i]]
                 x_i_ = []
                 for j in range(len(self.model)):
-                    x_i_j = self.model[i](x_i)
+                    x_i_j = self.model[j](x_i)
                     if j != self.unique_split[i]:
-                        x_i_j = x_i_j.detach()
+                        with torch.no_grad():
+                            x_i_j = x_i_j.detach()
                     x_i_.append(x_i_j)
-                x_i = torch.stack(x_i_, dim=-1)
-                x_i = x_i * self.model[self.unique_split[i]].col_weight.softmax(dim=-1)
-                x_i = x_i.sum(dim=-1)
+                x_i = torch.stack(x_i_, dim=-1).mean(dim=-1)
                 x_.append(x_i)
             x_ = torch.cat(x_, dim=0)
             x = x_[self.sorted_indices]
