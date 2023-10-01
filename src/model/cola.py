@@ -30,7 +30,6 @@ class LowRank(nn.Module):
 
     def reset_parameters(self):
         nn.init.kaiming_uniform_(self.cola_A.weight, a=math.sqrt(5))
-        # torch.nn.init.constant_(self.cola_A.weight, 1)
         nn.init.zeros_(self.cola_B.weight)
         return
 
@@ -40,10 +39,8 @@ class LowRank(nn.Module):
         output = {}
         x = input['data']
         output['target'] = self.forward(x)
-        output['loss'] = F.mse_loss(output['target'], input['target'], reduction='mean')
+        output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='mean')
         output['loss'].backward()
-        for n, p in self.named_parameters():
-            print(n, p.size(), p.grad.abs().sum().item())
         optimizer.step()
         scheduler.step()
         optimizer.zero_grad()
@@ -77,10 +74,8 @@ class Linear(nn.Module):
         output = {}
         x = input['data']
         output['target'] = self.forward(x)
-        output['loss'] = F.mse_loss(output['target'], input['target'], reduction='mean')
+        output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='mean')
         output['loss'].backward()
-        for n, p in self.named_parameters():
-            print(n, p.size(), p.grad.abs().sum().item())
         optimizer.step()
         scheduler.step()
         optimizer.zero_grad()
@@ -173,22 +168,8 @@ class Router(nn.Module):
             for i in range(len(self.unique_split)):
                 data_i, target_i = input['data'][self.indices[i]], input['target'][self.indices[i]]
                 input_i = {'data': data_i, 'target': target_i}
-                input_i = to_device(input_i, cfg['device'])
-                output_i = {'target': []}
-                for j in range(len(self.model)):
-                    if j != self.unique_split[i]:
-                        with torch.no_grad():
-                            output_target_i_j = self.model[j].forward(input_i['data']).detach()
-                    else:
-                        self.model[j].train(True)
-                        output_target_i_j = self.model[j].forward(input_i['data'])
-                    output_i['target'].append(output_target_i_j)
-                output_i['target'] = torch.stack(output_i['target'], dim=-1).mean(dim=-1)
-                output_i['loss'] = 0.5 * F.mse_loss(output_i['target'], input_i['target'], reduction='mean')
-                output_i['loss'].backward()
-                optimizer[self.unique_split[i]].step()
-                scheduler[self.unique_split[i]].step()
-                optimizer[self.unique_split[i]].zero_grad()
+                self.model[self.unique_split[i]].fit(input_i, optimizer[self.unique_split[i]],
+                                                     scheduler[self.unique_split[i]])
         else:
             raise ValueError('Not valid dist mode')
         return
@@ -198,7 +179,7 @@ class Router(nn.Module):
         for i in range(len(self.model)):
             delta_weight_i = self.model[i].make_delta_weight()
             delta_weight.append(delta_weight_i)
-        delta_weight = torch.stack(delta_weight, dim=0).mean(dim=0)
+        delta_weight = torch.stack(delta_weight, dim=-1).mean(dim=-1)
         return delta_weight
 
     def forward(self, x):
@@ -217,9 +198,6 @@ class Router(nn.Module):
                 x_i_ = []
                 for j in range(len(self.model)):
                     x_i_j = self.model[j](x_i)
-                    if j != self.unique_split[i]:
-                        with torch.no_grad():
-                            x_i_j = x_i_j.detach()
                     x_i_.append(x_i_j)
                 x_i = torch.stack(x_i_, dim=-1).mean(dim=-1)
                 x_.append(x_i)
@@ -234,26 +212,17 @@ def make_cola_model(name, model_name, input_size, output_size):
     if model_name == 'lowrank':
         hidden_size = cfg['cola']['lowrank']['hidden_size']
         dropout = cfg['cola']['lowrank']['dropout']
-        if 'classifier' in name:
-            model = Linear(input_size, output_size, True)
-        else:
-            model = LowRank(input_size, hidden_size, output_size, dropout)
+        model = LowRank(input_size, hidden_size, output_size, dropout)
         model.apply(init_param)
     elif model_name == 'linear':
-        if 'classifier' in name:
-            model = Linear(input_size, output_size, True)
-        else:
-            model = Linear(input_size, output_size)
+        model = Linear(input_size, output_size)
         model.apply(init_param)
     elif model_name == 'mlp':
         hidden_size = cfg['cola']['mlp']['hidden_size']
         scale_factor = cfg['cola']['mlp']['scale_factor']
         num_layers = cfg['cola']['mlp']['num_layers']
         activation = cfg['cola']['mlp']['activation']
-        if 'classifier' in name:
-            model = Linear(input_size, output_size, True)
-        else:
-            model = MLP(input_size, hidden_size, scale_factor, num_layers, activation, output_size)
+        model = MLP(input_size, hidden_size, scale_factor, num_layers, activation, output_size)
         model.apply(init_param)
     else:
         raise ValueError('Not valid model name')

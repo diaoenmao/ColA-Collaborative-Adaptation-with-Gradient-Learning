@@ -18,8 +18,7 @@ def process_control():
         cfg['dist_mode'] = 'joint'
     cfg['split_metric'] = False
     model_name = cfg['model_name']
-    # cfg[model_name]['shuffle'] = {'train': True, 'test': False}
-    cfg[model_name]['shuffle'] = {'train': False, 'test': False}
+    cfg[model_name]['shuffle'] = {'train': True, 'test': False}
     cfg[model_name]['optimizer_name'] = 'AdamW'
     if cfg['ft_name'] == 'full':
         cfg[model_name]['lr'] = 5e-6
@@ -41,8 +40,7 @@ def process_control():
         cfg['cola']['linear'] = {}
         cfg['cola']['mlp'] = {'hidden_size': 128, 'scale_factor': 2, 'num_layers': 2, 'activation': 'relu'}
         cfg['cola']['model_name'] = ft_name_list[1]
-        # cfg['cola']['shuffle'] = {'train': True, 'test': False}
-        cfg['cola']['shuffle'] = {'train': False, 'test': False}
+        cfg['cola']['shuffle'] = {'train': True, 'test': False}
         cfg['cola']['optimizer_name'] = 'AdamW'
         cfg['cola']['lr'] = 3e-4
         cfg['cola']['momentum'] = 0.9
@@ -63,7 +61,7 @@ def make_data_name():
         cfg['data_name'] = data_name_list[0]
         cfg['subset_name'] = 'none'
     data_name_dict = {
-        # https: // huggingface.co / datasets / financial_phrasebank
+        # https://huggingface.co/datasets/financial_phrasebank
         'fpb': {'data_name': 'financial_phrasebank',
                 'subset_name_dict': {'sa': {'subset_name': 'sentences_allagree',
                                             'text_column': 'sentence',
@@ -100,7 +98,7 @@ def make_data_name():
                  'subset_name_dict': {'none': {'subset_name': None,
                                                'text_column': 'hardcode, complex structure',
                                                'label_column': 'hardcode, complex structure'}}},
-
+        # https://huggingface.co/datasets/glue
         'glue': {'data_name': 'glue',
                  'subset_name_dict': {'cola': {'subset_name': 'cola',
                                                'text_column': ['sentence'],
@@ -132,6 +130,7 @@ def make_data_name():
                                                'label_column': 'label'}
                                       }
                  },
+        # https://huggingface.co/datasets/databricks/databricks-dolly-15k
         'dolly': {'data_name': 'databricks/databricks-dolly-15k',
                   'subset_name_dict': {'15k': {'subset_name': '15k',
                                                'text_column': ['instruction', 'context'],

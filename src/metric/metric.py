@@ -17,19 +17,19 @@ def make_metric(metric_name, tokenizer):
         if cfg['data_name'] in ['dolly']:
             pivot = -float('inf')
             pivot_direction = 'up'
-            pivot_name = 'Rouge'
+            pivot_name = 'ROUGE'
             metric_name['train'].extend(['Perplexity'])
-            metric_name['test'].extend(['Rouge'])
+            metric_name['test'].extend(['ROUGE'])
         else:
             raise ValueError('Not valid data name')
     elif cfg['task_name'] == 's2s':
         if cfg['data_name'] in ['fpb', 'wikisql', 'samsum', 'e2enlg', 'webnlg', 'dart']:
             pivot = -float('inf')
             pivot_direction = 'up'
-            pivot_name = 'Rouge'
+            pivot_name = 'ROUGE'
             for k in metric_name:
                 metric_name[k].extend(['Accuracy'])
-            metric_name['test'].extend(['Rouge'])
+            metric_name['test'].extend(['ROUGE'])
         else:
             raise ValueError('Not valid data name')
     elif cfg['task_name'] == 'sc':
@@ -94,7 +94,7 @@ class GLUE:
         return glue
 
 
-class Rouge:
+class ROUGE:
     def __init__(self, tokenizer, split_metric):
         self.split_metric = split_metric
         if cfg['dist_mode'] in ['alone', 'col'] and self.split_metric:
@@ -160,8 +160,8 @@ class Metric:
                     metric[split][m] = {'mode': 'batch',
                                         'metric': (
                                             lambda input, output: recur(RMSE, output['target'], input['target']))}
-                elif m == 'Rouge':
-                    metric[split][m] = {'mode': 'full', 'metric': Rouge(tokenizer, cfg['split_metric'])}
+                elif m == 'ROUGE':
+                    metric[split][m] = {'mode': 'full', 'metric': ROUGE(tokenizer, cfg['split_metric'])}
                 elif m == 'GLUE':
                     metric[split][m] = {'mode': 'full', 'metric': GLUE(cfg['hf_subset_name'])}
                 else:

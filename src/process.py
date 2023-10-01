@@ -10,7 +10,7 @@ from collections import defaultdict
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 result_path = os.path.join('output', 'result')
-save_format = 'png'
+save_format = 'pdf'
 vis_path = os.path.join('output', 'vis', '{}'.format(save_format))
 num_experiments = 3
 exp = [str(x) for x in list(range(num_experiments))]
@@ -191,6 +191,10 @@ def extract_result(extracted_processed_result, processed_result, control):
             if metric_name in ['test/Rouge']:
                 if mode == 'mean':
                     output = True
+        elif split == 'test_merge':
+            if metric_name in ['test/Rouge']:
+                if mode == 'mean':
+                    output = True
         return output
 
     if 'summary' in processed_result:
@@ -199,7 +203,7 @@ def extract_result(extracted_processed_result, processed_result, control):
             return
         stats = ['mean', 'std']
         for stat in stats:
-            exp_name = '_'.join([control_name, metric_name.split('/')[1], stat])
+            exp_name = '_'.join([control_name, split, metric_name.split('/')[1], stat])
             extracted_processed_result[mode][exp_name] = processed_result['summary'][stat]
     else:
         for k, v in processed_result.items():
@@ -226,7 +230,7 @@ def make_df(processed_result, mode):
 
 def make_vis_method(df_history):
     mode_name = ['full', 'lora', 'adalora', 'ia3', 'promptune', 'ptune', 'cola']
-    label_dict = {'full': 'FT', 'lora': 'LoRA', 'adalora': 'AdaLorA', 'ia3': 'IA3', 'promptune': 'Promp Tuning',
+    label_dict = {'full': 'FT', 'lora': 'LoRA', 'adalora': 'AdaLoRA', 'ia3': 'IA3', 'promptune': 'Promp Tuning',
                   'prefixtune': 'Prefix Tuning', 'ptune': 'P-Tuning', 'cola': 'ColA (Low Rank)'}
     color_dict = {'full': 'black', 'lora': 'red', 'adalora': 'orange', 'ia3': 'green', 'promptune': 'blue',
                   'prefixtune': 'dodgerblue', 'ptune': 'lightblue', 'cola': 'gold'}
@@ -234,7 +238,7 @@ def make_vis_method(df_history):
                       'prefixtune': ':', 'ptune': '-.', 'cola': '-'}
     marker_dict = {'full': 'D', 'lora': 's', 'adalora': 'p', 'ia3': 'd', 'promptune': 'd',
                    'prefixtune': 'p', 'ptune': 's', 'cola': 'o'}
-    loc_dict = {'Rouge': 'lower right', 'GLUE': 'lower right'}
+    loc_dict = {'ROUGE': 'lower right', 'GLUE': 'lower right'}
     fontsize_dict = {'legend': 12, 'label': 16, 'ticks': 16}
     figsize = (5, 4)
     fig = {}
@@ -242,7 +246,7 @@ def make_vis_method(df_history):
     for df_name in df_history:
         df_name_list = df_name.split('_')
         mode, batch_size, metric_name, stat = df_name_list[3], df_name_list[4], df_name_list[-2], df_name_list[-1]
-        mask = len(df_name_list) - 2 == 5 and stat == 'mean'
+        mask = len(df_name_list) - 3 == 5 and stat == 'mean'
         if 'cola' in mode:
             if 'cola-lowrank-1' not in mode or batch_size != '32':
                 mask = False
@@ -259,6 +263,7 @@ def make_vis_method(df_history):
             x = np.arange(len(y))
             xlabel = 'Epoch'
             pivot = mode
+            metric_name = 'ROUGE' if metric_name == 'Rouge' else metric_name
             ylabel = metric_name
             ax_1.plot(x, y, label=label_dict[pivot], color=color_dict[pivot],
                       linestyle=linestyle_dict[pivot])
@@ -287,7 +292,7 @@ def make_vis_step(df_history):
     color_dict = {'1': 'black', '2': 'red', '4': 'orange', '8': 'gold'}
     linestyle_dict = {'1': '-', '2': '--', '4': ':', '8': '-'}
     marker_dict = {'1': 'D', '2': 's', '4': 'p', '8': 'o'}
-    loc_dict = {'Rouge': 'lower right', 'GLUE': 'lower right'}
+    loc_dict = {'ROUGE': 'lower right', 'GLUE': 'lower right'}
     fontsize_dict = {'legend': 12, 'label': 16, 'ticks': 16}
     figsize = (5, 4)
     fig = {}
@@ -295,7 +300,7 @@ def make_vis_step(df_history):
     for df_name in df_history:
         df_name_list = df_name.split('_')
         method, batch_size, metric_name, stat = df_name_list[3], df_name_list[4], df_name_list[-2], df_name_list[-1]
-        mask = len(df_name_list) - 2 == 5 and stat == 'mean' and 'cola' in method
+        mask = len(df_name_list) - 3 == 5 and stat == 'mean' and 'cola' in method
         if 'cola-lowrank' not in method or batch_size != '8':
             mask = False
         mode = method.split('-')[-1]
@@ -307,10 +312,12 @@ def make_vis_step(df_history):
                 ax_dict_1[fig_name] = fig[fig_name].add_subplot(111)
             ax_1 = ax_dict_1[fig_name]
             y = df_history[df_name].iloc[0].to_numpy()
-            y_err = df_history[df_name_std].iloc[0].to_numpy()
+            # y_err = df_history[df_name_std].iloc[0].to_numpy()
+            y_err = 0
             x = np.arange(len(y))
             xlabel = 'Epoch'
             pivot = mode
+            metric_name = 'ROUGE' if metric_name == 'Rouge' else metric_name
             ylabel = metric_name
             ax_1.plot(x, y, label=label_dict[pivot], color=color_dict[pivot],
                       linestyle=linestyle_dict[pivot])

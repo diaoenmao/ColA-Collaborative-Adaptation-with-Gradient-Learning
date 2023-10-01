@@ -97,11 +97,6 @@ def train(data_loader, model, optimizer, scheduler, metric, logger):
         input_ = {'target': input['labels']}
         output_ = {'target': output['logits'], 'loss': output['loss']}
         output['loss'].backward()
-        if i == 0:
-            for n, p in model.named_parameters():
-                if p.requires_grad and p.grad is not None:
-                    print(n, p.size(), p.grad.abs().sum().item())
-            exit()
         optimizer.step()
         scheduler.step()
         optimizer.zero_grad()

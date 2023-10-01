@@ -158,15 +158,11 @@ def train(data_loader, model, cola_base, optimizer, scheduler, metric, logger):
                 input_cola = torch.cat(input_buffer[k], dim=0)
                 output_target_cola = torch.cat(output_target_buffer[k], dim=0)
                 input_cola = {'data': input_cola, 'target': output_target_cola}
-                if i == 0:
-                    print(k, end =" ")
                 cola_base[k].fit(input_cola, optimizer[k], scheduler[k])
             input_buffer = defaultdict(list)
             output_target_buffer = defaultdict(list)
         evaluation = metric.evaluate('train', 'batch', input_, output_)
         logger.append(evaluation, 'train', n=input_size)
-        if i == 0:
-            exit()
         if i % int((len(data_loader) * cfg['log_interval']) + 1) == 0:
             batch_time = (time.time() - start_time) / (i + 1)
             epoch_finished_time = datetime.timedelta(seconds=round(batch_time * (len(data_loader) - i - 1)))
