@@ -9,8 +9,8 @@ from module.peft import get_peft_model, TaskType, LoraConfig, AdaLoraConfig, IA3
     PromptTuningConfig, PrefixTuningConfig, PromptEncoderConfig, ColaConfig
 
 
-def make_model(model_name, data_name):
-    model, tokenizer = make_hf_model(model_name, data_name)
+def make_model(model_name):
+    model, tokenizer = make_hf_model(model_name)
     return model, tokenizer
 
 
@@ -123,7 +123,8 @@ def make_scheduler(optimizer, tag):
     elif cfg[tag]['scheduler_name'] == 'CyclicLR':
         scheduler = optim.lr_scheduler.CyclicLR(optimizer, base_lr=cfg[tag]['lr'], max_lr=10 * cfg[tag]['lr'])
     elif cfg[tag]['scheduler_name'] == 'LinearAnnealingLR':
-        scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=0,
+        scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=int(
+            cfg['num_steps']['train'] * cfg[cfg['model_name']]['num_epochs'] * cfg[tag]['warmup_ratio']),
                                                     num_training_steps=cfg['num_steps']['train'] *
                                                                        cfg[cfg['model_name']]['num_epochs'])
     else:
@@ -144,13 +145,20 @@ def make_ft_model(model):
     return model
 
 
+def freeze_model(model):
+    if cfg['ft_name'] == 'cola':
+        for n, p in model.named_parameters():
+            p.requires_grad = False
+    return
+
+
 def make_config_clm():
     if cfg['ft_name'] == 'lora':
         peft_config = LoraConfig(
             task_type=TaskType.CAUSAL_LM,
-            r=64,
-            lora_alpha=32,
-            lora_dropout=0.01,
+            r=8,
+            lora_alpha=8,
+            lora_dropout=0.0,
             inference_mode=False,
         )
     elif cfg['ft_name'] == 'adalora':
@@ -160,8 +168,8 @@ def make_config_clm():
             beta1=0.85,
             beta2=0.85,
             deltaT=10,
-            lora_alpha=32,
-            lora_dropout=0.01,
+            lora_alpha=8,
+            lora_dropout=0.0,
             task_type=TaskType.CAUSAL_LM,
             inference_mode=False,
         )
@@ -191,9 +199,9 @@ def make_config_s2s():
     if cfg['ft_name'] == 'lora':
         peft_config = LoraConfig(
             task_type=TaskType.SEQ_2_SEQ_LM,
-            r=64,
-            lora_alpha=32,
-            lora_dropout=0.01,
+            r=8,
+            lora_alpha=8,
+            lora_dropout=0.0,
             inference_mode=False,
         )
     elif cfg['ft_name'] == 'adalora':
@@ -203,8 +211,8 @@ def make_config_s2s():
             beta1=0.85,
             beta2=0.85,
             deltaT=10,
-            lora_alpha=32,
-            lora_dropout=0.01,
+            lora_alpha=8,
+            lora_dropout=0.0,
             task_type=TaskType.SEQ_2_SEQ_LM,
             inference_mode=False,
         )
@@ -235,9 +243,9 @@ def make_config_sc():
     if cfg['ft_name'] == 'lora':
         peft_config = LoraConfig(
             task_type=TaskType.SEQ_CLS,
-            r=64,
-            lora_alpha=32,
-            lora_dropout=0.01,
+            r=8,
+            lora_alpha=8,
+            lora_dropout=0.0,
             inference_mode=False,
         )
     elif cfg['ft_name'] == 'adalora':
@@ -247,8 +255,8 @@ def make_config_sc():
             beta1=0.85,
             beta2=0.85,
             deltaT=10,
-            lora_alpha=32,
-            lora_dropout=0.01,
+            lora_alpha=8,
+            lora_dropout=0.0,
             task_type=TaskType.SEQ_CLS,
             inference_mode=False,
         )

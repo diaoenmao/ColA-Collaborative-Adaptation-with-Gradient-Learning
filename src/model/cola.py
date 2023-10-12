@@ -1,4 +1,5 @@
 import copy
+import math
 import numpy as np
 import torch
 import torch.nn as nn
@@ -25,19 +26,24 @@ class LowRank(nn.Module):
             self.dropout = nn.Identity()
         self.cola_A = nn.Linear(input_size, hidden_size, bias=False)
         self.cola_B = nn.Linear(hidden_size, output_size, bias=False)
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        nn.init.kaiming_uniform_(self.cola_A.weight, a=math.sqrt(5))
+        nn.init.zeros_(self.cola_B.weight)
+        return
 
     def fit(self, input, optimizer, scheduler):
         self.train(True)
         input = to_device(input, cfg['device'])
         output = {}
-        for _ in range(cfg['cola']['num_epochs']):
-            x = input['data']
-            output['target'] = self.forward(x)
-            output['loss'] = F.mse_loss(output['target'], input['target'])
-            output['loss'].backward()
-            optimizer.step()
-            optimizer.zero_grad()
+        x = input['data']
+        output['target'] = self.forward(x)
+        output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='mean')
+        output['loss'].backward()
+        optimizer.step()
         scheduler.step()
+        optimizer.zero_grad()
         return output
 
     def make_delta_weight(self):
@@ -51,24 +57,28 @@ class LowRank(nn.Module):
 
 
 class Linear(nn.Module):
-    def __init__(self, input_size, output_size):
+    def __init__(self, input_size, output_size, bias=False):
         super().__init__()
         self.input_size = input_size
         self.output_size = output_size
-        self.linear = nn.Linear(input_size, output_size, bias=False)
+        self.linear = nn.Linear(input_size, output_size, bias=bias)
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        nn.init.zeros_(self.linear.weight)
+        return
 
     def fit(self, input, optimizer, scheduler):
         self.train(True)
         input = to_device(input, cfg['device'])
         output = {}
-        for _ in range(cfg['cola']['num_epochs']):
-            x = input['data']
-            output['target'] = self.forward(x)
-            output['loss'] = F.mse_loss(output['target'], input['target'])
-            output['loss'].backward()
-            optimizer.step()
-            optimizer.zero_grad()
+        x = input['data']
+        output['target'] = self.forward(x)
+        output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='mean')
+        output['loss'].backward()
+        optimizer.step()
         scheduler.step()
+        optimizer.zero_grad()
         return output
 
     def make_delta_weight(self):
@@ -97,19 +107,23 @@ class MLP(nn.Module):
             hidden_size = int(hidden_size * scale_factor)
         self.blocks = nn.Sequential(*blocks)
         self.linear = nn.Linear(input_size, output_size)
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        nn.init.zeros_(self.linear.weight)
+        return
 
     def fit(self, input, optimizer, scheduler):
         self.train(True)
         input = to_device(input, cfg['device'])
         output = {}
-        for _ in range(cfg['cola']['num_epochs']):
-            x = input['data']
-            output['target'] = self.forward(x)
-            output['loss'] = F.mse_loss(output['target'], input['target'])
-            output['loss'].backward()
-            optimizer.step()
-            optimizer.zero_grad()
+        x = input['data']
+        output['target'] = self.forward(x)
+        output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='mean')
+        output['loss'].backward()
+        optimizer.step()
         scheduler.step()
+        optimizer.zero_grad()
         return output
 
     def make_delta_weight(self):
@@ -118,53 +132,6 @@ class MLP(nn.Module):
     def forward(self, x):
         x = self.blocks(x)
         x = self.linear(x)
-        return x
-
-
-class SK(nn.Module):
-    def __init__(self, input_size, output_size, model_name, max_iter=1):
-        super().__init__()
-        self.model_name = model_name
-        self.input_size = input_size
-        self.output_size = output_size
-        self.max_iter = max_iter
-        if model_name == 'skmlp':
-            model = MLPRegressor(max_iter=self.max_iter, warm_start=True)
-        else:
-            raise ValueError('Not valid model name')
-        self.model = model
-
-    def state_dict(self):
-        return self.model.get_params()
-
-    def load_state_dict(self, state_dict):
-        self.model.set_params(**state_dict)
-        return
-
-    def fit(self, input, optimizer=None, scheduler=None):
-        output = {}
-        data, target = input['data'].cpu().numpy(), input['target'].cpu().numpy()
-        data = data.reshape(-1, self.input_size)
-        target = target.reshape(-1, self.output_size)
-        self.model.fit(data, target)
-        output_target = self.model.predict(data)
-        output_target = output_target.reshape(input['target'].shape)
-        output['target'] = input['target'].new_tensor(output_target)
-        output['loss'] = F.mse_loss(output['target'], input['target'])
-        return output
-
-    def make_delta_weight(self):
-        raise NotImplementedError
-
-    def forward(self, input):
-        x = input.cpu().numpy()
-        x = x.reshape(-1, self.input_size)
-        try:
-            x = self.model.predict(x)
-            x = x.reshape((*input.shape[:-1], self.output_size))
-        except NotFittedError:
-            x = np.zeros((*input.shape[:-1], self.output_size))
-        x = input.new_tensor(x)
         return x
 
 
@@ -195,12 +162,14 @@ class Router(nn.Module):
             for i in range(len(self.unique_split)):
                 data_i, target_i = input['data'][self.indices[i]], input['target'][self.indices[i]]
                 input_i = {'data': data_i, 'target': target_i}
-                self.model[self.unique_split[i]].fit(input_i, optimizer[i], scheduler[i])
+                self.model[self.unique_split[i]].fit(input_i, optimizer[self.unique_split[i]],
+                                                     scheduler[self.unique_split[i]])
         elif self.dist_mode == 'col':
             for i in range(len(self.unique_split)):
                 data_i, target_i = input['data'][self.indices[i]], input['target'][self.indices[i]]
                 input_i = {'data': data_i, 'target': target_i}
-                self.model[self.unique_split[i]].fit(input_i, optimizer[i], scheduler[i])
+                self.model[self.unique_split[i]].fit(input_i, optimizer[self.unique_split[i]],
+                                                     scheduler[self.unique_split[i]])
         else:
             raise ValueError('Not valid dist mode')
         return
@@ -210,7 +179,7 @@ class Router(nn.Module):
         for i in range(len(self.model)):
             delta_weight_i = self.model[i].make_delta_weight()
             delta_weight.append(delta_weight_i)
-        delta_weight = torch.stack(delta_weight, dim=0).mean(dim=0)
+        delta_weight = torch.stack(delta_weight, dim=-1).mean(dim=-1)
         return delta_weight
 
     def forward(self, x):
@@ -228,11 +197,9 @@ class Router(nn.Module):
                 x_i = x[self.indices[i]]
                 x_i_ = []
                 for j in range(len(self.model)):
-                    x_i_j = self.model[i](x_i)
-                    if j != self.unique_split[i]:
-                        x_i_j = x_i_j.detach()
+                    x_i_j = self.model[j](x_i)
                     x_i_.append(x_i_j)
-                x_i = torch.stack(x_i_, dim=0).mean(dim=0)
+                x_i = torch.stack(x_i_, dim=-1).mean(dim=-1)
                 x_.append(x_i)
             x_ = torch.cat(x_, dim=0)
             x = x_[self.sorted_indices]
@@ -241,7 +208,7 @@ class Router(nn.Module):
         return x
 
 
-def make_cola_model(model_name, input_size, output_size):
+def make_cola_model(name, model_name, input_size, output_size):
     if model_name == 'lowrank':
         hidden_size = cfg['cola']['lowrank']['hidden_size']
         dropout = cfg['cola']['lowrank']['dropout']
@@ -257,8 +224,6 @@ def make_cola_model(model_name, input_size, output_size):
         activation = cfg['cola']['mlp']['activation']
         model = MLP(input_size, hidden_size, scale_factor, num_layers, activation, output_size)
         model.apply(init_param)
-    elif model_name in ['skmlp']:
-        model = SK(input_size, output_size, model_name, max_iter=cfg['cola']['num_epochs'])
     else:
         raise ValueError('Not valid model name')
     return model
@@ -281,15 +246,15 @@ def make_cola(model, model_name, dist_mode='joint'):
         cfg['cola']['model_name'] = make_model_name(model_name)
     cola = {}
     for name, module in model.base_model.named_modules():
-        if isinstance(module, ColaLayer):
+        if 'original_module' not in name and isinstance(module, ColaLayer):
             input_size = module.in_features
             output_size = module.out_features
             if dist_mode in ['alone', 'col']:
                 cola[name] = []
                 for i in range(cfg['num_split']):
-                    cola_model_i = make_cola_model(cfg['cola']['model_name'][i], input_size, output_size)
+                    cola_model_i = make_cola_model(name, cfg['cola']['model_name'][i], input_size, output_size)
                     cola[name].append(cola_model_i)
                 cola[name] = Router(cola[name], dist_mode)
             else:
-                cola[name] = make_cola_model(model_name, input_size, output_size)
+                cola[name] = make_cola_model(name, model_name, input_size, output_size)
     return cola

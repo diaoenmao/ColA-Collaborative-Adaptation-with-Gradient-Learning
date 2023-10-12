@@ -3,15 +3,10 @@ from config import cfg
 
 def process_control():
     make_data_name()
-    if cfg['data_name'] in ['glue']:
-        cfg['collate_mode'] = 'pad'  # sw: collate_mode for processing text?
-    else:
-        cfg['collate_mode'] = 'transformer'
+    cfg['collate_mode'] = 'transformer'
     cfg['bart-base'] = {'max_length': 128}
-    cfg['bloomz-560m'] = {'max_length': 64}
     cfg['roberta-base'] = {'max_length': 128}
     cfg['gpt2'] = {'max_length': 128}
-    cfg['t5-base'] = {'max_length': 128}
     cfg['model_name'] = cfg['control']['model_name']
     cfg['task_name'] = cfg['control']['task_name']
     cfg['batch_size'] = int(cfg['control']['batch_size'])
@@ -21,46 +16,40 @@ def process_control():
         cfg['dist_mode'] = cfg['control']['dist_mode']
     else:
         cfg['dist_mode'] = 'joint'
+    cfg['split_metric'] = False
     model_name = cfg['model_name']
     cfg[model_name]['shuffle'] = {'train': True, 'test': False}
     cfg[model_name]['optimizer_name'] = 'AdamW'
     if cfg['ft_name'] == 'full':
-        cfg[model_name]['lr'] = 5e-5
+        cfg[model_name]['lr'] = 5e-6
     else:
-        cfg[model_name]['lr'] = 2e-4
+        cfg[model_name]['lr'] = 3e-4
     cfg[model_name]['momentum'] = 0.9
     cfg[model_name]['betas'] = (0.9, 0.999)
     cfg[model_name]['weight_decay'] = 5e-4
     cfg[model_name]['nesterov'] = True
-    cfg[model_name]['num_epochs'] = 1
+    cfg[model_name]['num_epochs'] = 40
     cfg[model_name]['batch_size'] = {'train': cfg['batch_size'], 'test': cfg['batch_size']}
     cfg[model_name]['scheduler_name'] = 'LinearAnnealingLR'
+    cfg[model_name]['warmup_ratio'] = 0.05
     if ft_name_list[0] == 'cola' and len(ft_name_list) > 1:
         cfg['cola'] = {}
-        cfg['cola']['lowrank'] = {'hidden_size': 64, 'dropout': 0.0}
+        cfg['cola']['num_steps'] = int(ft_name_list[2])
+        hidden_size = 8
+        cfg['cola']['lowrank'] = {'hidden_size': hidden_size, 'dropout': 0.0}
         cfg['cola']['linear'] = {}
         cfg['cola']['mlp'] = {'hidden_size': 128, 'scale_factor': 2, 'num_layers': 2, 'activation': 'relu'}
-        cfg['cola']['skmlp'] = {}
         cfg['cola']['model_name'] = ft_name_list[1]
         cfg['cola']['shuffle'] = {'train': True, 'test': False}
         cfg['cola']['optimizer_name'] = 'AdamW'
-        cfg['cola']['lr'] = 1
+        cfg['cola']['lr'] = 3e-4
         cfg['cola']['momentum'] = 0.9
         cfg['cola']['betas'] = (0.9, 0.999)
         cfg['cola']['weight_decay'] = 5e-4
         cfg['cola']['nesterov'] = True
-        cfg['cola']['num_steps'] = int(ft_name_list[2])
-        cfg['cola']['num_epochs'] = int(ft_name_list[3])
-        cfg['cola']['batch_size'] = {'train': cfg['batch_size'], 'test': cfg['batch_size']}
         cfg['cola']['scheduler_name'] = 'LinearAnnealingLR'
-        cfg['cola_func'] = {}
-        cfg['cola_func']['optimizer_name'] = 'AdamW'
-        cfg['cola_func']['lr'] = 1e-3
-        cfg['cola_func']['momentum'] = 0.9
-        cfg['cola_func']['betas'] = (0.9, 0.999)
-        cfg['cola_func']['weight_decay'] = 5e-4
-        cfg['cola_func']['nesterov'] = True
-        cfg['cola_func']['scheduler_name'] = 'LinearAnnealingLR'
+        cfg['cola']['warmup_ratio'] = 0.05
+        cfg['cola']['batch_size'] = {'train': cfg['batch_size'], 'test': cfg['batch_size']}
     return
 
 
@@ -72,7 +61,7 @@ def make_data_name():
         cfg['data_name'] = data_name_list[0]
         cfg['subset_name'] = 'none'
     data_name_dict = {
-        # https: // huggingface.co / datasets / financial_phrasebank
+        # https://huggingface.co/datasets/financial_phrasebank
         'fpb': {'data_name': 'financial_phrasebank',
                 'subset_name_dict': {'sa': {'subset_name': 'sentences_allagree',
                                             'text_column': 'sentence',
@@ -109,7 +98,7 @@ def make_data_name():
                  'subset_name_dict': {'none': {'subset_name': None,
                                                'text_column': 'hardcode, complex structure',
                                                'label_column': 'hardcode, complex structure'}}},
-
+        # https://huggingface.co/datasets/glue
         'glue': {'data_name': 'glue',
                  'subset_name_dict': {'cola': {'subset_name': 'cola',
                                                'text_column': ['sentence'],
@@ -117,13 +106,6 @@ def make_data_name():
                                       'mnli': {'subset_name': 'mnli',
                                                'text_column': ['premise', 'hypothesis'],
                                                'label_column': 'label'},
-                                      # validation/test set = validation/test_matched + validation/test_mismatched; multi_classification
-                                      'mnlim': {'subset_name': 'mnli_matched',
-                                                'text_column': ['premise', 'hypothesis'],
-                                                'label_column': 'label'},
-                                      'mnlimm': {'subset_name': 'mnli_mismatched',
-                                                 'text_column': ['premise', 'hypothesis'],
-                                                 'label_column': 'label'},
                                       'mrpc': {'subset_name': 'mrpc',
                                                'text_column': ['sentence1', 'sentence2'],
                                                'label_column': 'label'},
@@ -148,6 +130,7 @@ def make_data_name():
                                                'label_column': 'label'}
                                       }
                  },
+        # https://huggingface.co/datasets/databricks/databricks-dolly-15k
         'dolly': {'data_name': 'databricks/databricks-dolly-15k',
                   'subset_name_dict': {'15k': {'subset_name': '15k',
                                                'text_column': ['instruction', 'context'],

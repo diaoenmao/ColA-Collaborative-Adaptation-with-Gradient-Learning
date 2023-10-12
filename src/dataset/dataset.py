@@ -98,7 +98,6 @@ def make_dataset(data_name, subset_name=None, verbose=True):
     # DART
     elif data_name in ['glue']:
         dataset_ = load_dataset(cfg['hf_data_name'], cfg['hf_subset_name'], cache_dir=root)
-        dataset_['test'] = dataset_['validation']
         if subset_name in ['mnli']:
             dataset_['test'] = concatenate_datasets([dataset_['validation_matched'], dataset_['validation_mismatched']])
             del dataset_['test_matched']
@@ -108,7 +107,6 @@ def make_dataset(data_name, subset_name=None, verbose=True):
         else:
             dataset_['test'] = dataset_['validation']
             del dataset_['validation']
-        del dataset_['validation']
     elif data_name in ['dolly']:
         dataset_ = load_dataset(cfg['hf_data_name'], cfg['hf_subset_name'], cache_dir=root)
         dataset_ = dataset_['train'].train_test_split(test_size=0.1, seed=cfg['seed'])
@@ -121,10 +119,6 @@ def make_dataset(data_name, subset_name=None, verbose=True):
 
 def input_collate(batch):
     return {key: [b[key] for b in batch] for key in batch[0]}
-
-
-def pad_collate(batch, tokenizer):
-    return tokenizer.pad(batch, padding="longest", return_tensors="pt")
 
 
 def make_data_collate(collate_mode, tokenizer=None):
@@ -211,12 +205,15 @@ def process_dataset(dataset, tokenizer):
             load_from_cache_file=False,
             desc="Running tokenizer on dataset",
         )
-        cfg['max_new_tokens'] = 10
     elif cfg['data_name'] == 'glue':
+        max_length = cfg[cfg['model_name']]['max_length']
+
         def tokenize_function(examples):
-            # max_length=None => use the model max length (it's actually the default)
-            text_inputs = [examples[k] for k in cfg['text_column']]
-            model_inputs = tokenizer(*text_inputs, truncation=True, max_length=None)
+            batch_size = len(examples[label_column])
+
+            inputs = [(f"{' '.join([f'{col}: {examples[col][i]}' for col in text_column])}") for i in range(batch_size)]
+            model_inputs = tokenizer(inputs, max_length=max_length, padding="max_length", truncation=True,
+                                     return_tensors="pt")
             model_inputs["labels"] = examples["label"]
             return model_inputs
 
@@ -230,7 +227,7 @@ def process_dataset(dataset, tokenizer):
     elif cfg['data_name'] == 'dolly':
         max_length = cfg[cfg['model_name']]['max_length']
 
-        def preprocess_function(examples):
+        def preprocess_function_train(examples):
             batch_size = len(examples[text_column[0]])
             inputs = [(f"{' '.join([f'{col}: {examples[col][i]}' for col in text_column])} "
                        f"response: ") for i in range(batch_size)]
@@ -254,15 +251,48 @@ def process_dataset(dataset, tokenizer):
             model_inputs["labels"] = labels["input_ids"]
             return model_inputs
 
-        cfg['task_value'] = list(set(dataset['train']['category']))
+        def preprocess_function_test(examples):
+            batch_size = len(examples[text_column[0]])
+            inputs = [(f"{' '.join([f'{col}: {examples[col][i]}' for col in text_column])} "
+                       f"response: ") for i in range(batch_size)]
+            targets = [str(x) for x in examples[label_column]]
+            model_inputs = tokenizer(inputs, max_length=max_length, padding='max_length', truncation=True)
+            labels = tokenizer(targets, max_length=max_length, padding='do_not_pad', truncation=True)
+
+            model_inputs["split"] = []
+            for i in range(batch_size):
+                sample_input_ids = model_inputs["input_ids"][i]
+                sample_attention_mask = model_inputs["attention_mask"][i]
+                label_input_ids = labels["input_ids"][i]
+                model_inputs["input_ids"][i] = sample_input_ids
+                model_inputs["attention_mask"][i] = sample_attention_mask
+                labels["input_ids"][i] = [-100] * len(sample_input_ids) + label_input_ids
+                model_inputs["split"].append(cfg['task_label'][examples['category'][i]])
+                model_inputs["input_ids"][i] = torch.tensor(model_inputs["input_ids"][i][-max_length:])
+                model_inputs["attention_mask"][i] = torch.tensor(model_inputs["attention_mask"][i][-max_length:])
+                labels["input_ids"][i] = torch.tensor(labels["input_ids"][i][-max_length:])
+            model_inputs["labels"] = labels["input_ids"]
+            return model_inputs
+
+        cfg['task_value'] = ['classification', 'information_extraction', 'summarization', 'brainstorming',
+                             'creative_writing', 'open_qa', 'closed_qa', 'general_qa']
         cfg['task_label'] = {category: idx for idx, category in enumerate(cfg['task_value'])}
         cfg['num_split'] = len(cfg['task_label'])
 
-        processed_dataset = dataset.map(
-            preprocess_function,
+        processed_dataset = {}
+        processed_dataset['train'] = dataset['train'].map(
+            preprocess_function_train,
             batched=True,
             num_proc=1,
             remove_columns=dataset["train"].column_names,
+            load_from_cache_file=False,
+            desc="Running tokenizer on dataset",
+        )
+        processed_dataset['test'] = dataset['test'].map(
+            preprocess_function_test,
+            batched=True,
+            num_proc=1,
+            remove_columns=dataset["test"].column_names,
             load_from_cache_file=False,
             desc="Running tokenizer on dataset",
         )
@@ -317,7 +347,7 @@ def process_dataset(dataset, tokenizer):
             load_from_cache_file=False,
             desc="Running tokenizer on dataset",
         )
-        cfg['max_new_tokens'] = 10
+        cfg['max_new_tokens'] = max_length
     elif cfg['data_name'] == 'samsum':
         '''
         {'id': '13818513', 'summary': 'Amanda baked cookies and will bring Jerry some tomorrow.', 
@@ -351,7 +381,7 @@ def process_dataset(dataset, tokenizer):
             load_from_cache_file=False,
             desc="Running tokenizer on dataset",
         )
-        cfg['max_new_tokens'] = 10
+        cfg['max_new_tokens'] = max_length
     elif cfg['data_name'] == 'e2enlg':
         '''
         {'human_reference': 'The Vaults pub near Café Adriatic has a 5 star rating.  Prices start at £30.',
@@ -385,7 +415,7 @@ def process_dataset(dataset, tokenizer):
             load_from_cache_file=False,
             desc="Running tokenizer on dataset",
         )
-        cfg['max_new_tokens'] = 10
+        cfg['max_new_tokens'] = max_length
     elif cfg['data_name'] == 'webnlg':
         '''
         {'2017_test_category': '',
@@ -447,7 +477,7 @@ def process_dataset(dataset, tokenizer):
             load_from_cache_file=False,
             desc="Running tokenizer on dataset",
         )
-        cfg['max_new_tokens'] = 10
+        cfg['max_new_tokens'] = max_length
     elif cfg['data_name'] == 'dart':
         '''
         {'annotations': {'source': ['WikiTableQuestions_mturk'],
@@ -490,7 +520,7 @@ def process_dataset(dataset, tokenizer):
             load_from_cache_file=False,
             desc="Running tokenizer on dataset",
         )
-        cfg['max_new_tokens'] = 10
+        cfg['max_new_tokens'] = max_length
     else:
         raise ValueError('Not valid data name')
     cfg['data_size'] = {k: len(processed_dataset[k]) for k in processed_dataset}

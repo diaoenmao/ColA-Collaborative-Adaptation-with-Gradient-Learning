@@ -14,30 +14,22 @@ def make_metric(metric_name, tokenizer):
         for k in metric_name:
             metric_name[k].extend(['Accuracy'])
     if cfg['task_name'] == 'clm':
-        if cfg['data_name'] in ['ptb']:
+        if cfg['data_name'] in ['dolly']:
             pivot = -float('inf')
             pivot_direction = 'up'
-            pivot_name = 'Rouge'
-            for k in metric_name:
-                metric_name[k].extend(['Perplexity'])
-            metric_name['test'].extend(['Rouge'])
-        elif cfg['data_name'] in ['dolly']:
-            pivot = -float('inf')
-            pivot_direction = 'up'
-            pivot_name = 'Rouge'
-            for k in metric_name:
-                metric_name[k].extend(['Perplexity'])
-            metric_name['test'].extend(['Rouge'])
+            pivot_name = 'ROUGE'
+            metric_name['train'].extend(['Perplexity'])
+            metric_name['test'].extend(['ROUGE'])
         else:
             raise ValueError('Not valid data name')
     elif cfg['task_name'] == 's2s':
         if cfg['data_name'] in ['fpb', 'wikisql', 'samsum', 'e2enlg', 'webnlg', 'dart']:
             pivot = -float('inf')
             pivot_direction = 'up'
-            pivot_name = 'Rouge'
+            pivot_name = 'ROUGE'
             for k in metric_name:
                 metric_name[k].extend(['Accuracy'])
-            metric_name['test'].extend(['Rouge'])
+            metric_name['test'].extend(['ROUGE'])
         else:
             raise ValueError('Not valid data name')
     elif cfg['task_name'] == 'sc':
@@ -97,14 +89,15 @@ class GLUE:
 
     def __call__(self, *args, **kwargs):
         glue = self.metric.compute()
-        glue = sum(glue.values()) / len(glue)
-        #sw: we are taking the average of all metric? need to change - may only report accuracy or f1 score - otherwise it is not consistent and wrong in evaluation
+        metric_name = list(glue.keys())[0]
+        glue = glue[metric_name]
         return glue
 
 
-class Rouge:
-    def __init__(self, tokenizer):
-        if 'num_split' in cfg:
+class ROUGE:
+    def __init__(self, tokenizer, split_metric):
+        self.split_metric = split_metric
+        if cfg['dist_mode'] in ['alone', 'col'] and self.split_metric:
             self.metric = [evaluate.load('rouge') for _ in range(cfg['num_split'])]
         else:
             self.metric = evaluate.load('rouge')
@@ -118,7 +111,7 @@ class Rouge:
         return generate, target
 
     def add(self, input, output):
-        if 'num_split' in cfg:
+        if cfg['dist_mode'] in ['alone', 'col'] and self.split_metric:
             for i in range(cfg['num_split']):
                 generate_i = output['generate'][i]
                 if generate_i is None:
@@ -134,7 +127,7 @@ class Rouge:
         return
 
     def __call__(self, *args, **kwargs):
-        if 'num_split' in cfg:
+        if cfg['dist_mode'] in ['alone', 'col'] and self.split_metric:
             rouge = []
             for i in range(cfg['num_split']):
                 rouge_i = self.metric[i].compute()['rougeL']
@@ -167,8 +160,8 @@ class Metric:
                     metric[split][m] = {'mode': 'batch',
                                         'metric': (
                                             lambda input, output: recur(RMSE, output['target'], input['target']))}
-                elif m == 'Rouge':
-                    metric[split][m] = {'mode': 'full', 'metric': Rouge(tokenizer)}
+                elif m == 'ROUGE':
+                    metric[split][m] = {'mode': 'full', 'metric': ROUGE(tokenizer, cfg['split_metric'])}
                 elif m == 'GLUE':
                     metric[split][m] = {'mode': 'full', 'metric': GLUE(cfg['hf_subset_name'])}
                 else:

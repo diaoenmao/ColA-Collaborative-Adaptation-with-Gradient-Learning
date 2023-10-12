@@ -41,7 +41,7 @@ def runExperiment():
     checkpoint_path = os.path.join(model_tag_path, 'checkpoint')
     best_path = os.path.join(model_tag_path, 'best')
     dataset = make_dataset(cfg['data_name'], cfg['subset_name'])
-    model, tokenizer = make_model(cfg['model_name'], cfg['subset_name'])
+    model, tokenizer = make_model(cfg['model_name'])
     dataset = process_dataset(dataset, tokenizer)
     data_loader = make_data_loader(dataset, tokenizer, cfg['model_name'])
     result = resume(os.path.join(checkpoint_path, 'model'), resume_mode=cfg['resume_mode'])
@@ -73,7 +73,6 @@ def runExperiment():
             metric.update(logger.mean['test/{}'.format(metric.pivot_name)])
             makedir_exist_ok(best_path)
             shutil.copy(os.path.join(checkpoint_path, 'model'), os.path.join(best_path, 'model'))
-        logger.save(True)
         logger.reset()
     return
 
@@ -125,10 +124,12 @@ def test(data_loader, model, metric, logger):
                 output_['generate'] = model.generate(input_ids=input["input_ids"],
                                                      max_new_tokens=cfg['max_new_tokens'])
             elif cfg['task_name'] == 'clm':
-                output_['generate'] = model.generate(input_ids=input["input_ids"],
-                                                     attention_mask=input["attention_mask"],
-                                                     max_new_tokens=cfg['max_new_tokens'],
-                                                     eos_token_id=cfg['pad_token_id'])
+                if cfg['data_name'] in ['dolly']:
+                    output_['generate'] = model.generate(input_ids=input["input_ids"],
+                                                         attention_mask=input["attention_mask"],
+                                                         max_new_tokens=cfg['max_new_tokens'],
+                                                         eos_token_id=cfg['pad_token_id'],
+                                                         no_repeat_ngram_size=2)
             metric.add('test', input_, output_)
             evaluation = metric.evaluate('test', 'batch', input_, output_)
             logger.append(evaluation, 'test', input_size)
@@ -137,6 +138,7 @@ def test(data_loader, model, metric, logger):
         info = {'info': ['Model: {}'.format(cfg['model_tag']), 'Test Epoch: {}({:.0f}%)'.format(cfg['epoch'], 100.)]}
         logger.append(info, 'test')
         print(logger.write('test', metric.metric_name['test']))
+        logger.save(True)
     return
 
 
