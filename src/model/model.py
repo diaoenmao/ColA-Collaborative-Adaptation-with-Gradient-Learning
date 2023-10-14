@@ -10,7 +10,11 @@ from module.peft import get_peft_model, TaskType, LoraConfig, AdaLoraConfig, IA3
 
 
 def make_model(model_name):
-    model, tokenizer = make_hf_model(model_name)
+    if model_name in ['mlp']:
+        model = eval('model.{}()'.format(model_name))
+        tokenizer = None
+    else:
+        model, tokenizer = make_hf_model(model_name)
     return model, tokenizer
 
 
@@ -139,6 +143,8 @@ def make_ft_model(model):
         peft_config = make_config_s2s()
     elif cfg['task_name'] == 'sc':
         peft_config = make_config_sc()
+    elif cfg['task_name'] == 'ic':
+        peft_config = make_config_ic()
     else:
         raise ValueError('Not valid task name')
     model = get_peft_model(model, peft_config)
@@ -276,6 +282,22 @@ def make_config_sc():
     elif cfg['ft_name'] == 'ptune':
         peft_config = PromptEncoderConfig(task_type=TaskType.SEQ_CLS, inference_mode=False, num_virtual_tokens=20,
                                           encoder_hidden_size=128)
+    elif cfg['ft_name'] == 'cola':
+        peft_config = ColaConfig(task_type=TaskType.SEQ_CLS, inference_mode=False)
+    else:
+        raise ValueError('Not valid ft name')
+    return peft_config
+
+
+def make_config_ic():
+    if cfg['ft_name'] == 'lora':
+        peft_config = LoraConfig(
+            task_type=TaskType.SEQ_CLS,
+            r=8,
+            lora_alpha=8,
+            lora_dropout=0.0,
+            inference_mode=False,
+        )
     elif cfg['ft_name'] == 'cola':
         peft_config = ColaConfig(task_type=TaskType.SEQ_CLS, inference_mode=False)
     else:

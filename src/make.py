@@ -58,6 +58,9 @@ def main():
         data_names = ['glue-cola', 'glue-mnli', 'glue-mrpc', 'glue-qnli', 'glue-qqp', 'glue-rte', 'glue-sst2',
                       'glue-stsb']
         model_names = ['roberta-base']
+    elif task_name == 'ic':
+        data_names = ['MNIST', 'CIFAR10']
+        model_names = ['mlp']
     else:
         raise ValueError('Not valid task name')
     if mode == 'full':
