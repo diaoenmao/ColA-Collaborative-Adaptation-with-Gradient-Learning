@@ -4,7 +4,7 @@ import torch
 import torch.backends.cudnn as cudnn
 from collections import defaultdict
 from config import cfg, process_args
-from dataset import make_dataset, make_data_loader, process_dataset
+from dataset import make_dataset, make_data_loader, process_dataset, collate
 from metric import make_metric, make_logger
 from model import make_model, freeze_model, make_cola, Router
 from module import save, to_device, process_control, resume, PeftModel
@@ -52,6 +52,8 @@ def runExperiment():
         cola_base[k].load_state_dict(result['cola_base_state_dict'][k])
         cola_base[k] = cola_base[k].to(cfg['device'])
     model.load_cola_base(cola_base)
+    if cfg['model_name'] in ['cnn', 'resnet18', 'wresnet28x2']:
+        model = make_batchnorm_stats(dataset['train'], model, cfg['model_name'])
     cfg['epoch'] = result['epoch']
     test_logger = make_logger(os.path.join('output', 'runs', 'test_{}'.format(cfg['model_tag'])))
     test_merge_logger = make_logger(os.path.join('output', 'runs', 'test_merge_{}'.format(cfg['model_tag'])))
@@ -93,13 +95,21 @@ def test(data_loader, model, metric, logger):
     with torch.no_grad():
         model.train(False)
         for i, input in enumerate(data_loader):
-            input_size = input['labels'].size(0)
-            input = {'input_ids': input['input_ids'], 'attention_mask': input['attention_mask'],
-                     'labels': input['labels']}
-            input = to_device(input, cfg['device'])
-            output = model(**input)
-            input_ = {'target': input['labels']}
-            output_ = {'target': output['logits'], 'loss': output['loss']}
+            if cfg['task_name'] in ['s2s', 'sc', 'clm']:
+                input_size = input['labels'].size(0)
+                input = {'input_ids': input['input_ids'], 'attention_mask': input['attention_mask'],
+                         'labels': input['labels']}
+                input = to_device(input, cfg['device'])
+                output = model(**input)
+                input_ = {'target': input['labels']}
+                output_ = {'target': output['logits'], 'loss': output['loss']}
+            else:
+                input = collate(input)
+                input_size = input['data'].size(0)
+                input = to_device(input, cfg['device'])
+                output = model(**input)
+                input_ = {'target': input['target']}
+                output_ = {'target': output['target'], 'loss': output['loss']}
             if cfg['task_name'] == 's2s':
                 output_['generate'] = model.generate(input_ids=input["input_ids"],
                                                      max_new_tokens=cfg['max_new_tokens'])

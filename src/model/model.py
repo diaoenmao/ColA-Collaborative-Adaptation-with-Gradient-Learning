@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+import model
+from torchvision import transforms
 from transformers import get_linear_schedule_with_warmup
 from config import cfg
 from .huggingface import make_hf_model
@@ -10,11 +12,11 @@ from module.peft import get_peft_model, TaskType, LoraConfig, AdaLoraConfig, IA3
 
 
 def make_model(model_name):
-    if model_name in ['mlp']:
+    if cfg['task_name'] in ['s2s', 'sc', 'clm']:
+        model, tokenizer = make_hf_model(model_name)
+    else:
         model = eval('model.{}()'.format(model_name))
         tokenizer = None
-    else:
-        model, tokenizer = make_hf_model(model_name)
     return model, tokenizer
 
 
@@ -64,21 +66,6 @@ def init_param(m):
     elif isinstance(m, nn.Linear):
         if m.bias is not None:
             m.bias.data.zero_()
-    return m
-
-
-def make_batchnorm(m, momentum, track_running_stats):
-    if isinstance(m, (nn.BatchNorm1d, nn.BatchNorm2d)):
-        m.momentum = momentum
-        m.track_running_stats = track_running_stats
-        if track_running_stats:
-            m.register_buffer('running_mean', torch.zeros(m.num_features, device=cfg['device']))
-            m.register_buffer('running_var', torch.ones(m.num_features, device=cfg['device']))
-            m.register_buffer('num_batches_tracked', torch.tensor(0, dtype=torch.long, device=cfg['device']))
-        else:
-            m.running_mean = None
-            m.running_var = None
-            m.num_batches_tracked = None
     return m
 
 
@@ -144,7 +131,7 @@ def make_ft_model(model):
     elif cfg['task_name'] == 'sc':
         peft_config = make_config_sc()
     elif cfg['task_name'] == 'ic':
-        peft_config = make_config_ic()
+        peft_config = make_config_ic(model)
     else:
         raise ValueError('Not valid task name')
     model = get_peft_model(model, peft_config)
@@ -289,17 +276,21 @@ def make_config_sc():
     return peft_config
 
 
-def make_config_ic():
+def make_config_ic(model):
+    target_modules = []
+    for k, v in model.named_modules():
+        if isinstance(v, (nn.Linear, nn.Conv1d, nn.Conv2d)):
+            target_modules.append(k)
     if cfg['ft_name'] == 'lora':
         peft_config = LoraConfig(
-            task_type=TaskType.SEQ_CLS,
+            target_modules=target_modules,
             r=8,
             lora_alpha=8,
             lora_dropout=0.0,
             inference_mode=False,
         )
     elif cfg['ft_name'] == 'cola':
-        peft_config = ColaConfig(task_type=TaskType.SEQ_CLS, inference_mode=False)
+        peft_config = ColaConfig(target_modules=target_modules, inference_mode=False)
     else:
         raise ValueError('Not valid ft name')
     return peft_config

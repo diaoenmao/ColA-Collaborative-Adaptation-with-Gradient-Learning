@@ -247,6 +247,7 @@ def make_cola(model, model_name, dist_mode='joint'):
     cola = {}
     for name, module in model.base_model.named_modules():
         if 'original_module' not in name and isinstance(module, ColaLayer):
+            # TODO: add conv and embedding
             input_size = module.in_features
             output_size = module.out_features
             if dist_mode in ['alone', 'col']:
