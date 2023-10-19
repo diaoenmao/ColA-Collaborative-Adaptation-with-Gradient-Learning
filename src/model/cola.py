@@ -187,6 +187,65 @@ class MLP(nn.Module):
         return x
 
 
+class Embedding(nn.Module):
+    def __init__(self, model_cfg):
+        super().__init__()
+        self.input_size = model_cfg['input_size']
+        self.output_size = model_cfg['output_size']
+        self.hidden_size = model_cfg['hidden_size']
+        self.padding_idx = model_cfg['padding_idx']
+        self.max_norm = model_cfg['max_norm']
+        self.norm_type = model_cfg['norm_type']
+        self.scale_grad_by_freq = model_cfg['scale_grad_by_freq']
+        self.sparse = model_cfg['sparse']
+        self.mode = model_cfg['mode']
+        if model_cfg['dropout'] > 0.0:
+            self.dropout = nn.Dropout(p=model_cfg['dropout'])
+        else:
+            self.dropout = nn.Identity()
+        weight_A = torch.randn((self.hidden_size, self.input_size))
+        weight_B = torch.randn((self.output_size, self.hidden_size))
+        self.cola_embedding_A = nn.Parameter(weight_A)
+        self.cola_embedding_B = nn.Parameter(weight_B)
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        nn.init.zeros_(self.cola_embedding_A)
+        nn.init.normal_(self.cola_embedding_B)
+        return
+
+    def fit(self, input, optimizer, scheduler):
+        self.train(True)
+        input = to_device(input, cfg['device'])
+        output = {}
+        x = input['data']
+        output['target'] = self.forward(x)
+        output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='mean')
+        output['loss'].backward()
+        optimizer.step()
+        scheduler.step()
+        optimizer.zero_grad()
+        return output
+
+    def make_delta_weight(self):
+        delta_weight = (self.cola_embedding_B @ self.cola_embedding_A).T
+        return delta_weight
+
+    def forward(self, x):
+        x = self.dropout(x)
+        x = F.embedding(
+            x,
+            self.cola_embedding_A[self.active_adapter].T,
+            self.padding_idx,
+            self.max_norm,
+            self.norm_type,
+            self.scale_grad_by_freq,
+            self.sparse,
+        )
+        x = x @ self.cola_embedding_B.T
+        return x
+
+
 class Router(nn.Module):
     def __init__(self, model, dist_mode):
         super().__init__()
@@ -277,6 +336,10 @@ def make_cola_model(model_name, model_cfg):
         model_cfg['activation'] = cfg['cola']['mlp']['activation']
         model = MLP(model_cfg)
         model.apply(init_param)
+    elif model_name == 'embedding':
+        model_cfg['hidden_size'] = cfg['cola']['lowrank']['hidden_size']
+        model_cfg['dropout'] = cfg['cola']['lowrank']['dropout']
+        model = Embedding(model_cfg)
     else:
         raise ValueError('Not valid model name')
     return model
@@ -312,6 +375,18 @@ def make_cola(model, model_name, dist_mode='joint'):
                 padding = module.padding
                 model_cfg = {'input_size': input_size, 'output_size': output_size, 'kernel_size': kernel_size,
                              'stride': stride, 'padding': padding, 'mode': 'conv2d'}
+            elif isinstance(module, nn.Embedding):
+                input_size = module.in_features
+                output_size = module.out_features
+                padding_idx = module.padding_idx
+                max_norm = module.max_norm
+                norm_type = module.norm_type
+                scale_grad_by_freq = module.scale_grad_by_freq
+                sparse = module.sparse
+                model_cfg = {'input_size': input_size, 'output_size': output_size,
+                             'padding_idx': padding_idx, 'max_norm': max_norm,
+                             'norm_type': norm_type, 'scale_grad_by_freq': scale_grad_by_freq,
+                             'sparse': sparse, 'mode': 'embedding'}
             else:
                 raise ValueError('Not valid module')
             if dist_mode in ['alone', 'col']:

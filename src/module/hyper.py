@@ -68,6 +68,7 @@ def process_control():
         cfg['cola']['lowrank'] = {'hidden_size': hidden_size, 'dropout': 0.0}
         cfg['cola']['linear'] = {'bias': False}
         cfg['cola']['mlp'] = {'hidden_size': 128, 'scale_factor': 2, 'num_layers': 2, 'activation': 'relu'}
+        cfg['cola']['embedding'] = {'hidden_size': hidden_size, 'dropout': 0.0}
         cfg['cola']['model_name'] = ft_name_list[1]
         cfg['cola']['shuffle'] = {'train': True, 'test': False}
         cfg['cola']['optimizer_name'] = 'AdamW'
