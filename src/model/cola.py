@@ -16,16 +16,28 @@ warnings.filterwarnings('ignore', category=ConvergenceWarning)
 
 
 class LowRank(nn.Module):
-    def __init__(self, input_size, hidden_size, output_size, dropout):
+    def __init__(self, model_cfg):
         super().__init__()
-        self.input_size = input_size
-        self.output_size = output_size
-        if dropout > 0.0:
-            self.dropout = nn.Dropout(p=dropout)
+        self.input_size = model_cfg['input_size']
+        self.output_size = model_cfg['output_size']
+        self.hidden_size = model_cfg['hidden_size']
+        self.mode = model_cfg['mode']
+        if model_cfg['dropout'] > 0.0:
+            self.dropout = nn.Dropout(p=model_cfg['dropout'])
         else:
             self.dropout = nn.Identity()
-        self.cola_A = nn.Linear(input_size, hidden_size, bias=False)
-        self.cola_B = nn.Linear(hidden_size, output_size, bias=False)
+        if self.mode == 'linear':
+            self.cola_A = nn.Linear(self.input_size, self.hidden_size, bias=False)
+            self.cola_B = nn.Linear(self.hidden_size, self.output_size, bias=False)
+        elif self.mode == 'conv2d':
+            self.kernel_size = model_cfg['kernel_size']
+            self.stride = model_cfg['stride']
+            self.padding = model_cfg['padding']
+            self.cola_A = nn.Conv2d(self.input_size, self.hidden_size, self.kernel_size, self.stride, self.padding,
+                                    bias=False)
+            self.cola_B = nn.Conv2d(self.hidden_size, self.output_size, (1, 1), (1, 1), bias=False)
+        else:
+            raise ValueError('Not valid mode')
         self.reset_parameters()
 
     def reset_parameters(self):
@@ -47,7 +59,20 @@ class LowRank(nn.Module):
         return output
 
     def make_delta_weight(self):
-        return self.cola_B.weight.data @ self.cola_A.weight.data
+        if self.mode == 'linear':
+            delta_weight = self.cola_B.weight.data @ self.cola_A.weight.data
+        elif self.mode == 'conv2d':
+            if self.kernel_size == (1, 1):
+                # conv2d 1x1
+                delta_weight = (self.cola_B.weight.data.squeeze(3).squeeze(2) @
+                                self.cola_A.weight.data.squeeze(3).squeeze(2)).unsqueeze(2).unsqueeze(3)
+            else:
+                # conv2d 3x3
+                delta_weight = F.conv2d(self.cola_A.weight.data.permute(1, 0, 2, 3),
+                                        self.cola_B.weight.data).permute(1, 0, 2, 3)
+        else:
+            raise ValueError('Not valid mode')
+        return delta_weight
 
     def forward(self, x):
         x = self.dropout(x)
@@ -57,11 +82,21 @@ class LowRank(nn.Module):
 
 
 class Linear(nn.Module):
-    def __init__(self, input_size, output_size, bias=False):
+    def __init__(self, model_cfg):
         super().__init__()
-        self.input_size = input_size
-        self.output_size = output_size
-        self.linear = nn.Linear(input_size, output_size, bias=bias)
+        self.input_size = model_cfg['input_size']
+        self.output_size = model_cfg['output_size']
+        self.mode = model_cfg['mode']
+        if self.mode == 'linear':
+            self.linear = nn.Linear(self.input_size, self.output_size, bias=model_cfg['bias'])
+        elif self.mode == 'conv2d':
+            self.kernel_size = model_cfg['kernel_size']
+            self.stride = model_cfg['stride']
+            self.padding = model_cfg['padding']
+            self.linear = nn.Conv2d(self.input_size, self.output_size, self.kernel_size, self.stride, self.padding,
+                                    bias=model_cfg['bias'])
+        else:
+            raise ValueError('Not valid mode')
         self.reset_parameters()
 
     def reset_parameters(self):
@@ -82,7 +117,13 @@ class Linear(nn.Module):
         return output
 
     def make_delta_weight(self):
-        return self.linear.weight.data
+        if self.mode == 'linear':
+            delta_weight = self.linear.weight.data
+        elif self.mode == 'conv2d':
+            delta_weight = self.linear.weight.data
+        else:
+            raise ValueError('Not valid mode')
+        return delta_weight
 
     def forward(self, x):
         x = self.linear(x)
@@ -90,23 +131,30 @@ class Linear(nn.Module):
 
 
 class MLP(nn.Module):
-    def __init__(self, input_size, hidden_size, scale_factor, num_layers, activation, output_size):
+    def __init__(self, model_cfg):
         super().__init__()
-        self.input_size = input_size
-        self.output_size = output_size
+        self.input_size = model_cfg['input_size']
+        self.output_size = model_cfg['output_size']
+        self.hidden_size = model_cfg['hidden_size']
+        self.scale_factor = model_cfg['scale_factor']
+        self.num_layers = model_cfg['num_layers']
+        self.activation = model_cfg['activation']
+        self.mode = model_cfg['mode']
+        input_size = self.input_size
+        hidden_size = self.hidden_size
         blocks = []
-        for _ in range(num_layers):
+        for _ in range(self.num_layers):
             blocks.append(nn.Linear(input_size, hidden_size))
-            if activation == 'relu':
+            if self.activation == 'relu':
                 blocks.append(nn.ReLU())
-            elif activation == 'sigmoid':
+            elif self.activation == 'sigmoid':
                 blocks.append(nn.Sigmoid())
             else:
                 raise ValueError('Not valid activation')
             input_size = hidden_size
-            hidden_size = int(hidden_size * scale_factor)
+            hidden_size = int(hidden_size * self.scale_factor)
         self.blocks = nn.Sequential(*blocks)
-        self.linear = nn.Linear(input_size, output_size)
+        self.linear = nn.Linear(input_size, self.output_size)
         self.reset_parameters()
 
     def reset_parameters(self):
@@ -130,8 +178,12 @@ class MLP(nn.Module):
         raise NotImplementedError
 
     def forward(self, x):
+        if self.mode == 'conv2d':
+            x = x.permute(0, 2, 3, 1)
         x = self.blocks(x)
         x = self.linear(x)
+        if self.mode == 'conv2d':
+            x = x.permute(0, 3, 1, 2)
         return x
 
 
@@ -208,21 +260,22 @@ class Router(nn.Module):
         return x
 
 
-def make_cola_model(name, model_name, input_size, output_size):
+def make_cola_model(model_name, model_cfg):
     if model_name == 'lowrank':
-        hidden_size = cfg['cola']['lowrank']['hidden_size']
-        dropout = cfg['cola']['lowrank']['dropout']
-        model = LowRank(input_size, hidden_size, output_size, dropout)
+        model_cfg['hidden_size'] = cfg['cola']['lowrank']['hidden_size']
+        model_cfg['dropout'] = cfg['cola']['lowrank']['dropout']
+        model = LowRank(model_cfg)
         model.apply(init_param)
     elif model_name == 'linear':
-        model = Linear(input_size, output_size)
+        model_cfg['bias'] = cfg['cola']['linear']['bias']
+        model = Linear(model_cfg)
         model.apply(init_param)
     elif model_name == 'mlp':
-        hidden_size = cfg['cola']['mlp']['hidden_size']
-        scale_factor = cfg['cola']['mlp']['scale_factor']
-        num_layers = cfg['cola']['mlp']['num_layers']
-        activation = cfg['cola']['mlp']['activation']
-        model = MLP(input_size, hidden_size, scale_factor, num_layers, activation, output_size)
+        model_cfg['hidden_size'] = cfg['cola']['mlp']['hidden_size']
+        model_cfg['scale_factor'] = cfg['cola']['mlp']['scale_factor']
+        model_cfg['num_layers'] = cfg['cola']['mlp']['num_layers']
+        model_cfg['activation'] = cfg['cola']['mlp']['activation']
+        model = MLP(model_cfg)
         model.apply(init_param)
     else:
         raise ValueError('Not valid model name')
@@ -247,15 +300,26 @@ def make_cola(model, model_name, dist_mode='joint'):
     cola = {}
     for name, module in model.base_model.named_modules():
         if 'original_module' not in name and isinstance(module, ColaLayer):
-            # TODO: add conv and embedding
-            input_size = module.in_features
-            output_size = module.out_features
+            if isinstance(module, nn.Linear):
+                input_size = module.in_features
+                output_size = module.out_features
+                model_cfg = {'input_size': input_size, 'output_size': output_size, 'mode': 'linear'}
+            elif isinstance(module, nn.Conv2d):
+                input_size = module.in_features
+                output_size = module.out_features
+                kernel_size = module.kernel_size
+                stride = module.stride
+                padding = module.padding
+                model_cfg = {'input_size': input_size, 'output_size': output_size, 'kernel_size': kernel_size,
+                             'stride': stride, 'padding': padding, 'mode': 'conv2d'}
+            else:
+                raise ValueError('Not valid module')
             if dist_mode in ['alone', 'col']:
                 cola[name] = []
                 for i in range(cfg['num_split']):
-                    cola_model_i = make_cola_model(name, cfg['cola']['model_name'][i], input_size, output_size)
+                    cola_model_i = make_cola_model(cfg['cola']['model_name'][i], model_cfg)
                     cola[name].append(cola_model_i)
                 cola[name] = Router(cola[name], dist_mode)
             else:
-                cola[name] = make_cola_model(name, model_name, input_size, output_size)
+                cola[name] = make_cola_model(model_name, model_cfg)
     return cola
