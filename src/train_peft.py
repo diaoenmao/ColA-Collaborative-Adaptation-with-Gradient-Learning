@@ -105,6 +105,11 @@ def train(data_loader, model, optimizer, scheduler, metric, logger):
             input_ = {'target': input['target']}
             output_ = {'target': output['target'], 'loss': output['loss']}
         output['loss'].backward()
+        for k, v in model.named_parameters():
+            if v.grad is not None:
+                print(i, k, v.size())
+                print(v.grad[0])
+                print(v.grad.norm())
         optimizer.step()
         scheduler.step()
         optimizer.zero_grad()
@@ -122,6 +127,8 @@ def train(data_loader, model, optimizer, scheduler, metric, logger):
                              'Experiment Finished Time: {}'.format(exp_finished_time)]}
             logger.append(info, 'train')
             print(logger.write('train', metric.metric_name['train']))
+        if i == 2:
+            exit()
     return
 
 

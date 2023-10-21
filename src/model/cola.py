@@ -41,7 +41,9 @@ class LowRank(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self):
-        nn.init.kaiming_uniform_(self.cola_A.weight, a=math.sqrt(5))
+        # nn.init.kaiming_uniform_(self.cola_A.weight, a=math.sqrt(5))
+        nn.init.ones_(self.cola_A.weight)
+        # self.cola_A.weight.data = torch.arange(self.cola_A.weight.numel()).float().view(self.cola_A.weight.size())
         nn.init.zeros_(self.cola_B.weight)
         return
 
@@ -51,8 +53,13 @@ class LowRank(nn.Module):
         output = {}
         x = input['data']
         output['target'] = self.forward(x)
-        output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='mean')
+        output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='sum')
         output['loss'].backward()
+        for k, v in self.named_parameters():
+            if v.grad is not None:
+                print(k, v.size())
+                print(v.grad[0])
+                print(v.grad.norm())
         optimizer.step()
         scheduler.step()
         optimizer.zero_grad()

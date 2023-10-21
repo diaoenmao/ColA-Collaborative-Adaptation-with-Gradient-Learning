@@ -50,7 +50,7 @@ def runExperiment():
     if result is None:
         cfg['epoch'] = 1
         model = make_ft_model(model)
-        freeze_model(model)
+        # freeze_model(model)
         model = model.to(cfg['device'])
         model.print_trainable_parameters()
         cola_base = make_cola(model, cfg['cola']['model_name'])
@@ -123,8 +123,16 @@ def sum_loss(logits, labels):
             if cfg['task_name'] == 'clm':
                 logits = logits[..., :-1, :].contiguous()
                 labels = labels[..., 1:].contiguous()
-            loss_fct = torch.nn.CrossEntropyLoss(reduction='sum')
+            loss_fct = torch.nn.CrossEntropyLoss(reduction='mean')
             loss = loss_fct(logits.view(-1, num_labels), labels.view(-1))
+            # loss = loss * num_labels
+            # print(loss)
+
+            # loss = torch.nn.functional.kl_div(torch.log_softmax(logits.view(-1, num_labels), dim=1), torch.nn.functional.one_hot(labels, num_classes=num_labels).float(), reduction='none')
+            # print(loss.size())
+            # print(loss.sum())
+
+            # exit()
     else:
         loss = 0
     return loss
@@ -184,6 +192,8 @@ def train(data_loader, model, cola_base, optimizer, scheduler, metric, logger):
                              'Experiment Finished Time: {}'.format(exp_finished_time)]}
             logger.append(info, 'train')
             print(logger.write('train', metric.metric_name['train']), flush=True)
+        if i == 2:
+            exit()
     return
 
 
