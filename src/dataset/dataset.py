@@ -296,7 +296,7 @@ def process_dataset(dataset, tokenizer):
             load_from_cache_file=False,
             desc="Running tokenizer on dataset",
         )
-        cfg['max_new_tokens'] = 40
+        cfg['max_new_tokens'] = 100
     elif cfg['data_name'] == 'wikisql':
         '''
         This example was too long and was cropped:

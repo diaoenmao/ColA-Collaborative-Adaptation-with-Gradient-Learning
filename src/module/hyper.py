@@ -8,6 +8,8 @@ def process_control():
     cfg['roberta-base'] = {'max_length': 128}
     cfg['gpt2'] = {'max_length': 128}
     cfg['model_name'] = cfg['control']['model_name']
+    if 'llama' in cfg['model_name']:
+        cfg[cfg['model_name']] = {'max_length': 128}
     cfg['task_name'] = cfg['control']['task_name']
     cfg['batch_size'] = int(cfg['control']['batch_size'])
     ft_name_list = cfg['control']['ft_name'].split('-')
