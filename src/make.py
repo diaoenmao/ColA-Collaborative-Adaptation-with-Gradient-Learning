@@ -60,7 +60,7 @@ def main():
         model_names = ['roberta-base']
     elif task_name == 'ic':
         data_names = ['MNIST', 'CIFAR10']
-        model_names = ['linear', 'mlp', 'cnn', 'resnet18', 'wresnet28x2']
+        model_names = ['linear', 'mlp', 'cnn', 'resnet18']
     else:
         raise ValueError('Not valid task name')
     if mode == 'full':

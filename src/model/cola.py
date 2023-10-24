@@ -331,18 +331,15 @@ def make_cola_model(model_name, model_cfg):
         model_cfg['hidden_size'] = cfg['cola']['lowrank']['hidden_size']
         model_cfg['dropout'] = cfg['cola']['lowrank']['dropout']
         model = LowRank(model_cfg)
-        model.apply(init_param)
     elif model_name == 'linear':
         model_cfg['bias'] = cfg['cola']['linear']['bias']
         model = Linear(model_cfg)
-        model.apply(init_param)
     elif model_name == 'mlp':
         model_cfg['hidden_size'] = cfg['cola']['mlp']['hidden_size']
         model_cfg['scale_factor'] = cfg['cola']['mlp']['scale_factor']
         model_cfg['num_layers'] = cfg['cola']['mlp']['num_layers']
         model_cfg['activation'] = cfg['cola']['mlp']['activation']
         model = MLP(model_cfg)
-        model.apply(init_param)
     elif model_name == 'embedding':
         model_cfg['hidden_size'] = cfg['cola']['lowrank']['hidden_size']
         model_cfg['dropout'] = cfg['cola']['lowrank']['dropout']
