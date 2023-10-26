@@ -59,7 +59,7 @@ def main():
                       'glue-stsb']
         model_names = ['roberta-base']
     elif task_name == 'ic':
-        data_names = ['MNIST', 'CIFAR10']
+        data_names = ['CIFAR10']
         model_names = ['linear', 'mlp', 'cnn', 'resnet18']
     else:
         raise ValueError('Not valid task name')
