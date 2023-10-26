@@ -761,9 +761,7 @@ class LoraLayer:
     def reset_lora_parameters(self, adapter_name):
         if adapter_name in self.lora_A.keys():
             # initialize A the same way as the default for nn.Linear and B to zero
-            # nn.init.kaiming_uniform_(self.lora_A[adapter_name].weight, a=math.sqrt(5))
-            nn.init.ones_(self.lora_A[adapter_name].weight)
-            # self.lora_A[adapter_name].weight.data = torch.arange(self.lora_A[adapter_name].weight.numel()).float().view(self.lora_A[adapter_name].weight.size())
+            nn.init.kaiming_uniform_(self.lora_A[adapter_name].weight, a=math.sqrt(5))
             nn.init.zeros_(self.lora_B[adapter_name].weight)
         if adapter_name in self.lora_embedding_A.keys():
             # initialize a the same way as the default for nn.linear and b to zero

@@ -100,7 +100,7 @@ class ColaModel(torch.nn.Module):
             config = self._prepare_cola_config(config, model_config)
             self.peft_config[adapter_name] = config
         self._find_and_replace(adapter_name)
-        # mark_no_trainable(self.model)
+        mark_no_trainable(self.model)
         if self.peft_config[adapter_name].inference_mode:
             _freeze_adapter(self.model, adapter_name)
 
@@ -580,8 +580,12 @@ class Linear(nn.Linear, ColaLayer):
         if self.merged:
             warnings.warn("Already merged. Nothing to do.")
             return
-
+        len_delta_weight = len(delta_weight)
+        if len_delta_weight == 2:
+            delta_weight, delta_bias = delta_weight
         self.weight.data += self.get_delta_weight(delta_weight, self.active_adapter)
+        if self.bias is not None and len_delta_weight == 2:
+            self.bias.data += delta_bias.data
         self.merged = True
         return
 

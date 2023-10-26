@@ -50,7 +50,7 @@ def runExperiment():
     if result is None:
         cfg['epoch'] = 1
         model = make_ft_model(model)
-        # freeze_model(model)
+        freeze_model(model)
         model = model.to(cfg['device'])
         model.print_trainable_parameters()
         cola_base = make_cola(model, cfg['cola']['model_name'])
@@ -184,8 +184,6 @@ def train(data_loader, model, cola_base, optimizer, scheduler, metric, logger):
                              'Experiment Finished Time: {}'.format(exp_finished_time)]}
             logger.append(info, 'train')
             print(logger.write('train', metric.metric_name['train']), flush=True)
-        if i == 2:
-            exit()
     return
 
 

@@ -41,9 +41,7 @@ class LowRank(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self):
-        # nn.init.kaiming_uniform_(self.cola_A.weight, a=math.sqrt(5))
-        nn.init.ones_(self.cola_A.weight)
-        # self.cola_A.weight.data = torch.arange(self.cola_A.weight.numel()).float().view(self.cola_A.weight.size())
+        nn.init.kaiming_uniform_(self.cola_A.weight, a=math.sqrt(5))
         nn.init.zeros_(self.cola_B.weight)
         return
 
@@ -55,11 +53,6 @@ class LowRank(nn.Module):
         output['target'] = self.forward(x)
         output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='sum')
         output['loss'].backward()
-        for k, v in self.named_parameters():
-            if v.grad is not None:
-                print(k, v.size())
-                print(v.grad[0])
-                print(v.grad.norm())
         optimizer.step()
         scheduler.step()
         optimizer.zero_grad()
@@ -93,15 +86,16 @@ class Linear(nn.Module):
         super().__init__()
         self.input_size = model_cfg['input_size']
         self.output_size = model_cfg['output_size']
+        self.bias = model_cfg['bias']
         self.mode = model_cfg['mode']
         if self.mode == 'linear':
-            self.linear = nn.Linear(self.input_size, self.output_size, bias=model_cfg['bias'])
+            self.linear = nn.Linear(self.input_size, self.output_size, bias=self.bias)
         elif self.mode == 'conv2d':
             self.kernel_size = model_cfg['kernel_size']
             self.stride = model_cfg['stride']
             self.padding = model_cfg['padding']
             self.linear = nn.Conv2d(self.input_size, self.output_size, self.kernel_size, self.stride, self.padding,
-                                    bias=model_cfg['bias'])
+                                    bias=self.bias)
         else:
             raise ValueError('Not valid mode')
         self.reset_parameters()
@@ -130,6 +124,9 @@ class Linear(nn.Module):
             delta_weight = self.linear.weight.data
         else:
             raise ValueError('Not valid mode')
+        if self.bias:
+            delta_bias = self.linear.bias.data
+            return delta_weight, delta_bias
         return delta_weight
 
     def forward(self, x):
@@ -326,13 +323,18 @@ class Router(nn.Module):
         return x
 
 
-def make_cola_model(model_name, model_cfg):
+def make_cola_model(name, model_name, model_cfg):
+    if 'classifier' in name and cfg['task_name'] == 'sc':
+        model_name = 'linear'
     if model_name == 'lowrank':
         model_cfg['hidden_size'] = cfg['cola']['lowrank']['hidden_size']
         model_cfg['dropout'] = cfg['cola']['lowrank']['dropout']
         model = LowRank(model_cfg)
     elif model_name == 'linear':
-        model_cfg['bias'] = cfg['cola']['linear']['bias']
+        if 'classifier' in name and cfg['task_name'] == 'sc':
+            model_cfg['bias'] = True
+        else:
+            model_cfg['bias'] = cfg['cola']['linear']['bias']
         model = Linear(model_cfg)
     elif model_name == 'mlp':
         model_cfg['hidden_size'] = cfg['cola']['mlp']['hidden_size']
@@ -396,9 +398,9 @@ def make_cola(model, model_name, dist_mode='joint'):
             if dist_mode in ['alone', 'col']:
                 cola[name] = []
                 for i in range(cfg['num_split']):
-                    cola_model_i = make_cola_model(cfg['cola']['model_name'][i], model_cfg)
+                    cola_model_i = make_cola_model(name, cfg['cola']['model_name'][i], model_cfg)
                     cola[name].append(cola_model_i)
                 cola[name] = Router(cola[name], dist_mode)
             else:
-                cola[name] = make_cola_model(model_name, model_cfg)
+                cola[name] = make_cola_model(name, model_name, model_cfg)
     return cola
