@@ -580,8 +580,12 @@ class Linear(nn.Linear, ColaLayer):
         if self.merged:
             warnings.warn("Already merged. Nothing to do.")
             return
-
+        len_delta_weight = len(delta_weight)
+        if len_delta_weight == 2:
+            delta_weight, delta_bias = delta_weight
         self.weight.data += self.get_delta_weight(delta_weight, self.active_adapter)
+        if self.bias is not None and len_delta_weight == 2:
+            self.bias.data += delta_bias.data
         self.merged = True
         return
 

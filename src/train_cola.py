@@ -112,18 +112,18 @@ def runExperiment():
     return
 
 
-def sum_loss(logits, labels):
+def make_loss(logits, labels):
     num_labels = logits.size(-1)
     if labels is not None:
         if num_labels == 1:
             #  We are doing regression
-            loss_fct = torch.nn.MSELoss(reduction='sum')
+            loss_fct = torch.nn.MSELoss(reduction='mean')
             loss = loss_fct(logits.view(-1), labels.view(-1))
         else:
             if cfg['task_name'] == 'clm':
                 logits = logits[..., :-1, :].contiguous()
                 labels = labels[..., 1:].contiguous()
-            loss_fct = torch.nn.CrossEntropyLoss(reduction='sum')
+            loss_fct = torch.nn.CrossEntropyLoss(reduction='mean')
             loss = loss_fct(logits.view(-1, num_labels), labels.view(-1))
     else:
         loss = 0
@@ -139,14 +139,23 @@ def train(data_loader, model, cola_base, optimizer, scheduler, metric, logger):
         for k in cola_base:
             lr = optimizer[k].param_groups[0]['lr']
             cola_base[k].train(False)
-        input_size = input['labels'].size(0)
-        input = {'input_ids': input['input_ids'], 'attention_mask': input['attention_mask'],
-                 'labels': input['labels']}
-        input = to_device(input, cfg['device'])
-        output = model(**input)
-        input_ = {'target': input['labels']}
-        output_ = {'target': output['logits'], 'loss': output['loss']}
-        loss = sum_loss(output['logits'], input['labels'])
+        if cfg['task_name'] in ['s2s', 'sc', 'clm']:
+            input_size = input['labels'].size(0)
+            input = {'input_ids': input['input_ids'], 'attention_mask': input['attention_mask'],
+                     'labels': input['labels']}
+            input = to_device(input, cfg['device'])
+            output = model(**input)
+            input_ = {'target': input['labels']}
+            output_ = {'target': output['logits'], 'loss': output['loss']}
+            loss = make_loss(output['logits'], input['labels'])
+        else:
+            input = collate(input)
+            input_size = input['data'].size(0)
+            input = to_device(input, cfg['device'])
+            output = model(**input)
+            input_ = {'target': input['target']}
+            output_ = {'target': output['target'], 'loss': output['loss']}
+            loss = make_loss(output['target'], input['target'])
         loss.backward()
         model.zero_grad()
         input_i, output_target_i = model.flush()
@@ -182,13 +191,21 @@ def test(data_loader, model, metric, logger):
     with torch.no_grad():
         model.train(False)
         for i, input in enumerate(data_loader):
-            input_size = input['labels'].size(0)
-            input = {'input_ids': input['input_ids'], 'attention_mask': input['attention_mask'],
-                     'labels': input['labels']}
-            input = to_device(input, cfg['device'])
-            output = model(**input)
-            input_ = {'target': input['labels']}
-            output_ = {'target': output['logits'], 'loss': output['loss']}
+            if cfg['task_name'] in ['s2s', 'sc', 'clm']:
+                input_size = input['labels'].size(0)
+                input = {'input_ids': input['input_ids'], 'attention_mask': input['attention_mask'],
+                         'labels': input['labels']}
+                input = to_device(input, cfg['device'])
+                output = model(**input)
+                input_ = {'target': input['labels']}
+                output_ = {'target': output['logits'], 'loss': output['loss']}
+            else:
+                input = collate(input)
+                input_size = input['data'].size(0)
+                input = to_device(input, cfg['device'])
+                output = model(**input)
+                input_ = {'target': input['target']}
+                output_ = {'target': output['target'], 'loss': output['loss']}
             if cfg['task_name'] == 's2s':
                 output_['generate'] = model.generate(input_ids=input["input_ids"],
                                                      max_new_tokens=cfg['max_new_tokens'])

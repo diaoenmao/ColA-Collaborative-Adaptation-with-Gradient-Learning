@@ -86,7 +86,7 @@ class WideResNet(nn.Module):
         x = self.classify(x)
         return x
 
-    def forward(self, input):
+    def forward(self, **input):
         output = {}
         x = input['data']
         x = self.f(x)

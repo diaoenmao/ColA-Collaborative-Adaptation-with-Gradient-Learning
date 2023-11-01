@@ -7,12 +7,6 @@ from module import recur
 
 
 def make_metric(metric_name, tokenizer):
-    if cfg['data_name'] in ['MNIST', 'FashionMNIST', 'SVHN', 'CIFAR10', 'CIFAR100']:
-        pivot = -float('inf')
-        pivot_direction = 'up'
-        pivot_name = 'Accuracy'
-        for k in metric_name:
-            metric_name[k].extend(['Accuracy'])
     if cfg['task_name'] == 'clm':
         if cfg['data_name'] in ['dolly']:
             pivot = -float('inf')
@@ -40,6 +34,12 @@ def make_metric(metric_name, tokenizer):
             metric_name['test'].extend(['GLUE'])
         else:
             raise ValueError('Not valid data name')
+    elif cfg['task_name'] == 'ic':
+        pivot = -float('inf')
+        pivot_direction = 'up'
+        pivot_name = 'Accuracy'
+        for k in metric_name:
+            metric_name[k].extend(['Accuracy'])
     else:
         raise ValueError('Not valid task name')
     metric = Metric(metric_name, pivot, pivot_direction, pivot_name, tokenizer)

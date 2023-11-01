@@ -397,7 +397,7 @@ class PeftModel(PushToHubMixin, torch.nn.Module):
         """
         trainable_params = 0
         all_param = 0
-        for _, param in self.named_parameters():
+        for name, param in self.named_parameters():
             num_params = param.numel()
             # if using DS Zero 3 and the weights are initialized empty
             if num_params == 0 and hasattr(param, "ds_numel"):
@@ -410,9 +410,8 @@ class PeftModel(PushToHubMixin, torch.nn.Module):
                 num_params = num_params * 2
 
             all_param += num_params
-            if param.requires_grad:
+            if param.requires_grad and 'classifier.original_module' not in name:
                 trainable_params += num_params
-
         return trainable_params, all_param
 
     def print_trainable_parameters(self):

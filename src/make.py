@@ -58,28 +58,44 @@ def main():
         data_names = ['glue-cola', 'glue-mnli', 'glue-mrpc', 'glue-qnli', 'glue-qqp', 'glue-rte', 'glue-sst2',
                       'glue-stsb']
         model_names = ['roberta-base']
+    elif task_name == 'ic':
+        data_names = ['CIFAR10']
+        model_names = ['linear', 'mlp', 'cnn', 'resnet18']
     else:
         raise ValueError('Not valid task name')
     if mode == 'full':
         script_name = [['{}_model.py'.format(run)]]
-        batch_size = ['32']
+        if task_name == 'ic':
+            batch_size = ['256']
+        else:
+            batch_size = ['32']
         control_name = [[data_names, model_names, [task_name], ['full'], batch_size]]
         controls = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode, control_name)
     elif mode == 'peft':
-        ft_name = ['lora', 'adalora', 'ia3', 'promptune', 'prefixtune', 'ptune']
-        batch_size = ['32']
+        if task_name == 'ic':
+            ft_name = ['lora']
+            batch_size = ['256']
+        else:
+            ft_name = ['lora', 'adalora', 'ia3', 'promptune', 'prefixtune', 'ptune']
+            batch_size = ['32']
         script_name = [['{}_peft.py'.format(run)]]
         control_name = [[data_names, model_names, [task_name], ft_name, batch_size]]
         controls = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode, control_name)
     elif mode == 'cola':
         ft_name = ['cola-lowrank-1', 'cola-linear-1', 'cola-mlp-1']
-        batch_size = ['32']
+        if task_name == 'ic':
+            batch_size = ['256']
+        else:
+            batch_size = ['32']
         script_name = [['{}_cola.py'.format(run)]]
         control_name = [[data_names, model_names, [task_name], ft_name, batch_size]]
         controls = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode, control_name)
     elif mode == 'cola_step':
         ft_name = ['cola-lowrank-1', 'cola-lowrank-2', 'cola-lowrank-4', 'cola-lowrank-8']
-        batch_size = ['8']
+        if task_name == 'ic':
+            batch_size = ['64']
+        else:
+            batch_size = ['8']
         script_name = [['{}_cola.py'.format(run)]]
         control_name = [[data_names, model_names, [task_name], ft_name, batch_size]]
         controls = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode, control_name)

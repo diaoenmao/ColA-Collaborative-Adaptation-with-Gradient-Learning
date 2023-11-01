@@ -81,13 +81,21 @@ def train(data_loader, model, optimizer, scheduler, metric, logger):
     model.train(True)
     start_time = time.time()
     for i, input in enumerate(data_loader):
-        input_size = input['labels'].size(0)
-        input = {'input_ids': input['input_ids'], 'attention_mask': input['attention_mask'],
-                 'labels': input['labels']}
-        input = to_device(input, cfg['device'])
-        output = model(**input)
-        input_ = {'target': input['labels']}
-        output_ = {'target': output['logits'], 'loss': output['loss']}
+        if cfg['task_name'] in ['s2s', 'sc', 'clm']:
+            input_size = input['labels'].size(0)
+            input = {'input_ids': input['input_ids'], 'attention_mask': input['attention_mask'],
+                     'labels': input['labels']}
+            input = to_device(input, cfg['device'])
+            output = model(**input)
+            input_ = {'target': input['labels']}
+            output_ = {'target': output['logits'], 'loss': output['loss']}
+        else:
+            input = collate(input)
+            input_size = input['data'].size(0)
+            input = to_device(input, cfg['device'])
+            output = model(**input)
+            input_ = {'target': input['target']}
+            output_ = {'target': output['target'], 'loss': output['loss']}
         output['loss'].backward()
         optimizer.step()
         scheduler.step()
@@ -113,13 +121,21 @@ def test(data_loader, model, metric, logger):
     with torch.no_grad():
         model.train(False)
         for i, input in enumerate(data_loader):
-            input_size = input['labels'].size(0)
-            input = {'input_ids': input['input_ids'], 'attention_mask': input['attention_mask'],
-                     'labels': input['labels']}
-            input = to_device(input, cfg['device'])
-            output = model(**input)
-            input_ = {'target': input['labels']}
-            output_ = {'target': output['logits'], 'loss': output['loss']}
+            if cfg['task_name'] in ['s2s', 'sc', 'clm']:
+                input_size = input['labels'].size(0)
+                input = {'input_ids': input['input_ids'], 'attention_mask': input['attention_mask'],
+                         'labels': input['labels']}
+                input = to_device(input, cfg['device'])
+                output = model(**input)
+                input_ = {'target': input['labels']}
+                output_ = {'target': output['logits'], 'loss': output['loss']}
+            else:
+                input = collate(input)
+                input_size = input['data'].size(0)
+                input = to_device(input, cfg['device'])
+                output = model(**input)
+                input_ = {'target': input['target']}
+                output_ = {'target': output['target'], 'loss': output['loss']}
             if cfg['task_name'] == 's2s':
                 output_['generate'] = model.generate(input_ids=input["input_ids"],
                                                      max_new_tokens=cfg['max_new_tokens'])
