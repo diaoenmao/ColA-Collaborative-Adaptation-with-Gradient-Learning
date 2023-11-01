@@ -48,38 +48,44 @@ def process_control():
         cfg[model_name]['scheduler_name'] = 'LinearAnnealingLR'
         cfg[model_name]['warmup_ratio'] = 0.05
     else:
-        cfg[model_name]['optimizer_name'] = 'AdamW'
-        if cfg['ft_name'] == 'full':
-            cfg[model_name]['lr'] = 5e-6
-        else:
-            cfg[model_name]['lr'] = 3e-4
+        cfg[model_name]['optimizer_name'] = 'SGD'
+        cfg[model_name]['lr'] = 1e-1
         cfg[model_name]['momentum'] = 0.9
         cfg[model_name]['betas'] = (0.9, 0.999)
         cfg[model_name]['weight_decay'] = 5e-4
         cfg[model_name]['nesterov'] = True
-        cfg[model_name]['num_epochs'] = 40
+        cfg[model_name]['num_epochs'] = 400
         cfg[model_name]['batch_size'] = {'train': cfg['batch_size'], 'test': cfg['batch_size']}
-        cfg[model_name]['scheduler_name'] = 'LinearAnnealingLR'
-        cfg[model_name]['warmup_ratio'] = 0.05
+        cfg[model_name]['scheduler_name'] = 'CosineAnnealingLR'
     if ft_name_list[0] == 'cola' and len(ft_name_list) > 1:
         cfg['cola'] = {}
         cfg['cola']['num_steps'] = int(ft_name_list[2])
         hidden_size = 8
         cfg['cola']['lowrank'] = {'hidden_size': hidden_size, 'dropout': 0.0}
-        cfg['cola']['linear'] = {'bias': True}
+        cfg['cola']['linear'] = {'bias': False}
         cfg['cola']['mlp'] = {'hidden_size': 128, 'scale_factor': 2, 'num_layers': 2, 'activation': 'relu'}
         cfg['cola']['embedding'] = {'hidden_size': hidden_size, 'dropout': 0.0}
         cfg['cola']['model_name'] = ft_name_list[1]
         cfg['cola']['shuffle'] = {'train': True, 'test': False}
-        cfg['cola']['optimizer_name'] = 'AdamW'
-        cfg['cola']['lr'] = 3e-4
-        cfg['cola']['momentum'] = 0.9
-        cfg['cola']['betas'] = (0.9, 0.999)
-        cfg['cola']['weight_decay'] = 5e-4
-        cfg['cola']['nesterov'] = True
-        cfg['cola']['scheduler_name'] = 'LinearAnnealingLR'
-        cfg['cola']['warmup_ratio'] = 0.05
-        cfg['cola']['batch_size'] = {'train': cfg['batch_size'], 'test': cfg['batch_size']}
+        if cfg['task_name'] in ['s2s', 'sc', 'clm']:
+            cfg['cola']['optimizer_name'] = 'AdamW'
+            cfg['cola']['lr'] = 3e-4
+            cfg['cola']['momentum'] = 0.9
+            cfg['cola']['betas'] = (0.9, 0.999)
+            cfg['cola']['weight_decay'] = 5e-4
+            cfg['cola']['nesterov'] = True
+            cfg['cola']['batch_size'] = {'train': cfg['batch_size'], 'test': cfg['batch_size']}
+            cfg['cola']['scheduler_name'] = 'LinearAnnealingLR'
+            cfg['cola']['warmup_ratio'] = 0.05
+        else:
+            cfg['cola']['optimizer_name'] = 'SGD'
+            cfg['cola']['lr'] = 1e-1
+            cfg['cola']['momentum'] = 0.9
+            cfg['cola']['betas'] = (0.9, 0.999)
+            cfg['cola']['weight_decay'] = 5e-4
+            cfg['cola']['nesterov'] = True
+            cfg['cola']['batch_size'] = {'train': cfg['batch_size'], 'test': cfg['batch_size']}
+            cfg['cola']['scheduler_name'] = 'CosineAnnealingLR'
     return
 
 

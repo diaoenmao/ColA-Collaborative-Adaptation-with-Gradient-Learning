@@ -17,7 +17,8 @@ if __name__ == "__main__":
                 cfg['control']['task_name'] = 'ic'
                 cfg['control']['model_name'] = 'linear'
             process_control()
-            dataset = make_dataset(cfg['data_name'], cfg['subset_name'])
+            dataset = make_dataset(cfg['data_name'],
+                                   cfg['subset_name'])
             model, tokenizer = make_model(cfg['model_name'])
             dataset = process_dataset(dataset, tokenizer)
             print('{}: {}'.format(data_name, cfg['data_size']))
