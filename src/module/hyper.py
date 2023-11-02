@@ -51,7 +51,7 @@ def process_control():
         cfg[model_name]['warmup_ratio'] = 0.05
     else:
         cfg[model_name]['optimizer_name'] = 'SGD'
-        cfg[model_name]['lr'] = 1e-1
+        cfg[model_name]['lr'] = 3e-2
         cfg[model_name]['momentum'] = 0.9
         cfg[model_name]['betas'] = (0.9, 0.999)
         cfg[model_name]['weight_decay'] = 5e-4
