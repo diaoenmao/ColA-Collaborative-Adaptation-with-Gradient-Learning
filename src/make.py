@@ -5,7 +5,7 @@ import itertools
 parser = argparse.ArgumentParser(description='config')
 parser.add_argument('--run', default='train', type=str)
 parser.add_argument('--init_gpu', default=0, type=int)
-parser.add_argument('--num_gpus', default=4, type=int)
+parser.add_argument('--num_gpu', default=4, type=int)
 parser.add_argument('--world_size', default=1, type=int)
 parser.add_argument('--init_seed', default=0, type=int)
 parser.add_argument('--round', default=4, type=int)
@@ -31,7 +31,7 @@ def make_controls(script_name, init_seeds, world_size, num_experiment, resume_mo
 def main():
     run = args['run']
     init_gpu = args['init_gpu']
-    num_gpus = args['num_gpus']
+    num_gpu = args['num_gpu']
     world_size = args['world_size']
     round = args['round']
     experiment_step = args['experiment_step']
@@ -42,7 +42,7 @@ def main():
     split_round = args['split_round']
     task_name = args['task_name']
     gpu_ids = [','.join(str(i) for i in list(range(x, x + world_size))) for x in
-               list(range(init_gpu, init_gpu + num_gpus, world_size))]
+               list(range(init_gpu, init_gpu + num_gpu, world_size))]
     init_seeds = [list(range(init_seed, init_seed + num_experiment, experiment_step))]
     world_size = [[world_size]]
     num_experiment = [[experiment_step]]

@@ -81,7 +81,7 @@ def process_control():
             cfg['cola']['warmup_ratio'] = 0.05
         else:
             cfg['cola']['optimizer_name'] = 'SGD'
-            cfg['cola']['lr'] = 1e-1
+            cfg['cola']['lr'] = 3e-2
             cfg['cola']['momentum'] = 0.9
             cfg['cola']['betas'] = (0.9, 0.999)
             cfg['cola']['weight_decay'] = 5e-4

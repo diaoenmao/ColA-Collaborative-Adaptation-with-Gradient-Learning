@@ -89,6 +89,7 @@ def train(data_loader, model, optimizer, scheduler, metric, logger):
             output = model(**input)
             input_ = {'target': input['labels']}
             output_ = {'target': output['logits'], 'loss': output['loss']}
+            output['loss'].backward()
         else:
             input = collate(input)
             input_size = input['data'].size(0)
@@ -96,7 +97,8 @@ def train(data_loader, model, optimizer, scheduler, metric, logger):
             output = model(**input)
             input_ = {'target': input['target']}
             output_ = {'target': output['target'], 'loss': output['loss']}
-        output['loss'].backward()
+            output['loss'].backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
         optimizer.step()
         scheduler.step()
         optimizer.zero_grad()

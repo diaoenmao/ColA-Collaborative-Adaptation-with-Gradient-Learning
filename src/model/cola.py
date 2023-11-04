@@ -53,6 +53,8 @@ class LowRank(nn.Module):
         output['target'] = self.forward(x)
         output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='sum')
         output['loss'].backward()
+        if cfg['task_name'] in ['ic']:
+            torch.nn.utils.clip_grad_norm_(self.parameters(), 1)
         optimizer.step()
         scheduler.step()
         optimizer.zero_grad()
@@ -112,6 +114,8 @@ class Linear(nn.Module):
         output['target'] = self.forward(x)
         output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='mean')
         output['loss'].backward()
+        if cfg['task_name'] in ['ic']:
+            torch.nn.utils.clip_grad_norm_(self.parameters(), 1)
         optimizer.step()
         scheduler.step()
         optimizer.zero_grad()
@@ -173,6 +177,8 @@ class MLP(nn.Module):
         output['target'] = self.forward(x)
         output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='mean')
         output['loss'].backward()
+        if cfg['task_name'] in ['ic']:
+            torch.nn.utils.clip_grad_norm_(self.parameters(), 1)
         optimizer.step()
         scheduler.step()
         optimizer.zero_grad()
@@ -226,6 +232,8 @@ class Embedding(nn.Module):
         output['target'] = self.forward(x)
         output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='mean')
         output['loss'].backward()
+        if cfg['task_name'] in ['ic']:
+            torch.nn.utils.clip_grad_norm_(self.parameters(), 1)
         optimizer.step()
         scheduler.step()
         optimizer.zero_grad()
