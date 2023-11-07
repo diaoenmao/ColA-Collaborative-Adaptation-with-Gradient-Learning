@@ -4,13 +4,15 @@ import torch.nn.functional as F
 import torch.optim as optim
 from transformers import get_linear_schedule_with_warmup
 from config import cfg
+from diffusers import DDPMScheduler
 from .huggingface import make_hf_model
 from module.peft import get_peft_model, TaskType, LoraConfig, AdaLoraConfig, IA3Config, PromptTuningInit, \
-    PromptTuningConfig, PrefixTuningConfig, PromptEncoderConfig, ColaConfig
+    PromptTuningConfig, PrefixTuningConfig, PromptEncoderConfig, ColaConfig, UNET_TO_COLA_TARGET_MODULES_MAPPING, \
+    UNET_TO_LORA_TARGET_MODULES_MAPPING
 
 
-def make_model(model_name):
-    model, tokenizer = make_hf_model(model_name)
+def make_model(model_name, sub_model_name=None):
+    model, tokenizer = make_hf_model(model_name, sub_model_name)
     return model, tokenizer
 
 
@@ -127,10 +129,26 @@ def make_scheduler(optimizer, tag):
             cfg['num_steps']['train'] * cfg[cfg['model_name']]['num_epochs'] * cfg[tag]['warmup_ratio']),
                                                     num_training_steps=cfg['num_steps']['train'] *
                                                                        cfg[cfg['model_name']]['num_epochs'])
+    elif cfg[tag]['scheduler_name'] == 'ConstantLR':
+        scheduler = optim.lr_scheduler.ConstantLR(optimizer, factor=cfg[tag]['factor'])
     else:
         raise ValueError('Not valid scheduler name')
     return scheduler
 
+def make_noise_scheduler(tag):
+    if 'noise_scheduler_name' not in cfg[tag]:
+        raise ValueError('Not valid noise scheduler name')
+
+    if cfg[tag]['noise_scheduler_name'] == 'DDPM':
+        noise_scheduler = DDPMScheduler(
+            beta_start=cfg[tag]['beta_start'],
+            beta_end=cfg[tag]['beta_end'],
+            beta_schedule=cfg[tag]['beta_schedule'],
+            num_train_timesteps=cfg[tag]['num_train_timesteps'],
+        )
+    else:
+        raise ValueError('Not valid noise scheduler name')
+    return noise_scheduler 
 
 def make_ft_model(model):
     if cfg['task_name'] == 'clm':
@@ -139,6 +157,8 @@ def make_ft_model(model):
         peft_config = make_config_s2s()
     elif cfg['task_name'] == 'sc':
         peft_config = make_config_sc()
+    elif cfg['task_name'] == 't2i':
+        peft_config = make_config_t2i()
     else:
         raise ValueError('Not valid task name')
     model = get_peft_model(model, peft_config)
@@ -151,6 +171,25 @@ def freeze_model(model):
             p.requires_grad = False
     return
 
+def make_config_t2i():
+    model_name = cfg['model_name']
+    if cfg['ft_name'] == 'dreamboothlora':
+        peft_config = LoraConfig(
+            r=cfg[model_name]['lora_r'],
+            lora_alpha=cfg[model_name]['lora_alpha'],
+            target_modules=UNET_TO_LORA_TARGET_MODULES_MAPPING,
+            lora_dropout=cfg[model_name]['lora_dropout'],
+            bias=cfg[model_name]['lora_bias'],
+            inference_mode=False,
+        )
+    elif cfg['ft_name'] == 'dreamboothcola':
+        peft_config = ColaConfig(
+            target_modules=UNET_TO_COLA_TARGET_MODULES_MAPPING,
+            inference_mode=False,
+        )
+    else:
+        raise ValueError('Not valid ft name')
+    return peft_config
 
 def make_config_clm():
     if cfg['ft_name'] == 'lora':

@@ -2,6 +2,7 @@ import copy
 import dataset
 import numpy as np
 import os
+import sys
 import copy
 import torch
 from functools import partial
@@ -11,8 +12,12 @@ from torchvision import transforms
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.dataloader import default_collate
 from transformers import default_data_collator
+from module import check_exists, makedir_exist_ok, save, load
+from .dreambooth_dataset import DreamBoothDataset
+from .utils import download_url, extract_file
 from config import cfg
 from module import to_device
+from model.model import make_model
 
 data_stats = {'MNIST': ((0.1307,), (0.3081,)), 'FashionMNIST': ((0.2860,), (0.3530,)),
               'CIFAR10': ((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
@@ -110,6 +115,46 @@ def make_dataset(data_name, subset_name=None, verbose=True):
     elif data_name in ['dolly']:
         dataset_ = load_dataset(cfg['hf_data_name'], cfg['hf_subset_name'], cache_dir=root)
         dataset_ = dataset_['train'].train_test_split(test_size=0.1, seed=cfg['seed'])
+    elif data_name in ['dbdataset']:
+
+        # dataset_['train'] = eval('dataset.{}(root=root, split="train", '
+        #                          'transform=dataset.Compose([transforms.ToTensor()]))'.format(data_name))
+        # dataset_['test'] = eval('dataset.{}(root=root, split="test", '
+        #                         'transform=dataset.Compose([transforms.ToTensor()]))'.format(data_name))
+
+        model_name = cfg['model_name']
+        # sys.path.append("..")
+        # from model import make_model
+        # model, tokenizer = make_model(model_name)
+        tokenizer, model = make_model(model_name)
+        dataset_['train'] = DreamBoothDataset(
+            root=root,
+            split='train',
+            model=model,
+            tokenizer=tokenizer,
+            instance_data_dir=cfg['subset_name'],
+            instance_prompt='a photo of sks dog',
+            class_data_dir=f"{cfg['subset_name']}_class",
+            class_prompt='a photo of dog',
+            transform=None,
+        )
+
+        size = cfg[model_name]['resolution']
+        center_crop = False
+        dataset_['train'].transform = [
+            transforms.Resize(size, interpolation=transforms.InterpolationMode.BILINEAR),
+            transforms.CenterCrop(size) if center_crop else transforms.RandomCrop(size),
+            transforms.ToTensor(),
+            transforms.Normalize([0.5], [0.5])
+        ]
+        # dataset_['train'].transform = dataset.Compose([
+        #     transforms.ToTensor(),
+        #     transforms.Normalize(*data_stats[data_name])])
+        # dataset_['test'].transform = dataset.Compose([
+        #     transforms.ToTensor(),
+        #     transforms.Normalize(*data_stats[data_name])])
+        
+        # dataset_ = dataset_['train'].train_test_split(test_size=0.1, seed=cfg['seed'])
     else:
         raise ValueError('Not valid dataset name')
     if verbose:
@@ -120,6 +165,27 @@ def make_dataset(data_name, subset_name=None, verbose=True):
 def input_collate(batch):
     return {key: [b[key] for b in batch] for key in batch[0]}
 
+def dreambooth_input_collate(batch):
+    input_ids = [b["instance_prompt_ids"] for b in batch]
+    pixel_values = [b["instance_images"] for b in batch]
+
+    # Concat class and instance examples for prior preservation.
+    # We do this to avoid doing two forward passes.
+    if cfg[cfg['model_name']]['prior_loss_weight'] > 0:
+        input_ids += [b["class_prompt_ids"] for b in batch]
+        pixel_values += [b["class_images"] for b in batch]
+
+    pixel_values = torch.stack(pixel_values)
+    pixel_values = pixel_values.to(memory_format=torch.contiguous_format).float()
+
+    input_ids = torch.cat(input_ids, dim=0)
+
+    batch = {
+        "input_ids": input_ids,
+        "pixel_values": pixel_values,
+    }
+    return batch
+
 
 def make_data_collate(collate_mode, tokenizer=None):
     if collate_mode == 'dict':
@@ -128,6 +194,8 @@ def make_data_collate(collate_mode, tokenizer=None):
         return default_collate
     elif collate_mode == 'transformer':
         return default_data_collator
+    elif collate_mode == 'dreambooth':
+        return dreambooth_input_collate
     elif collate_mode == 'pad':
         return partial(pad_collate, tokenizer=tokenizer)
     else:

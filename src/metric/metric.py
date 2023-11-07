@@ -40,6 +40,8 @@ def make_metric(metric_name, tokenizer):
             metric_name['test'].extend(['GLUE'])
         else:
             raise ValueError('Not valid data name')
+    elif cfg['task_name'] == 't2i':
+        return None
     else:
         raise ValueError('Not valid task name')
     metric = Metric(metric_name, pivot, pivot_direction, pivot_name, tokenizer)

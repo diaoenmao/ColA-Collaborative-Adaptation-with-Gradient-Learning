@@ -18,6 +18,8 @@ def process_control():
         cfg['dist_mode'] = 'joint'
     cfg['split_metric'] = False
     model_name = cfg['model_name']
+    if model_name not in cfg:
+        cfg[model_name] = {}
     cfg[model_name]['shuffle'] = {'train': True, 'test': False}
     cfg[model_name]['optimizer_name'] = 'AdamW'
     if cfg['ft_name'] == 'full':
@@ -50,6 +52,31 @@ def process_control():
         cfg['cola']['scheduler_name'] = 'LinearAnnealingLR'
         cfg['cola']['warmup_ratio'] = 0.05
         cfg['cola']['batch_size'] = {'train': cfg['batch_size'], 'test': cfg['batch_size']}
+    if cfg['task_name'] == 't2i':
+        cfg['collate_mode'] = 'dreambooth'
+        # all settings are from the peft example: https://github.com/huggingface/peft
+        cfg[model_name]['prior_loss_weight'] = 1
+        cfg[model_name]['resolution'] = 512
+        cfg[model_name]['num_class_image'] = 200
+        # The dimension used by the LoRA update matrices
+        cfg[model_name]['lora_r'] = 16
+        # Scaling factor
+        cfg[model_name]['lora_alpha'] = 27
+        cfg[model_name]['lora_dropout'] = 0
+        cfg[model_name]['lora_bias'] = "none"
+        cfg[model_name]['max_train_steps'] = 800
+
+        cfg[model_name]['noise_scheduler_name'] = 'DDPM'
+        cfg[model_name]['beta_start'] = 0.00085
+        cfg[model_name]['beta_end'] = 0.012
+        cfg[model_name]['beta_schedule'] = 'scaled_linear'
+        cfg[model_name]['num_train_timesteps'] = 1000
+
+        cfg[model_name]['scheduler_name'] = 'ConstantLR'
+        cfg[model_name]['factor'] = 1
+
+        cfg[model_name]['num_inference_steps'] = 50
+        cfg[model_name]['guidance_scale'] = 7.5
     return
 
 
@@ -137,10 +164,135 @@ def make_data_name():
                                                'label_column': 'response'}
                                        }
 
-                  }
+                  },
+        # Dataset: https://github.com/google/dreambooth
+        # DreamBooth paper: https://arxiv.org/pdf/2208.12242.pdf
+        'dbdataset': { 'data_name': 'DreamBoothDataset',
+                        'subset_name_dict': {
+                            'backpack': {'subset_name': 'backpack',
+                                         'class': 'backpack',
+                                         'category': 'object'},
+                            'backpack_dog': {'subset_name': 'backpack_dog',
+                                             'class': 'backpack',
+                                             'category': 'object'},
+                            'bear_plushie': {'subset_name': 'bear_plushie',
+                                             'class': 'stuffed animal',
+                                             'category': 'toy'},
+                            'berry_bowl': {'subset_name': 'berry_bowl',
+                                           'class': 'bowl',
+                                           'category': 'object'},
+                            'can': {'subset_name': 'can', 'class': 'can', 'category': 'object'},
+                            'candle': {'subset_name': 'candle', 'class': 'candle', 'category': 'object'},
+                            'cat': {'subset_name': 'cat', 'class': 'cat', 'category': 'live object'},
+                            'cat2': {'subset_name': 'cat2', 'class': 'cat', 'category': 'live object'},
+                            'clock': {'subset_name': 'clock', 'class': 'clock', 'category': 'object'},
+                            'colorful_sneaker': {'subset_name': 'colorful_sneaker',
+                                                 'class': 'sneaker',
+                                                 'category': 'object'},
+                            'dog': {'subset_name': 'dog', 'class': 'dog', 'category': 'live object'},
+                            'dog2': {'subset_name': 'dog2', 'class': 'dog', 'category': 'live object'},
+                            'dog3': {'subset_name': 'dog3', 'class': 'dog', 'category': 'live object'},
+                            'dog5': {'subset_name': 'dog5', 'class': 'dog', 'category': 'live object'},
+                            'dog6': {'subset_name': 'dog6', 'class': 'dog', 'category': 'live object'},
+                            'dog7': {'subset_name': 'dog7', 'class': 'dog', 'category': 'live object'},
+                            'dog8': {'subset_name': 'dog8', 'class': 'dog', 'category': 'live object'},
+                            'duck_toy': {'subset_name': 'duck_toy', 'class': 'toy', 'category': 'toy'},
+                            'fancy_boot': {'subset_name': 'fancy_boot',
+                                           'class': 'boot',
+                                           'category': 'object'},
+                            'grey_sloth_plushie': {'subset_name': 'grey_sloth_plushie',
+                                                   'class': 'stuffed animal',
+                                                   'category': 'toy'},
+                            'monster_toy': {'subset_name': 'monster_toy',
+                                            'class': 'toy',
+                                            'category': 'toy'},
+                            'pink_sunglasses': {'subset_name': 'pink_sunglasses',
+                                                'class': 'glasses',
+                                                'category': 'accessory'},
+                            'poop_emoji': {'subset_name': 'poop_emoji',
+                                           'class': 'toy',
+                                           'category': 'toy'},
+                            'rc_car': {'subset_name': 'rc_car', 'class': 'toy', 'category': 'toy'},
+                            'red_cartoon': {'subset_name': 'red_cartoon',
+                                            'class': 'cartoon',
+                                            'category': 'object'},
+                            'robot_toy': {'subset_name': 'robot_toy', 'class': 'toy', 'category': 'toy'},
+                            'shiny_sneaker': {'subset_name': 'shiny_sneaker',
+                                              'class': 'sneaker',
+                                              'category': 'object'},
+                            'teapot': {'subset_name': 'teapot', 'class': 'teapot', 'category': 'object'},
+                            'vase': {'subset_name': 'vase', 'class': 'vase', 'category': 'object'},
+                            'wolf_plushie': {'subset_name': 'wolf_plushie',
+                                             'class': 'stuffed animal',
+                                             'category': 'toy'}}
+        }
     }
     cfg['hf_data_name'] = data_name_dict[cfg['data_name']]['data_name']
     cfg['hf_subset_name'] = data_name_dict[cfg['data_name']]['subset_name_dict'][cfg['subset_name']]['subset_name']
-    cfg['text_column'] = data_name_dict[cfg['data_name']]['subset_name_dict'][cfg['subset_name']]['text_column']
-    cfg['label_column'] = data_name_dict[cfg['data_name']]['subset_name_dict'][cfg['subset_name']]['label_column']
+    if cfg['hf_data_name'] != 'DreamBoothDataset':
+        cfg['text_column'] = data_name_dict[cfg['data_name']]['subset_name_dict'][cfg['subset_name']]['text_column']
+        cfg['label_column'] = data_name_dict[cfg['data_name']]['subset_name_dict'][cfg['subset_name']]['label_column']
     return
+
+
+
+# Object Prompts
+
+# prompt_list = [
+# 'a {0} {1} in the jungle'.format(unique_token, class_token),
+# 'a {0} {1} in the snow'.format(unique_token, class_token),
+# 'a {0} {1} on the beach'.format(unique_token, class_token),
+# 'a {0} {1} on a cobblestone street'.format(unique_token, class_token),
+# 'a {0} {1} on top of pink fabric'.format(unique_token, class_token),
+# 'a {0} {1} on top of a wooden floor'.format(unique_token, class_token),
+# 'a {0} {1} with a city in the background'.format(unique_token, class_token),
+# 'a {0} {1} with a mountain in the background'.format(unique_token, class_token),
+# 'a {0} {1} with a blue house in the background'.format(unique_token, class_token),
+# 'a {0} {1} on top of a purple rug in a forest'.format(unique_token, class_token),
+# 'a {0} {1} with a wheat field in the background'.format(unique_token, class_token),
+# 'a {0} {1} with a tree and autumn leaves in the background'.format(unique_token, class_token),
+# 'a {0} {1} with the Eiffel Tower in the background'.format(unique_token, class_token),
+# 'a {0} {1} floating on top of water'.format(unique_token, class_token),
+# 'a {0} {1} floating in an ocean of milk'.format(unique_token, class_token),
+# 'a {0} {1} on top of green grass with sunflowers around it'.format(unique_token, class_token),
+# 'a {0} {1} on top of a mirror'.format(unique_token, class_token),
+# 'a {0} {1} on top of the sidewalk in a crowded street'.format(unique_token, class_token),
+# 'a {0} {1} on top of a dirt road'.format(unique_token, class_token),
+# 'a {0} {1} on top of a white rug'.format(unique_token, class_token),
+# 'a red {0} {1}'.format(unique_token, class_token),
+# 'a purple {0} {1}'.format(unique_token, class_token),
+# 'a shiny {0} {1}'.format(unique_token, class_token),
+# 'a wet {0} {1}'.format(unique_token, class_token),
+# 'a cube shaped {0} {1}'.format(unique_token, class_token)
+# ]
+
+# Live Subject Prompts
+
+# prompt_list = [
+# 'a {0} {1} in the jungle'.format(unique_token, class_token),
+# 'a {0} {1} in the snow'.format(unique_token, class_token),
+# 'a {0} {1} on the beach'.format(unique_token, class_token),
+# 'a {0} {1} on a cobblestone street'.format(unique_token, class_token),
+# 'a {0} {1} on top of pink fabric'.format(unique_token, class_token),
+# 'a {0} {1} on top of a wooden floor'.format(unique_token, class_token),
+# 'a {0} {1} with a city in the background'.format(unique_token, class_token),
+# 'a {0} {1} with a mountain in the background'.format(unique_token, class_token),
+# 'a {0} {1} with a blue house in the background'.format(unique_token, class_token),
+# 'a {0} {1} on top of a purple rug in a forest'.format(unique_token, class_token),
+# 'a {0} {1} wearing a red hat'.format(unique_token, class_token),
+# 'a {0} {1} wearing a santa hat'.format(unique_token, class_token),
+# 'a {0} {1} wearing a rainbow scarf'.format(unique_token, class_token),
+# 'a {0} {1} wearing a black top hat and a monocle'.format(unique_token, class_token),
+# 'a {0} {1} in a chef outfit'.format(unique_token, class_token),
+# 'a {0} {1} in a firefighter outfit'.format(unique_token, class_token),
+# 'a {0} {1} in a police outfit'.format(unique_token, class_token),
+# 'a {0} {1} wearing pink glasses'.format(unique_token, class_token),
+# 'a {0} {1} wearing a yellow shirt'.format(unique_token, class_token),
+# 'a {0} {1} in a purple wizard outfit'.format(unique_token, class_token),
+# 'a red {0} {1}'.format(unique_token, class_token),
+# 'a purple {0} {1}'.format(unique_token, class_token),
+# 'a shiny {0} {1}'.format(unique_token, class_token),
+# 'a wet {0} {1}'.format(unique_token, class_token),
+# 'a cube shaped {0} {1}'.format(unique_token, class_token)
+# ]
+
