@@ -281,7 +281,7 @@ def make_config_sc():
 def make_config_ic(model):
     target_modules = []
     for k, v in model.named_modules():
-        if isinstance(v, (nn.Linear, nn.Conv1d, nn.Conv2d)):
+        if isinstance(v, (nn.Linear, nn.Conv1d, nn.Conv2d)) and 'linear' not in k:
             target_modules.append(k)
     if cfg['ft_name'] == 'lora':
         peft_config = LoraConfig(

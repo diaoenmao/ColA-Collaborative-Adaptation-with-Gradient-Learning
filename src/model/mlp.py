@@ -12,12 +12,12 @@ class MLP(nn.Module):
         blocks = []
         for _ in range(num_layers):
             blocks.append(nn.Linear(input_size, hidden_size))
-            if activation == 'relu':
-                blocks.append(nn.ReLU())
-            elif activation == 'sigmoid':
-                blocks.append(nn.Sigmoid())
-            else:
-                raise ValueError('Not valid activation')
+            # if activation == 'relu':
+            #     blocks.append(nn.ReLU())
+            # elif activation == 'sigmoid':
+            #     blocks.append(nn.Sigmoid())
+            # else:
+            #     raise ValueError('Not valid activation')
             input_size = hidden_size
             hidden_size = int(hidden_size * scale_factor)
         self.blocks = nn.Sequential(*blocks)

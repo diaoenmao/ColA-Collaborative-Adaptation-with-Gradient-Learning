@@ -41,8 +41,13 @@ class LowRank(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self):
-        nn.init.kaiming_uniform_(self.cola_A.weight, a=math.sqrt(5))
+        # nn.init.kaiming_uniform_(self.cola_A.weight, a=math.sqrt(5))
+        # nn.init.zeros_(self.cola_B.weight)
+        # nn.init.kaiming_uniform_(self.cola_A.weight, a=math.sqrt(5))
+        nn.init.ones_(self.cola_A.weight)
+        # self.cola_A.weight.data = torch.arange(self.cola_A.weight.numel()).float().view(self.cola_A.weight.size()) / self.cola_A.weight.data.numel()
         nn.init.zeros_(self.cola_B.weight)
+        # nn.init.ones_(self.cola_B.weight)
         return
 
     def fit(self, input, optimizer, scheduler):
@@ -50,11 +55,17 @@ class LowRank(nn.Module):
         input = to_device(input, cfg['device'])
         output = {}
         x = input['data']
-        output['target'] = self.forward(x)
+        output['target'] = self.forward(x).float()
         output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='sum')
         output['loss'].backward()
-        if cfg['task_name'] in ['ic']:
-            torch.nn.utils.clip_grad_norm_(self.parameters(), 1)
+        # if cfg['task_name'] in ['ic']:
+        #     torch.nn.utils.clip_grad_norm_(self.parameters(), 1)
+        for k, v in self.named_parameters():
+            if v.grad is not None:
+                print(k, v.size())
+                print(v.grad.abs().sum())
+                print(v.grad.norm())
+                print(v.grad.min(), v.grad.max())
         optimizer.step()
         scheduler.step()
         optimizer.zero_grad()
@@ -77,9 +88,12 @@ class LowRank(nn.Module):
         return delta_weight
 
     def forward(self, x):
+        x_dtype = x.dtype
+        x = x.float()
         x = self.dropout(x)
         x = self.cola_A(x)
         x = self.cola_B(x)
+        x = x.to(x_dtype)
         return x
 
 
@@ -104,6 +118,8 @@ class Linear(nn.Module):
 
     def reset_parameters(self):
         nn.init.zeros_(self.linear.weight)
+        if self.bias:
+            nn.init.zeros_(self.linear.bias)
         return
 
     def fit(self, input, optimizer, scheduler):
@@ -111,7 +127,7 @@ class Linear(nn.Module):
         input = to_device(input, cfg['device'])
         output = {}
         x = input['data']
-        output['target'] = self.forward(x)
+        output['target'] = self.forward(x).float()
         output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='mean')
         output['loss'].backward()
         if cfg['task_name'] in ['ic']:
@@ -134,7 +150,10 @@ class Linear(nn.Module):
         return delta_weight
 
     def forward(self, x):
+        x_dtype = x.dtype
+        x = x.float()
         x = self.linear(x)
+        x = x.to(x_dtype)
         return x
 
 
@@ -167,6 +186,7 @@ class MLP(nn.Module):
 
     def reset_parameters(self):
         nn.init.zeros_(self.linear.weight)
+        nn.init.zeros_(self.linear.bias)
         return
 
     def fit(self, input, optimizer, scheduler):
@@ -174,7 +194,7 @@ class MLP(nn.Module):
         input = to_device(input, cfg['device'])
         output = {}
         x = input['data']
-        output['target'] = self.forward(x)
+        output['target'] = self.forward(x).float()
         output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='mean')
         output['loss'].backward()
         if cfg['task_name'] in ['ic']:
@@ -188,12 +208,15 @@ class MLP(nn.Module):
         raise NotImplementedError
 
     def forward(self, x):
+        x_dtype = x.dtype
+        x = x.float()
         if self.mode == 'conv2d':
             x = x.permute(0, 2, 3, 1)
         x = self.blocks(x)
         x = self.linear(x)
         if self.mode == 'conv2d':
             x = x.permute(0, 3, 1, 2)
+        x = x.to(x_dtype)
         return x
 
 
@@ -229,7 +252,7 @@ class Embedding(nn.Module):
         input = to_device(input, cfg['device'])
         output = {}
         x = input['data']
-        output['target'] = self.forward(x)
+        output['target'] = self.forward(x).float()
         output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='mean')
         output['loss'].backward()
         if cfg['task_name'] in ['ic']:
@@ -244,6 +267,8 @@ class Embedding(nn.Module):
         return delta_weight
 
     def forward(self, x):
+        x_dtype = x.dtype
+        x = x.float()
         x = self.dropout(x)
         x = F.embedding(
             x,
@@ -255,6 +280,7 @@ class Embedding(nn.Module):
             self.sparse,
         )
         x = x @ self.cola_embedding_B.T
+        x = x.to(x_dtype)
         return x
 
 

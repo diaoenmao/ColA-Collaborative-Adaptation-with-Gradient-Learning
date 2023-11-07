@@ -575,17 +575,15 @@ class Linear(nn.Linear, ColaLayer):
         self.is_target_conv_1d_layer = is_target_conv_1d_layer
 
     def merge(self, delta_weight):
-        # if self.active_adapter:
-        #     return
         if self.merged:
             warnings.warn("Already merged. Nothing to do.")
             return
         len_delta_weight = len(delta_weight)
         if len_delta_weight == 2:
             delta_weight, delta_bias = delta_weight
-        self.weight.data += self.get_delta_weight(delta_weight, self.active_adapter)
+        self.weight.data += self.get_delta_weight(delta_weight, self.active_adapter).to(self.weight.data.device, self.weight.data.dtype)
         if self.bias is not None and len_delta_weight == 2:
-            self.bias.data += delta_bias.data
+            self.bias.data += delta_bias.data.to(self.bias.data.device, self.bias.data.dtype)
         self.merged = True
         return
 
@@ -668,7 +666,7 @@ class Embedding(nn.Embedding, ColaLayer):
         if self.merged:
             warnings.warn("Already merged. Nothing to do.")
             return
-        self.weight.data += self.get_delta_weight(delta_weight, self.active_adapter)
+        self.weight.data += self.get_delta_weight(delta_weight, self.active_adapter).to(self.weight.data.device, self.weight.data.dtype)
         self.merged = True
         return
 
@@ -728,7 +726,13 @@ class Conv2d(nn.Conv2d, ColaLayer):
         if self.merged:
             warnings.warn("Already merged. Nothing to do.")
             return
-        self.weight.data += self.get_delta_weight(delta_weight, self.active_adapter)
+        len_delta_weight = len(delta_weight)
+        if len_delta_weight == 2:
+            delta_weight, delta_bias = delta_weight
+
+        self.weight.data += self.get_delta_weight(delta_weight, self.active_adapter).to(self.weight.data.device, self.weight.data.dtype)
+        if self.bias is not None and len_delta_weight == 2:
+            self.bias.data += delta_bias.data.to(self.bias.data.device, self.bias.data.dtype)
         self.merged = True
         return
 

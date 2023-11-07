@@ -34,7 +34,7 @@ def process_control():
         cfg['data_shape'] = data_shape[cfg['data_name']]
         cfg['target_size'] = target_size[cfg['data_name']]
     model_name = cfg['model_name']
-    cfg[model_name]['shuffle'] = {'train': True, 'test': False}
+    cfg[model_name]['shuffle'] = {'train': False, 'test': False}
     if cfg['task_name'] in ['s2s', 'sc', 'clm']:
         cfg[model_name]['optimizer_name'] = 'AdamW'
         if cfg['ft_name'] == 'full':
@@ -54,7 +54,7 @@ def process_control():
         cfg[model_name]['lr'] = 3e-2
         cfg[model_name]['momentum'] = 0.9
         cfg[model_name]['betas'] = (0.9, 0.999)
-        cfg[model_name]['weight_decay'] = 5e-4
+        cfg[model_name]['weight_decay'] = 0
         cfg[model_name]['nesterov'] = True
         cfg[model_name]['num_epochs'] = 400
         cfg[model_name]['batch_size'] = {'train': cfg['batch_size'], 'test': cfg['batch_size']}
@@ -84,7 +84,7 @@ def process_control():
             cfg['cola']['lr'] = 3e-2
             cfg['cola']['momentum'] = 0.9
             cfg['cola']['betas'] = (0.9, 0.999)
-            cfg['cola']['weight_decay'] = 5e-4
+            cfg['cola']['weight_decay'] = 0
             cfg['cola']['nesterov'] = True
             cfg['cola']['batch_size'] = {'train': cfg['batch_size'], 'test': cfg['batch_size']}
             cfg['cola']['scheduler_name'] = 'CosineAnnealingLR'

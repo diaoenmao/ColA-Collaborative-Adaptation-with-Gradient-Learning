@@ -53,6 +53,7 @@ def main():
         model_names = ['bart-base']
     elif task_name == 'clm':
         data_names = ['dolly-15k']
+        # model_names = ['llama-2']
         model_names = ['gpt2']
     elif task_name == 'sc':
         data_names = ['glue-cola', 'glue-mnli', 'glue-mrpc', 'glue-qnli', 'glue-qqp', 'glue-rte', 'glue-sst2',
@@ -60,7 +61,7 @@ def main():
         model_names = ['roberta-base']
     elif task_name == 'ic':
         data_names = ['MNIST', 'CIFAR10']
-        model_names = ['linear', 'mlp', 'cnn', 'resnet18']
+        model_names = ['linear', 'mlp', 'cnn']
     else:
         raise ValueError('Not valid task name')
     if mode == 'full':
@@ -77,7 +78,10 @@ def main():
             batch_size = ['256']
         else:
             ft_name = ['lora', 'adalora', 'ia3', 'promptune', 'prefixtune', 'ptune']
-            batch_size = ['32']
+            if model_names[0] == 'llama-2':
+                batch_size = ['8']
+            else:
+                batch_size = ['32']
         script_name = [['{}_peft.py'.format(run)]]
         control_name = [[data_names, model_names, [task_name], ft_name, batch_size]]
         controls = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode, control_name)
@@ -86,7 +90,10 @@ def main():
         if task_name == 'ic':
             batch_size = ['256']
         else:
-            batch_size = ['32']
+            if model_names[0] == 'llama-2':
+                batch_size = ['8']
+            else:
+                batch_size = ['32']
         script_name = [['{}_cola.py'.format(run)]]
         control_name = [[data_names, model_names, [task_name], ft_name, batch_size]]
         controls = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode, control_name)

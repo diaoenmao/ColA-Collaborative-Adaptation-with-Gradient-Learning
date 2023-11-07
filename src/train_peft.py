@@ -52,6 +52,10 @@ def runExperiment():
         model = make_ft_model(model)
         model = model.to(cfg['device'])
         model.print_trainable_parameters()
+        # for k, v in model.named_parameters():
+        #     if v.requires_grad:
+        #         print(k, v.size())
+        # exit()
         optimizer = make_optimizer(model.parameters(), cfg['model_name'])
         scheduler = make_scheduler(optimizer, cfg['model_name'])
     else:
@@ -106,8 +110,20 @@ def train(data_loader, model, optimizer, scheduler, metric, logger):
             input_ = {'target': input['target']}
             output_ = {'target': output['target'], 'loss': output['loss']}
             output['loss'].backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
+            # torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
+        for k, v in model.named_parameters():
+            if v.grad is not None:
+                print(i, k, v.size())
+                print(v.grad.abs().sum())
+                print(v.grad.norm())
+                print(v.grad.min(), v.grad.max())
         optimizer.step()
+        print('------------------------------')
+        for k, v in model.named_parameters():
+            if v.grad is not None:
+                print(i, k, v.size())
+                print(v.abs().mean())
+                print(v.norm())
         scheduler.step()
         optimizer.zero_grad()
         evaluation = metric.evaluate('train', 'batch', input_, output_)
@@ -124,6 +140,8 @@ def train(data_loader, model, optimizer, scheduler, metric, logger):
                              'Experiment Finished Time: {}'.format(exp_finished_time)]}
             logger.append(info, 'train')
             print(logger.write('train', metric.metric_name['train']))
+        if i == 1:
+            exit()
     return
 
 
