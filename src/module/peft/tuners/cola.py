@@ -618,7 +618,7 @@ class Linear(nn.Linear, ColaLayer):
             result = F.linear(x, transpose(self.weight, self.fan_in_fan_out), bias=self.bias)
 
             if self.cola_base[self.active_adapter]['model'] is not None:
-                x = x.to(self.cola_base[self.active_adapter]['dtype'])
+                # x = x.to(self.cola_base[self.active_adapter]['dtype'])
                 with torch.no_grad():
                     cola_output = self.cola_base[self.active_adapter]['model'](x) * self.cola_alpha[self.active_adapter]
                     cola_output.detach_()
@@ -786,7 +786,7 @@ class Conv2d(nn.Conv2d, ColaLayer):
             )
 
             if self.cola_base[self.active_adapter]['model'] is not None:
-                x = x.to(self.cola_base[self.active_adapter]['dtype'])
+                # x = x.to(self.cola_base[self.active_adapter]['dtype'])
                 with torch.no_grad():
                     cola_output = self.cola_base[self.active_adapter]['model'](x) * self.cola_alpha[self.active_adapter]
                     cola_output.detach_()

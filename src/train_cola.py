@@ -164,18 +164,10 @@ def train(data_loader, model, cola_base, optimizer, scheduler, metric, logger):
             output_target_buffer[k].append(output_target_i[k])
         if (i + 1) % cfg['cola']['num_steps'] == 0:
             for k in input_buffer:
-                print(i, k)
                 input_cola = torch.cat(input_buffer[k], dim=0)
                 output_target_cola = torch.cat(output_target_buffer[k], dim=0)
                 input_cola = {'data': input_cola, 'target': output_target_cola}
                 cola_base[k].fit(input_cola, optimizer[k], scheduler[k])
-            print('------------------------------')
-            for k in input_buffer:
-                print(i, k)
-                for k, v in cola_base[k].named_parameters():
-                    print(k, v.size())
-                    print(v.abs().mean())
-                    print(v.norm())
             input_buffer = defaultdict(list)
             output_target_buffer = defaultdict(list)
         evaluation = metric.evaluate('train', 'batch', input_, output_)
@@ -192,8 +184,6 @@ def train(data_loader, model, cola_base, optimizer, scheduler, metric, logger):
                              'Experiment Finished Time: {}'.format(exp_finished_time)]}
             logger.append(info, 'train')
             print(logger.write('train', metric.metric_name['train']), flush=True)
-        if i == 1:
-            exit()
     return
 
 
