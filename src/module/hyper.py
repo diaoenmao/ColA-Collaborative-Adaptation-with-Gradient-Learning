@@ -53,6 +53,7 @@ def process_control():
         cfg['cola']['warmup_ratio'] = 0.05
         cfg['cola']['batch_size'] = {'train': cfg['batch_size'], 'test': cfg['batch_size']}
     if cfg['task_name'] == 't2i':
+        cfg[model_name]['num_epochs'] = 1
         cfg['collate_mode'] = 'dreambooth'
         # all settings are from the peft example: https://github.com/huggingface/peft
         cfg[model_name]['prior_loss_weight'] = 1
@@ -64,8 +65,7 @@ def process_control():
         cfg[model_name]['lora_alpha'] = 27
         cfg[model_name]['lora_dropout'] = 0
         cfg[model_name]['lora_bias'] = "none"
-        cfg[model_name]['max_train_steps'] = 800
-
+        
         cfg[model_name]['noise_scheduler_name'] = 'DDPM'
         cfg[model_name]['beta_start'] = 0.00085
         cfg[model_name]['beta_end'] = 0.012
@@ -227,72 +227,12 @@ def make_data_name():
                                              'category': 'toy'}}
         }
     }
+    if cfg['data_name'] == 'dbdataset':
+        cfg['unique_id'] = 'sks'
+        cfg['unique_class'] = data_name_dict[cfg['data_name']]['subset_name_dict'][cfg['subset_name']]['class']
+        return
     cfg['hf_data_name'] = data_name_dict[cfg['data_name']]['data_name']
     cfg['hf_subset_name'] = data_name_dict[cfg['data_name']]['subset_name_dict'][cfg['subset_name']]['subset_name']
-    if cfg['hf_data_name'] != 'DreamBoothDataset':
-        cfg['text_column'] = data_name_dict[cfg['data_name']]['subset_name_dict'][cfg['subset_name']]['text_column']
-        cfg['label_column'] = data_name_dict[cfg['data_name']]['subset_name_dict'][cfg['subset_name']]['label_column']
+    cfg['text_column'] = data_name_dict[cfg['data_name']]['subset_name_dict'][cfg['subset_name']]['text_column']
+    cfg['label_column'] = data_name_dict[cfg['data_name']]['subset_name_dict'][cfg['subset_name']]['label_column']
     return
-
-
-
-# Object Prompts
-
-# prompt_list = [
-# 'a {0} {1} in the jungle'.format(unique_token, class_token),
-# 'a {0} {1} in the snow'.format(unique_token, class_token),
-# 'a {0} {1} on the beach'.format(unique_token, class_token),
-# 'a {0} {1} on a cobblestone street'.format(unique_token, class_token),
-# 'a {0} {1} on top of pink fabric'.format(unique_token, class_token),
-# 'a {0} {1} on top of a wooden floor'.format(unique_token, class_token),
-# 'a {0} {1} with a city in the background'.format(unique_token, class_token),
-# 'a {0} {1} with a mountain in the background'.format(unique_token, class_token),
-# 'a {0} {1} with a blue house in the background'.format(unique_token, class_token),
-# 'a {0} {1} on top of a purple rug in a forest'.format(unique_token, class_token),
-# 'a {0} {1} with a wheat field in the background'.format(unique_token, class_token),
-# 'a {0} {1} with a tree and autumn leaves in the background'.format(unique_token, class_token),
-# 'a {0} {1} with the Eiffel Tower in the background'.format(unique_token, class_token),
-# 'a {0} {1} floating on top of water'.format(unique_token, class_token),
-# 'a {0} {1} floating in an ocean of milk'.format(unique_token, class_token),
-# 'a {0} {1} on top of green grass with sunflowers around it'.format(unique_token, class_token),
-# 'a {0} {1} on top of a mirror'.format(unique_token, class_token),
-# 'a {0} {1} on top of the sidewalk in a crowded street'.format(unique_token, class_token),
-# 'a {0} {1} on top of a dirt road'.format(unique_token, class_token),
-# 'a {0} {1} on top of a white rug'.format(unique_token, class_token),
-# 'a red {0} {1}'.format(unique_token, class_token),
-# 'a purple {0} {1}'.format(unique_token, class_token),
-# 'a shiny {0} {1}'.format(unique_token, class_token),
-# 'a wet {0} {1}'.format(unique_token, class_token),
-# 'a cube shaped {0} {1}'.format(unique_token, class_token)
-# ]
-
-# Live Subject Prompts
-
-# prompt_list = [
-# 'a {0} {1} in the jungle'.format(unique_token, class_token),
-# 'a {0} {1} in the snow'.format(unique_token, class_token),
-# 'a {0} {1} on the beach'.format(unique_token, class_token),
-# 'a {0} {1} on a cobblestone street'.format(unique_token, class_token),
-# 'a {0} {1} on top of pink fabric'.format(unique_token, class_token),
-# 'a {0} {1} on top of a wooden floor'.format(unique_token, class_token),
-# 'a {0} {1} with a city in the background'.format(unique_token, class_token),
-# 'a {0} {1} with a mountain in the background'.format(unique_token, class_token),
-# 'a {0} {1} with a blue house in the background'.format(unique_token, class_token),
-# 'a {0} {1} on top of a purple rug in a forest'.format(unique_token, class_token),
-# 'a {0} {1} wearing a red hat'.format(unique_token, class_token),
-# 'a {0} {1} wearing a santa hat'.format(unique_token, class_token),
-# 'a {0} {1} wearing a rainbow scarf'.format(unique_token, class_token),
-# 'a {0} {1} wearing a black top hat and a monocle'.format(unique_token, class_token),
-# 'a {0} {1} in a chef outfit'.format(unique_token, class_token),
-# 'a {0} {1} in a firefighter outfit'.format(unique_token, class_token),
-# 'a {0} {1} in a police outfit'.format(unique_token, class_token),
-# 'a {0} {1} wearing pink glasses'.format(unique_token, class_token),
-# 'a {0} {1} wearing a yellow shirt'.format(unique_token, class_token),
-# 'a {0} {1} in a purple wizard outfit'.format(unique_token, class_token),
-# 'a red {0} {1}'.format(unique_token, class_token),
-# 'a purple {0} {1}'.format(unique_token, class_token),
-# 'a shiny {0} {1}'.format(unique_token, class_token),
-# 'a wet {0} {1}'.format(unique_token, class_token),
-# 'a cube shaped {0} {1}'.format(unique_token, class_token)
-# ]
-

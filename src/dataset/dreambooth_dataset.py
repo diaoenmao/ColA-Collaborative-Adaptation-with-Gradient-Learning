@@ -2,6 +2,7 @@ import numpy as np
 import os
 import pickle
 import torch
+import requests
 from config import cfg
 from PIL import Image
 from pathlib import Path
@@ -13,8 +14,8 @@ from .utils import download_url, extract_file, make_classes_counts
 
 class DreamBoothDataset(Dataset):
     data_name = 'DreamBooth'
-    file = [('https://drive.google.com/file/d/1jPpJcGUH68o7LIMM9asS0cs4Cec4NqYz/view?usp=drive_link', None)]
-    
+    api_url = f'https://api.github.com/repos/google/dreambooth/contents/dataset'
+
     def __init__(
             self, 
             root, 
@@ -37,20 +38,14 @@ class DreamBoothDataset(Dataset):
         self.transform = transform
 
         if not check_exists(self.processed_folder):
-            self.download()
+            self.download_github_directory(self.api_url, self.processed_folder)
         if not check_exists(self.class_data_dir):
             self.process(model)
         self.make_data()
-        # self.id, self.data, self.target = load(os.path.join(self.processed_folder, '{}.pt'.format(self.split)),
-        #                                        mode='pickle')
-        # self.other = {}
-        # self.classes_counts = make_classes_counts(self.target)
-        # self.classes_to_labels, self.target_size = load(os.path.join(self.processed_folder, 'meta.pt'), mode='pickle')
-
+        return
+    
     def __getitem__(self, index):
-
         input = {}
-
         instance_image = Image.open(self.instance_images_path[index % self.num_instance_images])
         if not instance_image.mode == "RGB":
             instance_image = instance_image.convert("RGB")
@@ -63,7 +58,7 @@ class DreamBoothDataset(Dataset):
             return_tensors="pt",
         ).input_ids
 
-        if self.class_data_root:
+        if self.class_data_dir:
             class_image = Image.open(self.class_images_path[index % self.num_class_images])
             if not class_image.mode == "RGB":
                 class_image = class_image.convert("RGB")
@@ -75,7 +70,6 @@ class DreamBoothDataset(Dataset):
                 max_length=self.tokenizer.model_max_length,
                 return_tensors="pt",
             ).input_ids
-
         return input
 
     def __len__(self):
@@ -103,18 +97,6 @@ class DreamBoothDataset(Dataset):
     def process(self, model):
         makedir_exist_ok(self.class_data_dir)
         self.generate_prior_data(model)
-        # train_set, test_set, meta = self.make_data()
-        # save(train_set, os.path.join(self.processed_folder, 'train.pt'), mode='pickle')
-        # save(test_set, os.path.join(self.processed_folder, 'test.pt'), mode='pickle')
-        # save(meta, os.path.join(self.processed_folder, 'meta.pt'), mode='pickle')
-        return
-
-    def download(self):
-        makedir_exist_ok(self.raw_folder)
-        for (url, md5) in self.file:
-            filename = os.path.basename(url)
-            download_url(url, os.path.join(self.raw_folder, filename), md5)
-            extract_file(os.path.join(self.raw_folder, filename))
         return
 
     def __repr__(self):
@@ -123,8 +105,6 @@ class DreamBoothDataset(Dataset):
         return fmt_str
 
     def make_data(self):
-        a = Path(self.instance_data_dir).iterdir()
-        b = list(Path(self.instance_data_dir).iterdir())
         self.instance_images_path = list(Path(self.instance_data_dir).iterdir())
         self.num_instance_images = len(self.instance_images_path)
         self._length = self.num_instance_images
@@ -137,3 +117,31 @@ class DreamBoothDataset(Dataset):
             self.class_data_root = None
 
         return None
+
+    def download_github_directory(self, api_url, destination):
+        # Make a request to get the contents of the directory
+        contents_response = requests.get(api_url)
+        contents_response.raise_for_status()  # Raise an error if the request failed
+
+        # Iterate over the files and directories in the current directory
+        print('download dreambooth dataset start')
+        for file_info in contents_response.json():
+            if file_info['type'] == 'file':
+                # Download each file
+                file_response = requests.get(file_info['download_url'])
+                file_response.raise_for_status()
+
+                # Write the file to the local file system
+                file_path = os.path.join(destination, file_info['name'])
+                with open(file_path, 'wb') as f:
+                    f.write(file_response.content)
+                # print(f'Downloaded {file_info["name"]}')
+            elif file_info['type'] == 'dir':
+                # Create a new directory locally for the subdirectory
+                new_destination = os.path.join(destination, file_info['name'])
+                makedir_exist_ok(new_destination)
+
+                # Recursively call this function for the new directory
+                new_api_url = file_info['url']  # URL for the subdirectory
+                self.download_github_directory(new_api_url, new_destination)
+        print('download dreambooth dataset end')

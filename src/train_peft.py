@@ -3,6 +3,7 @@ import datetime
 import os
 import shutil
 import time
+import math
 import torch
 import torch.nn.functional as F
 import torch.backends.cudnn as cudnn
@@ -70,10 +71,17 @@ def runExperiment():
         logger.load_state_dict(result['logger_state_dict'])
     if cfg['task_name'] == 't2i':
         model_name = cfg['model_name']
-        vae = make_model(model_name, 'vae')
-        text_encoder = make_model(model_name, 'text_encoder')
+        vae, _ = make_model(model_name, 'vae')
+        vae = vae.to(cfg['device'])
+        text_encoder, _ = make_model(model_name, 'text_encoder')
+        text_encoder = text_encoder.to(cfg['device'])
         noise_scheduler = make_noise_scheduler(model_name)
         train_t2i(data_loader['train'], model, vae, text_encoder, optimizer, scheduler, noise_scheduler, metric, logger)
+        result = {'cfg': cfg, 'epoch': cfg['epoch'] + 1,
+                  'optimizer_state_dict': optimizer.state_dict(), 'scheduler_state_dict': scheduler.state_dict(),
+                  'metric_state_dict': None, 'logger_state_dict': logger.state_dict()}
+        save(result, os.path.join(checkpoint_path, 'model'))
+        model.save_pretrained(os.path.join(best_path, 'adapter'))
         return
     for epoch in range(cfg['epoch'], cfg[cfg['model_name']]['num_epochs'] + 1):
         cfg['epoch'] = epoch
@@ -126,81 +134,80 @@ def train(data_loader, model, optimizer, scheduler, metric, logger):
 
 def train_t2i(data_loader, unet, vae, text_encoder, optimizer, scheduler, noise_scheduler, metric, logger):
     unet.train(True)
-    global_step = 0
+    
     model_name = cfg['model_name']
-    start_time = time.time()
-    for step, batch in enumerate(data_loader):
-        latents = vae.encode(batch["pixel_values"].to(dtype=torch.float32)).latent_dist.sample()
-        latents = latents * 0.18215
+    for epoch in range(0, cfg[model_name]['num_epochs']):
+        start_time = time.time()
+        for i, batch in enumerate(data_loader):
+            batch = to_device(batch, cfg['device'])
+            latents = vae.encode(batch["pixel_values"].to(dtype=torch.float32)).latent_dist.sample()
+            latents = latents * 0.18215
 
-        # Sample noise that we'll add to the latents
-        noise = torch.randn_like(latents)
-        bsz = latents.shape[0]
-        # Sample a random timestep for each image
-        timesteps = torch.randint(
-            0, noise_scheduler.config.num_train_timesteps, (bsz,), device=latents.device
-        )
-        timesteps = timesteps.long()
+            # Sample noise that we'll add to the latents
+            noise = torch.randn_like(latents)
+            bsz = latents.shape[0]
+            # Sample a random timestep for each image
+            timesteps = torch.randint(
+                0, noise_scheduler.config.num_train_timesteps, (bsz,), device=latents.device
+            )
+            timesteps = timesteps.long()
 
-        # Add noise to the latents according to the noise magnitude at each timestep
-        # (this is the forward diffusion process)
-        noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
+            # Add noise to the latents according to the noise magnitude at each timestep
+            # (this is the forward diffusion process)
+            noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
 
-        # Get the text embedding for conditioning
-        encoder_hidden_states = text_encoder(batch["input_ids"])[0]
+            # Get the text embedding for conditioning
+            encoder_hidden_states = text_encoder(batch["input_ids"])[0]
 
-        # Predict the noise residual
-        model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
+            # Predict the noise residual
+            model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
 
-        # Get the target for loss depending on the prediction type
-        if noise_scheduler.config.prediction_type == "epsilon":
-            target = noise
-        elif noise_scheduler.config.prediction_type == "v_prediction":
-            target = noise_scheduler.get_velocity(latents, noise, timesteps)
-        else:
-            raise ValueError(f"Unknown prediction type {noise_scheduler.config.prediction_type}")
+            # Get the target for loss depending on the prediction type
+            if noise_scheduler.config.prediction_type == "epsilon":
+                target = noise
+            elif noise_scheduler.config.prediction_type == "v_prediction":
+                target = noise_scheduler.get_velocity(latents, noise, timesteps)
+            else:
+                raise ValueError(f"Unknown prediction type {noise_scheduler.config.prediction_type}")
 
-        if cfg[model_name]['prior_loss_weight'] > 0:
-            # Chunk the noise and model_pred into two parts and compute the loss on each part separately.
-            model_pred, model_pred_prior = torch.chunk(model_pred, 2, dim=0)
-            target, target_prior = torch.chunk(target, 2, dim=0)
+            if cfg[model_name]['prior_loss_weight'] > 0:
+                # Chunk the noise and model_pred into two parts and compute the loss on each part separately.
+                model_pred, model_pred_prior = torch.chunk(model_pred, 2, dim=0)
+                target, target_prior = torch.chunk(target, 2, dim=0)
 
-            # Compute instance loss
-            loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+                # Compute instance loss
+                loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
 
-            # Compute prior loss
-            prior_loss = F.mse_loss(model_pred_prior.float(), target_prior.float(), reduction="mean")
+                # Compute prior loss
+                prior_loss = F.mse_loss(model_pred_prior.float(), target_prior.float(), reduction="mean")
 
-            # Add the prior loss to the instance loss.
-            loss = loss + cfg[model_name]['prior_loss_weight'] * prior_loss
-        else:
-            loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+                # Add the prior loss to the instance loss.
+                loss = loss + cfg[model_name]['prior_loss_weight'] * prior_loss
+            else:
+                loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
 
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-        scheduler.step()
-        
-        logs = {"loss": loss.detach().item(), "lr": scheduler.get_last_lr()[0]}
+            evaluation = {'loss': loss.detach().item()}
+            input_size = batch['input_ids'].size(0) / 2
+            logger.append(evaluation, 'train', n=input_size)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            scheduler.step()
 
-        max_steps = cfg[model_name]['max_train_steps']
-        if global_step % int((max_steps * cfg['log_interval']) + 1) == 0:
-            batch_time = (time.time() - start_time) / (global_step + 1)
-            lr = optimizer.param_groups[0]['lr']
-            epoch_finished_time = datetime.timedelta(seconds=round(batch_time * (len(data_loader) - i - 1)))
-            exp_finished_time = epoch_finished_time + datetime.timedelta(
-                seconds=round((max_steps - global_step) * batch_time * max_steps))
-            info = {'info': ['Model: {}'.format(cfg['model_tag']),
-                             'Train Epoch: {}({:.0f}%)'.format(cfg['epoch'], 100. * global_step / max_steps),
-                             'Learning rate: {:.6f}'.format(lr), 'Epoch Finished Time: {}'.format(epoch_finished_time),
-                             'Experiment Finished Time: {}'.format(exp_finished_time)]}
-            # TODO
-            # logger.append(info, 'train')
-            # print(logger.write('train', metric.metric_name['train']))
-        global_step += 1
-        if global_step >= cfg[model_name]['max_train_steps']:
-            break
-
+            if i % int((len(data_loader) * cfg['log_interval']) + 1) == 0:
+                print('evaluation', evaluation, input_size)
+                batch_time = (time.time() - start_time) / (i + 1)
+                lr = optimizer.param_groups[0]['lr']
+                epoch_finished_time = datetime.timedelta(seconds=round(batch_time * (len(data_loader) - i - 1)))
+                exp_finished_time = epoch_finished_time + datetime.timedelta(
+                    seconds=round((cfg[cfg['model_name']]['num_epochs'] - cfg['epoch']) * batch_time * len(data_loader)))
+                info = {'info': ['Model: {}'.format(cfg['model_tag']),
+                                'Train Epoch: {}({:.0f}%)'.format(cfg['epoch'], 100. * i / len(data_loader)),
+                                'Learning rate: {:.6f}'.format(lr), 'Epoch Finished Time: {}'.format(epoch_finished_time),
+                                'Experiment Finished Time: {}'.format(exp_finished_time)]}
+                logger.append(info, 'train')
+                print(logger.write('train', ['loss']), flush=True)
+    return
 
 def test(data_loader, model, metric, logger):
     with torch.no_grad():

@@ -116,45 +116,31 @@ def make_dataset(data_name, subset_name=None, verbose=True):
         dataset_ = load_dataset(cfg['hf_data_name'], cfg['hf_subset_name'], cache_dir=root)
         dataset_ = dataset_['train'].train_test_split(test_size=0.1, seed=cfg['seed'])
     elif data_name in ['dbdataset']:
-
-        # dataset_['train'] = eval('dataset.{}(root=root, split="train", '
-        #                          'transform=dataset.Compose([transforms.ToTensor()]))'.format(data_name))
-        # dataset_['test'] = eval('dataset.{}(root=root, split="test", '
-        #                         'transform=dataset.Compose([transforms.ToTensor()]))'.format(data_name))
-
         model_name = cfg['model_name']
-        # sys.path.append("..")
-        # from model import make_model
-        # model, tokenizer = make_model(model_name)
-        tokenizer, model = make_model(model_name)
+        model, tokenizer = make_model(model_name)
+
+        # other prompts can be found in: https://github.com/google/dreambooth/blob/main/dataset/prompts_and_classes.txt
         dataset_['train'] = DreamBoothDataset(
             root=root,
             split='train',
             model=model,
             tokenizer=tokenizer,
             instance_data_dir=cfg['subset_name'],
-            instance_prompt='a photo of sks dog',
+            instance_prompt=f"a photo of {cfg['unique_id']} {cfg['unique_class']}",
             class_data_dir=f"{cfg['subset_name']}_class",
-            class_prompt='a photo of dog',
-            transform=None,
+            class_prompt=f"a photo of {cfg['unique_class']}",
         )
 
         size = cfg[model_name]['resolution']
         center_crop = False
-        dataset_['train'].transform = [
-            transforms.Resize(size, interpolation=transforms.InterpolationMode.BILINEAR),
-            transforms.CenterCrop(size) if center_crop else transforms.RandomCrop(size),
-            transforms.ToTensor(),
-            transforms.Normalize([0.5], [0.5])
-        ]
-        # dataset_['train'].transform = dataset.Compose([
-        #     transforms.ToTensor(),
-        #     transforms.Normalize(*data_stats[data_name])])
-        # dataset_['test'].transform = dataset.Compose([
-        #     transforms.ToTensor(),
-        #     transforms.Normalize(*data_stats[data_name])])
-        
-        # dataset_ = dataset_['train'].train_test_split(test_size=0.1, seed=cfg['seed'])
+        dataset_['train'].transform = transforms.Compose(
+            [
+                transforms.Resize(size, interpolation=transforms.InterpolationMode.BILINEAR),
+                transforms.CenterCrop(size) if center_crop else transforms.RandomCrop(size),
+                transforms.ToTensor(),
+                transforms.Normalize([0.5], [0.5])
+            ]
+        )
     else:
         raise ValueError('Not valid dataset name')
     if verbose:
@@ -229,6 +215,8 @@ def collate(input):
 
 
 def process_dataset(dataset, tokenizer):
+    if cfg['data_name'] == 'dbdataset':
+        return dataset
     text_column = cfg['text_column']
     label_column = cfg['label_column']
     if cfg['data_name'] == 'fpb':
