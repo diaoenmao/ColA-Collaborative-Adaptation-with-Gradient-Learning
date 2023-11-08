@@ -106,6 +106,8 @@ def verify_cola():
     # input_1 = torch.arange(N * D_1).float().view(N, D_1)
     # weight_1 = torch.arange(D_1 * D_2).float().view(D_1, D_2)
     # weight_2 = torch.arange(D_2 * C).float().view(D_2, C)
+    # weight_1_aux = torch.arange(D_1 * D_2).float().view(D_1, D_2)
+    # weight_2_aux = torch.arange(D_2 * C).float().view(D_2, C)
     input_1 = torch.randn((N, D_1))
     weight_1 = torch.randn((D_1, D_2))
     weight_2 = torch.randn((D_2, C))
@@ -167,7 +169,7 @@ def verify_cola():
     weight_1_cola = weight_1_aux.clone().detach()
     weight_1_cola.requires_grad = True
     output_1_cola_ = F.linear(input_1_cola, weight_1_cola.t())
-    cola_loss_1 = 0.5 * F.mse_loss(output_1_cola_, output_1_cola - output_1_aux_grad.detach(), reduction='sum')
+    cola_loss_1 = 0.5 * F.mse_loss(output_1_cola_, output_1_cola - output_1_grad.detach(), reduction='sum')
     cola_loss_1.backward()
     weight_1_cola_grad = weight_1_cola.grad
     print(weight_1_cola_grad)
@@ -178,11 +180,65 @@ def verify_cola():
     weight_2_cola = weight_2_aux.clone().detach()
     weight_2_cola.requires_grad = True
     output_2_cola_ = F.linear(input_2_cola, weight_2_cola.t())
-    cola_loss_2 = 0.5 * F.mse_loss(output_2_cola_, output_2_cola - output_2_aux_grad.detach(), reduction='sum')
+    cola_loss_2 = 0.5 * F.mse_loss(output_2_cola_, output_2_cola - output_2_grad.detach(), reduction='sum')
     cola_loss_2.backward()
     weight_2_cola_grad = weight_2_cola.grad
     print(weight_2_cola_grad)
     print(torch.allclose(weight_2_cola_grad, weight_2_aux_grad, atol=1e-05))
+
+
+    print('--------------Detach--------------------')
+    grad_pool = []
+    weight_1_aux.grad = None
+    weight_2_aux.grad = None
+    weight_1.requires_grad = False
+    weight_2.requires_grad = False
+    weight_1_aux.requires_grad = False
+    weight_2_aux.requires_grad = False
+    output_1 = F.linear(input_1, weight_1.t())
+    # with torch.no_grad():
+    #     output_1_aux = F.linear(input_1, weight_1_aux.t()).detach()
+    output_1_aux = F.linear(input_1, weight_1_aux.t())
+    output_1 = output_1 + output_1_aux
+    output_1.requires_grad_(True)
+    output_1.register_hook(backward_hook)
+
+    input_2 = F.relu(output_1)
+    # input_2 = output_1
+    output_2 = F.linear(input_2, weight_2.t())
+    # with torch.no_grad():
+    #     output_2_aux = F.linear(input_2, weight_2_aux.t()).detach()
+    output_2_aux = F.linear(input_2, weight_2_aux.t())
+    output_2 = output_2 + output_2_aux
+    output_2.requires_grad_(True)
+    output_2.register_hook(backward_hook)
+
+    target = torch.zeros((N,), dtype=torch.long)
+    loss = F.cross_entropy(output_2, target, reduction='mean')
+    loss.backward()
+    output_1_grad = grad_pool[1]
+    output_2_grad = grad_pool[0]
+    input_1_cola = input_1.clone().detach()
+    output_1_cola = output_1_aux.clone().detach()
+    weight_1_cola = weight_1_aux.clone().detach()
+    weight_1_cola.requires_grad = True
+    output_1_cola_ = F.linear(input_1_cola, weight_1_cola.t())
+    cola_loss_1 = 0.5 * F.mse_loss(output_1_cola_, output_1_cola - output_1_grad.detach(), reduction='sum')
+    cola_loss_1.backward()
+    weight_1_cola_grad_detach = weight_1_cola.grad
+    print(weight_1_cola_grad_detach)
+    print(torch.allclose(weight_1_cola_grad_detach, weight_1_aux_grad, atol=1e-05))
+    print('-----------------')
+    input_2_cola = input_2.clone().detach()
+    output_2_cola = output_2_aux.clone().detach()
+    weight_2_cola = weight_2_aux.clone().detach()
+    weight_2_cola.requires_grad = True
+    output_2_cola_ = F.linear(input_2_cola, weight_2_cola.t())
+    cola_loss_2 = 0.5 * F.mse_loss(output_2_cola_, output_2_cola - output_2_grad.detach(), reduction='sum')
+    cola_loss_2.backward()
+    weight_2_cola_grad_detach = weight_2_cola.grad
+    print(weight_2_cola_grad_detach)
+    print(torch.allclose(weight_2_cola_grad_detach, weight_2_aux_grad, atol=1e-05))
     return
 
 

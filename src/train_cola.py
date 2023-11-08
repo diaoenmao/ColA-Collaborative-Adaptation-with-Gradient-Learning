@@ -9,7 +9,7 @@ from collections import defaultdict
 from config import cfg, process_args
 from dataset import make_dataset, make_data_loader, process_dataset, collate
 from metric import make_metric, make_logger
-from model import make_model, make_optimizer, make_scheduler, make_ft_model, freeze_model, make_cola
+from model import make_model, make_optimizer, make_scheduler, make_ft_model, freeze_model, unfreeze_model, make_cola
 from module import save, to_device, process_control, resume, makedir_exist_ok, PeftModel
 
 cudnn.benchmark = True
@@ -139,6 +139,7 @@ def train(data_loader, model, cola_base, optimizer, scheduler, metric, logger):
         for k in cola_base:
             lr = optimizer[k].param_groups[0]['lr']
             cola_base[k].train(False)
+            freeze_model(cola_base[k])
         if cfg['task_name'] in ['s2s', 'sc', 'clm']:
             input_size = input['labels'].size(0)
             input = {'input_ids': input['input_ids'], 'attention_mask': input['attention_mask'],
@@ -164,6 +165,8 @@ def train(data_loader, model, cola_base, optimizer, scheduler, metric, logger):
             output_target_buffer[k].append(output_target_i[k])
         if (i + 1) % cfg['cola']['num_steps'] == 0:
             for k in input_buffer:
+                unfreeze_model(cola_base[k])
+                print(i, k)
                 input_cola = torch.cat(input_buffer[k], dim=0)
                 output_target_cola = torch.cat(output_target_buffer[k], dim=0)
                 input_cola = {'data': input_cola, 'target': output_target_cola}
@@ -184,6 +187,8 @@ def train(data_loader, model, cola_base, optimizer, scheduler, metric, logger):
                              'Experiment Finished Time: {}'.format(exp_finished_time)]}
             logger.append(info, 'train')
             print(logger.write('train', metric.metric_name['train']), flush=True)
+        if i == 1:
+            exit()
     return
 
 

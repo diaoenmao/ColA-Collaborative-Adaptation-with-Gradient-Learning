@@ -147,6 +147,13 @@ def freeze_model(model):
     return
 
 
+def unfreeze_model(model):
+    if cfg['ft_name'] == 'cola':
+        for n, p in model.named_parameters():
+            p.requires_grad = True
+    return
+
+
 def make_config_clm():
     if cfg['ft_name'] == 'lora':
         peft_config = LoraConfig(

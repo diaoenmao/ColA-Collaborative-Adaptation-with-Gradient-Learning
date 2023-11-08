@@ -41,8 +41,12 @@ class LowRank(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self):
-        nn.init.kaiming_uniform_(self.cola_A.weight, a=math.sqrt(5))
+        # nn.init.kaiming_uniform_(self.cola_A.weight, a=math.sqrt(5))
+        # nn.init.zeros_(self.cola_B.weight)
+        nn.init.ones_(self.cola_A.weight)
+        # self.cola_A.weight.data = torch.arange(self.cola_A.weight.numel()).float().view(self.cola_A.weight.size()) / self.cola_A.weight.data.numel()
         nn.init.zeros_(self.cola_B.weight)
+        # nn.init.ones_(self.cola_B.weight)
         return
 
     def fit(self, input, optimizer, scheduler):
@@ -53,8 +57,14 @@ class LowRank(nn.Module):
         output['target'] = self.forward(x)
         output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='sum')
         output['loss'].backward()
-        if cfg['task_name'] in ['ic']:
-            torch.nn.utils.clip_grad_norm_(self.parameters(), 1)
+        # if cfg['task_name'] in ['ic']:
+        #     torch.nn.utils.clip_grad_norm_(self.parameters(), 1)
+        for k, v in self.named_parameters():
+            if v.grad is not None:
+                print(k, v.size())
+                print(v.grad.abs().sum())
+                print(v.grad.norm())
+                print(v.grad.min(), v.grad.max())
         optimizer.step()
         scheduler.step()
         optimizer.zero_grad()
