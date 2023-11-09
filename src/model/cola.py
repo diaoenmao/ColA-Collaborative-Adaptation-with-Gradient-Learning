@@ -114,7 +114,7 @@ class Linear(nn.Module):
         output = {}
         x = input['data']
         output['target'] = self.forward(x)
-        output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='mean')
+        output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='sum')
         output['loss'].backward()
         if cfg['task_name'] in ['ic']:
             torch.nn.utils.clip_grad_norm_(self.parameters(), 1)
@@ -178,7 +178,7 @@ class MLP(nn.Module):
         output = {}
         x = input['data']
         output['target'] = self.forward(x)
-        output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='mean')
+        output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='sum')
         output['loss'].backward()
         if cfg['task_name'] in ['ic']:
             torch.nn.utils.clip_grad_norm_(self.parameters(), 1)
@@ -233,7 +233,7 @@ class Embedding(nn.Module):
         output = {}
         x = input['data']
         output['target'] = self.forward(x)
-        output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='mean')
+        output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='sum')
         output['loss'].backward()
         if cfg['task_name'] in ['ic']:
             torch.nn.utils.clip_grad_norm_(self.parameters(), 1)
@@ -343,6 +343,8 @@ def make_cola_model(name, model_name, model_cfg):
         model = LowRank(model_cfg)
     elif model_name == 'linear':
         if 'classifier' in name and cfg['task_name'] == 'sc':
+            model_cfg['bias'] = True
+        elif cfg['task_name'] == 'ic':
             model_cfg['bias'] = True
         else:
             model_cfg['bias'] = cfg['cola']['linear']['bias']

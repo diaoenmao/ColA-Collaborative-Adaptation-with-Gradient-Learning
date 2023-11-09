@@ -121,7 +121,7 @@ class PromptEmbedding(torch.nn.Module):
             init_token_ids = init_token_ids[:total_virtual_tokens]
 
             word_embedding_weights = word_embeddings(
-                torch.LongTensor(init_token_ids, device=word_embeddings.weight.device)).detach().clone()
+                torch.tensor(init_token_ids, dtype=torch.long, device=word_embeddings.weight.device)).detach().clone()
             word_embedding_weights = word_embedding_weights.to(torch.float32)
             self.embedding.weight = torch.nn.Parameter(word_embedding_weights)
 
