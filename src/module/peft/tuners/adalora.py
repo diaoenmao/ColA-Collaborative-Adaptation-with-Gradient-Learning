@@ -447,6 +447,7 @@ class SVDLinear(nn.Linear, AdaLoraLayer):
             result = F.linear(x, transpose(self.weight, self.fan_in_fan_out), bias=self.bias)
         elif self.r[self.active_adapter] > 0 and not self.merged:
             result = F.linear(x, transpose(self.weight, self.fan_in_fan_out), bias=self.bias)
+            x = x.to(self.lora_A[self.active_adapter].dtype)
             result += (
                 (
                     self.lora_dropout[self.active_adapter](x)

@@ -106,13 +106,7 @@ def train(data_loader, model, optimizer, scheduler, metric, logger):
             input_ = {'target': input['target']}
             output_ = {'target': output['target'], 'loss': output['loss']}
             output['loss'].backward()
-            # torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
-        for k, v in model.named_parameters():
-            if v.grad is not None:
-                print(i, k, v.size())
-                print(v.grad.abs().sum())
-                print(v.grad.norm())
-                print(v.grad.min(), v.grad.max())
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
         optimizer.step()
         scheduler.step()
         optimizer.zero_grad()
@@ -130,8 +124,6 @@ def train(data_loader, model, optimizer, scheduler, metric, logger):
                              'Experiment Finished Time: {}'.format(exp_finished_time)]}
             logger.append(info, 'train')
             print(logger.write('train', metric.metric_name['train']))
-        if i == 1:
-            exit()
     return
 
 

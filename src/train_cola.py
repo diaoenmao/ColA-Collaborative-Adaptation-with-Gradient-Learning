@@ -166,7 +166,6 @@ def train(data_loader, model, cola_base, optimizer, scheduler, metric, logger):
         if (i + 1) % cfg['cola']['num_steps'] == 0:
             for k in input_buffer:
                 unfreeze_model(cola_base[k])
-                print(i, k)
                 input_cola = torch.cat(input_buffer[k], dim=0)
                 output_target_cola = torch.cat(output_target_buffer[k], dim=0)
                 input_cola = {'data': input_cola, 'target': output_target_cola}
@@ -187,8 +186,6 @@ def train(data_loader, model, cola_base, optimizer, scheduler, metric, logger):
                              'Experiment Finished Time: {}'.format(exp_finished_time)]}
             logger.append(info, 'train')
             print(logger.write('train', metric.metric_name['train']), flush=True)
-        if i == 1:
-            exit()
     return
 
 
