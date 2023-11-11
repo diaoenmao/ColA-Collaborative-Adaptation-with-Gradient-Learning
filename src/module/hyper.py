@@ -88,6 +88,17 @@ def process_control():
             cfg['cola']['nesterov'] = True
             cfg['cola']['batch_size'] = {'train': cfg['batch_size'], 'test': cfg['batch_size']}
             cfg['cola']['scheduler_name'] = 'CosineAnnealingLR'
+    cfg['test_computation'] = False
+    if cfg['test_computation']:
+        cfg['device_cola'] = 'cpu'
+        cfg['num_test_iter'] = 10
+        # cfg['device_cola'] = 'cuda:0'
+        cfg['time_cola'] = []
+        cfg['time_backward'] = []
+        cfg['mem_used'] = []
+        cfg['mem_used_cola'] = []
+    else:
+        cfg['device_cola'] = cfg['device']
     return
 
 

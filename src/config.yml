@@ -13,7 +13,7 @@ num_workers: 0
 init_seed: 0
 num_experiments: 1
 log_interval: 0.25
-device: cuda
+device: cuda:0
 world_size: 1
 resume_mode: 0
 verbose: False

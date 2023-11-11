@@ -47,7 +47,7 @@ class LowRank(nn.Module):
 
     def fit(self, input, optimizer, scheduler):
         self.train(True)
-        input = to_device(input, cfg['device'])
+        input = to_device(input, cfg['device_cola'])
         output = {}
         x = input['data']
         output['target'] = self.forward(x)
@@ -110,7 +110,7 @@ class Linear(nn.Module):
 
     def fit(self, input, optimizer, scheduler):
         self.train(True)
-        input = to_device(input, cfg['device'])
+        input = to_device(input, cfg['device_cola'])
         output = {}
         x = input['data']
         output['target'] = self.forward(x)
@@ -174,7 +174,7 @@ class MLP(nn.Module):
 
     def fit(self, input, optimizer, scheduler):
         self.train(True)
-        input = to_device(input, cfg['device'])
+        input = to_device(input, cfg['device_cola'])
         output = {}
         x = input['data']
         output['target'] = self.forward(x)
@@ -229,7 +229,7 @@ class Embedding(nn.Module):
 
     def fit(self, input, optimizer, scheduler):
         self.train(True)
-        input = to_device(input, cfg['device'])
+        input = to_device(input, cfg['device_cola'])
         output = {}
         x = input['data']
         output['target'] = self.forward(x)

@@ -1,5 +1,6 @@
 import argparse
 import datetime
+import numpy as np
 import os
 import shutil
 import time
@@ -81,6 +82,8 @@ def train(data_loader, model, optimizer, scheduler, metric, logger):
     model.train(True)
     start_time = time.time()
     for i, input in enumerate(data_loader):
+        if cfg['test_computation']:
+            s = time.time()
         if cfg['task_name'] in ['s2s', 'sc', 'clm']:
             input_size = input['labels'].size(0)
             input = {'input_ids': input['input_ids'], 'attention_mask': input['attention_mask'],
@@ -102,6 +105,8 @@ def train(data_loader, model, optimizer, scheduler, metric, logger):
         optimizer.step()
         scheduler.step()
         optimizer.zero_grad()
+        if cfg['test_computation']:
+            cfg['time_backward'].append(time.time() - s)
         evaluation = metric.evaluate('train', 'batch', input_, output_)
         logger.append(evaluation, 'train', n=input_size)
         if i % int((len(data_loader) * cfg['log_interval']) + 1) == 0:
@@ -116,6 +121,17 @@ def train(data_loader, model, optimizer, scheduler, metric, logger):
                              'Experiment Finished Time: {}'.format(exp_finished_time)]}
             logger.append(info, 'train')
             print(logger.write('train', metric.metric_name['train']))
+        if cfg['test_computation']:
+            mem_free, mem_total = torch.cuda.mem_get_info(cfg['device'])
+            cfg['mem_used'].append(mem_total - mem_free)
+            if i == cfg['num_test_iter']:
+                print(cfg['time_backward'])
+                print(cfg['mem_used'])
+                print('Run time backward: {}/{}'.format(np.mean(cfg['time_backward'][1:]),
+                                                        np.std(cfg['time_backward'][1:])))
+                print('Memory used: {}/{}'.format(np.mean(cfg['mem_used'][1:]),
+                                                  np.std(cfg['mem_used'][1:])))
+                exit()
     return
 
 
