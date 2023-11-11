@@ -95,7 +95,7 @@ def runExperiment():
     for epoch in range(cfg['epoch'], cfg[cfg['model_name']]['num_epochs'] + 1):
         cfg['epoch'] = epoch
         train(data_loader['train'], model, cola_base, optimizer, scheduler, metric, logger)
-        test(data_loader['test'], model, metric, logger)
+        test(data_loader['test'], model, cola_base, metric, logger)
         result = {'cfg': cfg, 'epoch': cfg['epoch'] + 1,
                   'cola_base_state_dict': {k: cola_base[k].state_dict() for k in cola_base},
                   'optimizer_state_dict': {k: optimizer[k].state_dict() for k in optimizer},
@@ -111,24 +111,6 @@ def runExperiment():
                             dirs_exist_ok=True)
         logger.reset()
     return
-
-
-def make_loss(logits, labels):
-    num_labels = logits.size(-1)
-    if labels is not None:
-        if num_labels == 1:
-            #  We are doing regression
-            loss_fct = torch.nn.MSELoss(reduction='mean')
-            loss = loss_fct(logits.view(-1), labels.view(-1))
-        else:
-            if cfg['task_name'] == 'clm':
-                logits = logits[..., :-1, :].contiguous()
-                labels = labels[..., 1:].contiguous()
-            loss_fct = torch.nn.CrossEntropyLoss(reduction='mean')
-            loss = loss_fct(logits.view(-1, num_labels), labels.view(-1))
-    else:
-        loss = 0
-    return loss
 
 
 def train(data_loader, model, cola_base, optimizer, scheduler, metric, logger):
@@ -152,7 +134,7 @@ def train(data_loader, model, cola_base, optimizer, scheduler, metric, logger):
             output = model(**input)
             input_ = {'target': input['labels']}
             output_ = {'target': output['logits'], 'loss': output['loss']}
-            loss = make_loss(output['logits'], input['labels'])
+            loss = output['loss']
         else:
             input = collate(input)
             input_size = input['data'].size(0)
@@ -160,7 +142,7 @@ def train(data_loader, model, cola_base, optimizer, scheduler, metric, logger):
             output = model(**input)
             input_ = {'target': input['target']}
             output_ = {'target': output['target'], 'loss': output['loss']}
-            loss = make_loss(output['target'], input['target'])
+            loss = output['loss']
         loss.backward()
         model.zero_grad()
         input_i, output_target_i = model.flush()
@@ -221,7 +203,7 @@ def train(data_loader, model, cola_base, optimizer, scheduler, metric, logger):
     return
 
 
-def test(data_loader, model, metric, logger):
+def test(data_loader, model, cola_base, metric, logger):
     with torch.no_grad():
         model.train(False)
         for i, input in enumerate(data_loader):

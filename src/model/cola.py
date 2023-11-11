@@ -49,7 +49,7 @@ class LowRank(nn.Module):
         self.train(True)
         input = to_device(input, cfg['device_cola'])
         output = {}
-        x = input['data']
+        x = input['data'].to(self.cola_A.weight.dtype)
         output['target'] = self.forward(x)
         output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='sum')
         output['loss'].backward()
@@ -112,7 +112,7 @@ class Linear(nn.Module):
         self.train(True)
         input = to_device(input, cfg['device_cola'])
         output = {}
-        x = input['data']
+        x = input['data'].to(self.linear.weight.dtype)
         output['target'] = self.forward(x)
         output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='sum')
         output['loss'].backward()
@@ -176,7 +176,7 @@ class MLP(nn.Module):
         self.train(True)
         input = to_device(input, cfg['device_cola'])
         output = {}
-        x = input['data']
+        x = input['data'].to(self.linear.weight.dtype)
         output['target'] = self.forward(x)
         output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='sum')
         output['loss'].backward()
@@ -380,7 +380,6 @@ def make_cola(model, model_name, dist_mode='joint'):
     if dist_mode in ['alone', 'col']:
         cfg['cola']['model_name'] = make_model_name(model_name)
     cola = {}
-    dtype = next(model.parameters()).dtype
     for name, module in model.base_model.named_modules():
         if 'original_module' not in name and isinstance(module, ColaLayer):
             if isinstance(module, nn.Linear):
@@ -413,10 +412,8 @@ def make_cola(model, model_name, dist_mode='joint'):
                 cola[name] = []
                 for i in range(cfg['num_split']):
                     cola_model_i = make_cola_model(name, cfg['cola']['model_name'][i], model_cfg)
-                    cola_model_i = cola_model_i.to(dtype)
                     cola[name].append(cola_model_i)
                 cola[name] = Router(cola[name], dist_mode)
             else:
                 cola[name] = make_cola_model(name, model_name, model_cfg)
-                cola[name] = cola[name].to(dtype)
     return cola

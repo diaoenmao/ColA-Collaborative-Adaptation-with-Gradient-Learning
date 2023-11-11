@@ -578,12 +578,12 @@ class Linear(nn.Linear, ColaLayer):
         if self.merged:
             warnings.warn("Already merged. Nothing to do.")
             return
-        len_delta_weight = len(delta_weight)
-        if len_delta_weight == 2:
-            delta_weight, delta_bias = delta_weight
-        self.weight.data += self.get_delta_weight(delta_weight, self.active_adapter).to(self.weight.data.device, self.weight.data.dtype)
-        if self.bias is not None and len_delta_weight == 2:
-            self.bias.data += delta_bias.data.to(self.bias.data.device, self.bias.data.dtype)
+        if isinstance(delta_weight, tuple):
+            delta_weight_, delta_bias_ = delta_weight
+
+        self.weight.data += self.get_delta_weight(delta_weight_, self.active_adapter).to(self.weight.data.device, self.weight.data.dtype)
+        if self.bias is not None and isinstance(delta_weight, tuple):
+            self.bias.data += delta_bias_.data.to(self.bias.data.device, self.bias.data.dtype)
         self.merged = True
         return
 
@@ -618,7 +618,7 @@ class Linear(nn.Linear, ColaLayer):
             result = F.linear(x, transpose(self.weight, self.fan_in_fan_out), bias=self.bias)
 
             if self.cola_base[self.active_adapter]['model'] is not None:
-                # x = x.to(self.cola_base[self.active_adapter]['dtype'])
+                x = x.to(self.cola_base[self.active_adapter]['dtype'])
                 cola_output = self.cola_base[self.active_adapter]['model'](x) * self.cola_alpha[self.active_adapter]
                 if self.training:
                     self.output_target.append(cola_output.to('cpu'))
@@ -723,11 +723,11 @@ class Conv2d(nn.Conv2d, ColaLayer):
             warnings.warn("Already merged. Nothing to do.")
             return
         if isinstance(delta_weight, tuple):
-            delta_weight, delta_bias = delta_weight
+            delta_weight_, delta_bias_ = delta_weight
 
-        self.weight.data += self.get_delta_weight(delta_weight, self.active_adapter).to(self.weight.data.device, self.weight.data.dtype)
+        self.weight.data += self.get_delta_weight(delta_weight_, self.active_adapter).to(self.weight.data.device, self.weight.data.dtype)
         if self.bias is not None and isinstance(delta_weight, tuple):
-            self.bias.data += delta_bias.data.to(self.bias.data.device, self.bias.data.dtype)
+            self.bias.data += delta_bias_.data.to(self.bias.data.device, self.bias.data.dtype)
         self.merged = True
         return
 
@@ -781,7 +781,7 @@ class Conv2d(nn.Conv2d, ColaLayer):
             )
 
             if self.cola_base[self.active_adapter]['model'] is not None:
-                # x = x.to(self.cola_base[self.active_adapter]['dtype'])
+                x = x.to(self.cola_base[self.active_adapter]['dtype'])
                 cola_output = self.cola_base[self.active_adapter]['model'](x) * self.cola_alpha[self.active_adapter]
                 if self.training:
                     self.output_target.append(cola_output.to('cpu'))
