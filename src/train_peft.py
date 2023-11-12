@@ -114,7 +114,7 @@ def train(data_loader, model, optimizer, scheduler, metric, logger):
         scheduler.step()
         optimizer.zero_grad()
         if cfg['test_computation']:
-            cfg['time_backward'].append(time.time() - s)
+            cfg['time_used'].append(time.time() - s)
         evaluation = metric.evaluate('train', 'batch', input_, output_)
         logger.append(evaluation, 'train', n=input_size)
         if i % int((len(data_loader) * cfg['log_interval']) + 1) == 0:
@@ -133,11 +133,9 @@ def train(data_loader, model, optimizer, scheduler, metric, logger):
             mem_free, mem_total = torch.cuda.mem_get_info(cfg['device'])
             cfg['mem_used'].append(mem_total - mem_free)
             if i == cfg['num_test_iter']:
-                print(cfg['time_backward'])
-                print(cfg['mem_used'])
-                print('Run time backward: {}/{}'.format(np.mean(cfg['time_backward'][1:]),
-                                                        np.std(cfg['time_backward'][1:])))
-                print('Memory used: {}/{}'.format(np.mean(cfg['mem_used'][1:]),
+                print('Run time backward: {}({})'.format(np.mean(cfg['time_used'][1:]),
+                                                        np.std(cfg['time_used'][1:])))
+                print('Memory used: {}({})'.format(np.mean(cfg['mem_used'][1:]),
                                                   np.std(cfg['mem_used'][1:])))
                 exit()
     return

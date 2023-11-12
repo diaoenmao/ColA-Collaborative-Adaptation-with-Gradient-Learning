@@ -147,7 +147,7 @@ def train(data_loader, model, cola_base, optimizer, scheduler, metric, logger):
         model.zero_grad()
         input_i, output_target_i = model.flush()
         if cfg['test_computation']:
-            cfg['time_backward'].append(time.time() - s)
+            cfg['time_used'].append(time.time() - s)
         for k in input_i:
             input_buffer[k].append(input_i[k])
             output_target_buffer[k].append(output_target_i[k])
@@ -162,7 +162,7 @@ def train(data_loader, model, cola_base, optimizer, scheduler, metric, logger):
                 input_cola = {'data': input_cola, 'target': output_target_cola}
                 cola_base[k].fit(input_cola, optimizer[k], scheduler[k])
                 if cfg['test_computation']:
-                    cfg['time_cola'].append(time.time() - s)
+                    cfg['time_used_cola'].append(time.time() - s)
             input_buffer = defaultdict(list)
             output_target_buffer = defaultdict(list)
         evaluation = metric.evaluate('train', 'batch', input_, output_)
@@ -186,16 +186,13 @@ def train(data_loader, model, cola_base, optimizer, scheduler, metric, logger):
                 mem_free_cola, mem_total_cola = torch.cuda.mem_get_info(cfg['device_cola'])
                 cfg['mem_used_cola'].append(mem_total_cola - mem_free_cola)
             if i == cfg['num_test_iter']:
-                print(cfg['time_backward'])
-                print(cfg['time_cola'])
-                print(cfg['mem_used'])
-                print(cfg['mem_used_cola'])
-                print('Run time backward: {}/{}'.format(np.mean(cfg['time_backward'][1:]),
-                                                        np.std(cfg['time_backward'][1:])))
-                print('Run time (ColA): {}/{}'.format(np.mean(cfg['time_cola'][1:]),
-                                                      np.std(cfg['time_cola'][1:])))
-                print('Memory used: {}/{}'.format(np.mean(cfg['mem_used'][1:]),
-                                                  np.std(cfg['mem_used'][1:])))
+                print('Run time backward: {}({})'.format(np.mean(cfg['time_used'][1:]),
+                                                         np.std(cfg['time_used'][1:])))
+                print('Run time (ColA, M={}): {}({})'.format(len(list(cola_base.keys())),
+                                                             np.mean(cfg['time_used_cola'][1:]),
+                                                             np.std(cfg['time_used_cola'][1:])))
+                print('Memory used: {}/({})'.format(np.mean(cfg['mem_used'][1:]),
+                                                    np.std(cfg['mem_used'][1:])))
                 if cfg['device_cola'] != 'cpu':
                     print('Memory used (ColA): {}/{}'.format(np.mean(cfg['mem_used_cola'][1:]),
                                                              np.std(cfg['mem_used_cola'][1:])))
@@ -206,9 +203,9 @@ def train(data_loader, model, cola_base, optimizer, scheduler, metric, logger):
 def test(data_loader, model, cola_base, metric, logger):
     with torch.no_grad():
         model.train(False)
+        for k in cola_base:
+            cola_base[k] = cola_base[k].to(cfg['device'])
         for i, input in enumerate(data_loader):
-            for k in cola_base:
-                cola_base[k] = cola_base[k].to(cfg['device'])
             if cfg['task_name'] in ['s2s', 'sc', 'clm']:
                 input_size = input['labels'].size(0)
                 input = {'input_ids': input['input_ids'], 'attention_mask': input['attention_mask'],

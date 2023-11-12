@@ -1,5 +1,6 @@
 import argparse
 import datetime
+import numpy as np
 import os
 import shutil
 import time
@@ -9,7 +10,7 @@ from collections import defaultdict
 from config import cfg, process_args
 from dataset import make_dataset, make_data_loader, process_dataset, collate
 from metric import make_metric, make_logger
-from model import make_model, make_optimizer, make_scheduler, make_ft_model, freeze_model, make_cola
+from model import make_model, make_optimizer, make_scheduler, make_ft_model, freeze_model, unfreeze_model, make_cola
 from module import save, to_device, process_control, resume, makedir_exist_ok, PeftModel
 
 cudnn.benchmark = True
@@ -40,7 +41,7 @@ def runExperiment():
     model_tag_path = os.path.join(model_path, cfg['model_tag'])
     checkpoint_path = os.path.join(model_tag_path, 'checkpoint')
     best_path = os.path.join(model_tag_path, 'best')
-    dataset = make_dataset(cfg['data_name'])
+    dataset = make_dataset(cfg['data_name'], cfg['subset_name'])
     model, tokenizer = make_model(cfg['model_name'])
     dataset = process_dataset(dataset, tokenizer)
     data_loader = make_data_loader(dataset, tokenizer, cfg['model_name'])
@@ -57,12 +58,16 @@ def runExperiment():
         model.load_cola_base(cola_base)
         optimizer = defaultdict(list)
         scheduler = defaultdict(list)
+        num_params = 0
         for k in cola_base:
             for i in range(cfg['num_split']):
-                cola_base[k].model[i] = cola_base[k].model[i].to(cfg['device'])
+                for n, p in cola_base[k].model[i].named_parameters():
+                    num_params += p.numel()
+                cola_base[k].model[i] = cola_base[k].model[i].to(cfg['device_cola'])
                 cola_param_k_i = cola_base[k].model[i].parameters()
                 optimizer[k].append(make_optimizer(cola_param_k_i, 'cola'))
                 scheduler[k].append(make_scheduler(optimizer[k][i], 'cola'))
+        print("Number of ColA trainable parameters: {}".format(num_params))
     else:
         cfg['epoch'] = result['epoch']
         model = PeftModel.from_pretrained(model, os.path.join(checkpoint_path, 'adapter'), is_trainable=True)
@@ -76,14 +81,18 @@ def runExperiment():
         model.load_cola_base(cola_base)
         optimizer = defaultdict(list)
         scheduler = defaultdict(list)
+        num_params = 0
         for k in cola_base:
             for i in range(cfg['num_split']):
-                cola_base[k].model[i] = cola_base[k].model[i].to(cfg['device'])
+                for n, p in cola_base[k].model[i].named_parameters():
+                    num_params += p.numel()
+                cola_base[k].model[i] = cola_base[k].model[i].to(cfg['device_cola'])
                 cola_param_k_i = cola_base[k].model[i].parameters()
                 optimizer[k].append(make_optimizer(cola_param_k_i, 'cola'))
                 scheduler[k].append(make_scheduler(optimizer[k][i], 'cola'))
                 optimizer[k][i].load_state_dict(result['optimizer_state_dict'][k][i])
                 scheduler[k][i].load_state_dict(result['scheduler_state_dict'][k][i])
+        print("Number of ColA trainable parameters: {}".format(num_params))
         metric.load_state_dict(result['metric_state_dict'])
         logger.load_state_dict(result['logger_state_dict'])
     for epoch in range(cfg['epoch'], cfg[cfg['model_name']]['num_epochs'] + 1):
@@ -110,24 +119,6 @@ def runExperiment():
     return
 
 
-def sum_loss(logits, labels):
-    num_labels = logits.size(-1)
-    if labels is not None:
-        if num_labels == 1:
-            #  We are doing regression
-            loss_fct = torch.nn.MSELoss(reduction='sum')
-            loss = loss_fct(logits.view(-1), labels.view(-1))
-        else:
-            if cfg['task_name'] == 'clm':
-                logits = logits[..., :-1, :].contiguous()
-                labels = labels[..., 1:].contiguous()
-            loss_fct = torch.nn.CrossEntropyLoss(reduction='sum')
-            loss = loss_fct(logits.view(-1, num_labels), labels.view(-1))
-    else:
-        loss = 0
-    return loss
-
-
 def train(data_loader, model, cola_base, optimizer, scheduler, metric, logger):
     model.train(True)
     start_time = time.time()
@@ -138,8 +129,13 @@ def train(data_loader, model, cola_base, optimizer, scheduler, metric, logger):
         split_i = input['split']
         for k in cola_base:
             lr = optimizer[k][0].param_groups[0]['lr']
-            cola_base[k].train(False)
+            for j in range(len(cola_base[k].model)):
+                cola_base[k].model[j] = cola_base[k].model[j].to(cfg['device'])
+                cola_base[k].model[j].train(False)
+                freeze_model(cola_base[k].model[j])
             cola_base[k].make_split(split_i)
+        if cfg['test_computation']:
+            s = time.time()
         input_size = input['labels'].size(0)
         input = {'input_ids': input['input_ids'], 'attention_mask': input['attention_mask'],
                  'labels': input['labels']}
@@ -147,22 +143,31 @@ def train(data_loader, model, cola_base, optimizer, scheduler, metric, logger):
         output = model(**input)
         input_ = {'target': input['labels']}
         output_ = {'target': output['logits'], 'loss': output['loss']}
-        loss = sum_loss(output['logits'], input['labels'])
+        loss = output['loss']
         loss.backward()
         model.zero_grad()
         input_i, output_target_i = model.flush()
+        if cfg['test_computation']:
+            cfg['time_used'].append(time.time() - s)
         for k in input_i:
             input_buffer[k].append(input_i[k])
             output_target_buffer[k].append(output_target_i[k])
             split_buffer[k].append(split_i)
         if (i + 1) % cfg['cola']['num_steps'] == 0:
             for k in input_buffer:
+                if cfg['test_computation']:
+                    s = time.time()
+                for j in range(len(cola_base[k].model)):
+                    cola_base[k].model[j] = cola_base[k].model[j].to(cfg['device_cola'])
+                    unfreeze_model(cola_base[k].model[j])
                 input_cola = torch.cat(input_buffer[k], dim=0)
                 output_target_cola = torch.cat(output_target_buffer[k], dim=0)
                 split_cola = torch.cat(split_buffer[k], dim=0)
                 cola_base[k].make_split(split_cola)
                 input_cola = {'data': input_cola, 'target': output_target_cola}
                 cola_base[k].fit(input_cola, optimizer[k], scheduler[k])
+                if cfg['test_computation']:
+                    cfg['time_used_cola'].append(time.time() - s)
             input_buffer = defaultdict(list)
             output_target_buffer = defaultdict(list)
             split_buffer = defaultdict(list)
@@ -181,12 +186,34 @@ def train(data_loader, model, cola_base, optimizer, scheduler, metric, logger):
                              'Experiment Finished Time: {}'.format(exp_finished_time)]}
             logger.append(info, 'train')
             print(logger.write('train', metric.metric_name['train']))
+        if cfg['test_computation']:
+            mem_free, mem_total = torch.cuda.mem_get_info(cfg['device'])
+            cfg['mem_used'].append(mem_total - mem_free)
+            if cfg['device_cola'] != 'cpu':
+                mem_free_cola, mem_total_cola = torch.cuda.mem_get_info(cfg['device_cola'])
+                cfg['mem_used_cola'].append(mem_total_cola - mem_free_cola)
+            if i == cfg['num_test_iter']:
+                print('Run time backward: {}({})'.format(np.mean(cfg['time_used'][1:]),
+                                                         np.std(cfg['time_used'][1:])))
+                print('Run time (ColA, M={}, K={}): {}({})'.format(len(list(cola_base.keys())),
+                                                                   len(cola_base[k].model),
+                                                                   np.mean(cfg['time_used_cola'][1:]),
+                                                                   np.std(cfg['time_used_cola'][1:])))
+                print('Memory used: {}/({})'.format(np.mean(cfg['mem_used'][1:]),
+                                                    np.std(cfg['mem_used'][1:])))
+                if cfg['device_cola'] != 'cpu':
+                    print('Memory used (ColA): {}/{}'.format(np.mean(cfg['mem_used_cola'][1:]),
+                                                             np.std(cfg['mem_used_cola'][1:])))
+                exit()
     return
 
 
 def test(data_loader, model, cola_base, metric, logger):
     with torch.no_grad():
         model.train(False)
+        for k in cola_base:
+            for i in range(len(cola_base[k].model)):
+                cola_base[k].model[i] = cola_base[k].model[i].to(cfg['device'])
         for i, input in enumerate(data_loader):
             for k in cola_base:
                 cola_base[k].make_split(input['split'])

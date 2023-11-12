@@ -114,6 +114,46 @@ def main():
         script_name = [['{}_cola_dist.py'.format(run)]]
         control_name = [[data_names, model_names, [task_name], ft_name, batch_size, dist_mode]]
         controls = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode, control_name)
+    elif mode == 'computation':
+        if task_name == 's2s':
+            data_names = ['fpb-sa']
+            model_names = ['bart-base']
+        elif task_name == 'clm':
+            data_names = ['dolly-15k']
+            model_names = ['gpt2', 'llama-2']
+        elif task_name == 'sc':
+            data_names = ['glue_cola']
+            model_names = ['roberta-base']
+        elif task_name == 'ic':
+            data_names = ['MNIST']
+            model_names = ['linear', 'mlp', 'cnn']
+        else:
+            raise ValueError('Not valid task name')
+        ft_name = ['full']
+        batch_size = ['1', '8']
+        script_name = [['train_model.py']]
+        control_name = [[data_names, model_names, [task_name], ft_name, batch_size]]
+        controls_full = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode, control_name)
+        ft_name = ['lora', 'adalora', 'ia3', 'promptune', 'prefixtune', 'ptune']
+        batch_size = ['1', '8']
+        script_name = [['train_peft.py']]
+        control_name = [[data_names, model_names, [task_name], ft_name, batch_size]]
+        controls_peft = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode, control_name)
+        ft_name = ['cola-lowrank-1', 'cola-linear-1', 'cola-mlp-1']
+        batch_size = ['1', '8']
+        script_name = [['train_cola.py']]
+        control_name = [[data_names, model_names, [task_name], ft_name, batch_size]]
+        controls_cola = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode, control_name)
+        controls = controls_full + controls_peft + controls_cola
+        if task_name == 'clm':
+            ft_name = ['cola-lowrank-1', 'cola-lowrank~linear-1', 'cola-lowrank~mlp-1']
+            batch_size = ['1', '8']
+            dist_mode = ['alone', 'col']
+            script_name = [['train_cola_dist.py']]
+            control_name = [[data_names, model_names, [task_name], ft_name, batch_size, dist_mode]]
+            controls_cola_dist = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode,
+                                               control_name)
+            controls = controls + controls_cola_dist
     else:
         raise ValueError('Not valid mode')
     s = '#!/bin/bash\n'

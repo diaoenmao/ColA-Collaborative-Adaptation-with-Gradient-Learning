@@ -93,8 +93,8 @@ def process_control():
         cfg['device_cola'] = 'cpu'
         cfg['num_test_iter'] = 10
         # cfg['device_cola'] = 'cuda:0'
-        cfg['time_cola'] = []
-        cfg['time_backward'] = []
+        cfg['time_used'] = []
+        cfg['time_used_cola'] = []
         cfg['mem_used'] = []
         cfg['mem_used_cola'] = []
     else:
