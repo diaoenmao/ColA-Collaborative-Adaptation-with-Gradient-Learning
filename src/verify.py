@@ -300,6 +300,75 @@ def verify_cola():
     if_match_g_2 = torch.allclose(weight_2_aux_cola_grad, weight_2_aux_grad, atol=1e-03)
     print('[Verify Proposition 1] Gradient of auxiliary parameters (first layer): {}, '
           'Gradient of auxiliary parameters (second layer): {}'.format(if_match_g_1, if_match_g_2))
+
+    print('--------Collaborative Adaptation (Merge)---------')
+    grad_pool = []
+    # Proposed method
+    # Backward original loss
+    # Use the same data and parameters
+    input_1_cola = input_1.clone().detach()
+    weight_1_cola = weight_1.clone().detach()
+    weight_2_cola = weight_2.clone().detach()
+    weight_1_aux_cola = weight_1_aux.clone().detach()
+    weight_2_aux_cola = weight_2_aux.clone().detach()
+    target_cola = target.clone().detach()
+    # Freeze original and auxiliary parameters
+    weight_1_cola.requires_grad = False
+    weight_2_cola.requires_grad = False
+    weight_1_aux_cola.requires_grad = False
+    weight_2_aux_cola.requires_grad = False
+    # First layer
+    # Merge parameters
+    with torch.no_grad():
+        weight_1_cola = (weight_1_cola + weight_1_aux_cola).detach()
+    output_1_cola = F.linear(input_1_cola, weight_1_cola.t())
+    # register hook to retrieve gradient of hidden representations
+    output_1_cola.requires_grad_(True)
+    output_1_cola.register_hook(backward_hook)
+    input_2_cola = F.relu(output_1_cola)
+    # Second layer
+    with torch.no_grad():
+        weight_2_cola = (weight_2_cola + weight_2_aux_cola).detach()
+    output_2_cola = F.linear(input_2_cola, weight_2_cola.t())
+    # register hook to retrieve gradient of hidden representations
+    output_2_cola.requires_grad_(True)
+    output_2_cola.register_hook(backward_hook)
+    # Compute loss
+    loss = F.cross_entropy(output_2_cola, target_cola, reduction='mean')
+    loss.backward()
+    print('Loss: {}'.format(loss))
+
+    # Backward on original parameters
+    # Use the same data and parameters
+    input_1_cola = input_1.clone().detach()
+    weight_1_aux_cola = weight_1_aux_cola.clone().detach()
+    weight_2_aux_cola = weight_2_aux_cola.clone().detach()
+    # Retrieve hidden representations and gradient of hidden representations
+    input_2_cola = input_2_cola.clone().detach()
+    output_2_aux_cola = output_2_aux_cola.clone().detach()
+    output_1_grad = grad_pool[1]
+    output_2_grad = grad_pool[0]
+    # First layer
+    weight_1_aux_cola.requires_grad = True
+    output_1_aux_cola_ = F.linear(input_1_cola, weight_1_aux_cola.t())
+    output_1_aux_cola_copy = output_1_aux_cola_.clone().detach()
+    cola_loss_1 = 0.5 * F.mse_loss(output_1_aux_cola_, (output_1_aux_cola_copy - output_1_grad).detach(),
+                                   reduction='sum')  # Proposition 1
+    cola_loss_1.backward()
+    # Second layer
+    weight_2_aux_cola.requires_grad = True
+    output_2_aux_cola_ = F.linear(input_2_cola, weight_2_aux_cola.t())
+    output_2_aux_cola_copy = output_2_aux_cola_.clone().detach()
+    cola_loss_2 = 0.5 * F.mse_loss(output_2_aux_cola_, (output_2_aux_cola_copy - output_2_grad).detach(),
+                                   reduction='sum')  # Proposition 1
+    cola_loss_2.backward()
+    # Verification
+    weight_1_aux_cola_grad = weight_1_aux_cola.grad
+    weight_2_aux_cola_grad = weight_2_aux_cola.grad
+    if_match_g_1 = torch.allclose(weight_1_aux_cola_grad, weight_1_aux_grad, atol=1e-03)
+    if_match_g_2 = torch.allclose(weight_2_aux_cola_grad, weight_2_aux_grad, atol=1e-03)
+    print('[Verify Proposition 1] Gradient of auxiliary parameters (first layer): {}, '
+          'Gradient of auxiliary parameters (second layer): {}'.format(if_match_g_1, if_match_g_2))
     return
 
 

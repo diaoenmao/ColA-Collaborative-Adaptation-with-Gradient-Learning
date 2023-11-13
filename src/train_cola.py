@@ -186,6 +186,10 @@ def train(data_loader, model, cola_base, optimizer, scheduler, metric, logger):
                 mem_free_cola, mem_total_cola = torch.cuda.mem_get_info(cfg['device_cola'])
                 cfg['mem_used_cola'].append(mem_total_cola - mem_free_cola)
             if i == cfg['num_test_iter']:
+                print(cfg['time_used'])
+                print(cfg['mem_used'])
+                print(cfg['time_used_cola'])
+                print(cfg['mem_used_cola'])
                 print('Run time backward: {}({})'.format(np.mean(cfg['time_used'][1:]),
                                                          np.std(cfg['time_used'][1:])))
                 print('Run time (ColA, M={}): {}({})'.format(len(list(cola_base.keys())),

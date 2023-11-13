@@ -62,6 +62,10 @@ def process_control():
     if ft_name_list[0] == 'cola' and len(ft_name_list) > 1:
         cfg['cola'] = {}
         cfg['cola']['num_steps'] = int(ft_name_list[2])
+        if len(ft_name_list) > 3:
+            cfg['cola']['merge'] = bool(int(ft_name_list[3]))
+        else:
+            cfg['cola']['merge'] = False
         hidden_size = 8
         cfg['cola']['lowrank'] = {'hidden_size': hidden_size, 'dropout': 0.0}
         cfg['cola']['linear'] = {'bias': False}
@@ -90,9 +94,8 @@ def process_control():
             cfg['cola']['scheduler_name'] = 'CosineAnnealingLR'
     cfg['test_computation'] = False
     if cfg['test_computation']:
-        cfg['device_cola'] = 'cpu'
         cfg['num_test_iter'] = 10
-        # cfg['device_cola'] = 'cuda:0'
+        cfg['device_cola'] = 'cpu'
         cfg['time_used'] = []
         cfg['time_used_cola'] = []
         cfg['mem_used'] = []

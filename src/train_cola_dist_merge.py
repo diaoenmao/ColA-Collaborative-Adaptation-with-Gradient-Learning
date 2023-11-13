@@ -10,7 +10,8 @@ from collections import defaultdict
 from config import cfg, process_args
 from dataset import make_dataset, make_data_loader, process_dataset, collate
 from metric import make_metric, make_logger
-from model import make_model, make_optimizer, make_scheduler, make_ft_model, freeze_model, unfreeze_model, make_cola
+from model import make_model, make_optimizer, make_scheduler, make_ft_model, freeze_model, unfreeze_model, make_cola, \
+    make_delta_weight
 from module import save, to_device, process_control, resume, makedir_exist_ok, PeftModel
 
 cudnn.benchmark = True
@@ -55,7 +56,6 @@ def runExperiment():
         model = model.to(cfg['device'])
         model.print_trainable_parameters()
         cola_base = make_cola(model, cfg['cola']['model_name'], cfg['dist_mode'])
-        model.load_cola_base(cola_base)
         optimizer = defaultdict(list)
         scheduler = defaultdict(list)
         num_params = 0
@@ -78,7 +78,6 @@ def runExperiment():
         for k in cola_base:
             for i in range(cfg['num_split']):
                 cola_base[k].model[i].load_state_dict(result['cola_base_state_dict'][k][i])
-        model.load_cola_base(cola_base)
         optimizer = defaultdict(list)
         scheduler = defaultdict(list)
         num_params = 0
@@ -130,10 +129,12 @@ def train(data_loader, model, cola_base, optimizer, scheduler, metric, logger):
         for k in cola_base:
             lr = optimizer[k][0].param_groups[0]['lr']
             for j in range(len(cola_base[k].model)):
-                cola_base[k].model[j] = cola_base[k].model[j].to(cfg['device'])
+                # cola_base[k].model[j] = cola_base[k].model[j].to(cfg['device'])
                 cola_base[k].model[j].train(False)
                 freeze_model(cola_base[k].model[j])
             cola_base[k].make_split(split_i)
+        delta_weight = make_delta_weight(cola_base)
+        model.merge_adapter(delta_weight)
         if cfg['test_computation']:
             s = time.time()
         input_size = input['labels'].size(0)
@@ -147,6 +148,7 @@ def train(data_loader, model, cola_base, optimizer, scheduler, metric, logger):
         loss.backward()
         model.zero_grad()
         input_i, output_target_i = model.flush()
+        model.unmerge_adapter(delta_weight)
         if cfg['test_computation']:
             cfg['time_used'].append(time.time() - s)
         for k in input_i:
@@ -215,9 +217,8 @@ def train(data_loader, model, cola_base, optimizer, scheduler, metric, logger):
 def test(data_loader, model, cola_base, metric, logger):
     with torch.no_grad():
         model.train(False)
-        for k in cola_base:
-            for i in range(len(cola_base[k].model)):
-                cola_base[k].model[i] = cola_base[k].model[i].to(cfg['device'])
+        delta_weight = make_delta_weight(cola_base)
+        model.merge_adapter(delta_weight)
         for i, input in enumerate(data_loader):
             for k in cola_base:
                 cola_base[k].make_split(input['split'])
@@ -241,6 +242,7 @@ def test(data_loader, model, cola_base, metric, logger):
             metric.add('test', input_, output_)
             evaluation = metric.evaluate('test', 'batch', input_, output_)
             logger.append(evaluation, 'test', input_size)
+        model.unmerge_adapter(delta_weight)
         evaluation = metric.evaluate('test', 'full')
         logger.append(evaluation, 'test')
         info = {'info': ['Model: {}'.format(cfg['model_tag']), 'Test Epoch: {}({:.0f}%)'.format(cfg['epoch'], 100.)]}
