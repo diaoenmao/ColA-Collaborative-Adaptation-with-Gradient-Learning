@@ -126,7 +126,8 @@ def make_all_controls(mode, task_name):
 
 
 def main():
-    modes = ['full', 'peft', 'cola', 'cola_step', 'cola_dist', 'cola_merge', 'cola_dist_merge']
+    # modes = ['full', 'peft', 'cola', 'cola_step', 'cola_dist', 'cola_merge', 'cola_dist_merge']
+    modes = ['full', 'peft']
     task_names = ['s2s', 'sc', 'clm', 'ic']
     controls = []
     for mode in modes:
@@ -135,6 +136,7 @@ def main():
     processed_result = process_result(controls)
     df_mean = make_df(processed_result, 'mean')
     df_history = make_df(processed_result, 'history')
+    exit()
     make_vis_method(df_history)
     make_vis_step(df_history)
     return
@@ -202,7 +204,7 @@ def gather_result(control, model_tag, processed_result):
 #                     processed_result[split][metric_name]['history'][exp_idx] \
 #                         = x
 #         else:
-#             # print('Missing {}'.format(base_result_path_i))
+#             print('Missing {}'.format(base_result_path_i))
 #             pass
 #     else:
 #         gather_result([control[0]] + control[2:], model_tag, processed_result[control[1]])
@@ -285,10 +287,10 @@ def make_vis_method(df_history):
                   'cola-linear': 'ColA (Linear)', 'cola-mlp': 'ColA (MLP)'}
     color_dict = {'full': 'black', 'lora': 'red', 'adalora': 'orange', 'ia3': 'green', 'promptune': 'blue',
                   'prefixtune': 'dodgerblue', 'ptune': 'lightblue', 'cola-lowrank': 'gold',
-                  'cola-linear': 'gray', 'cola-mlp': 'teal'}
-    linestyle_dict = {'full': '-', 'lora': '--', 'adalora': ':', 'ia3': '-.', 'promptune': '--',
-                      'prefixtune': ':', 'ptune': '-.', 'cola-lowrank': (0, (5, 1, 1, 1)),
-                      'cola-linear': (0, (10, 5)), 'cola-mlp': (0, (1, 5))}
+                  'cola-linear': 'gray', 'cola-mlp': 'purple'}
+    linestyle_dict = {'full': '-', 'lora': (0, (5, 5)), 'adalora': (0, (1, 1)), 'ia3': (0, (3, 5, 1, 5)),
+                      'promptune': (0, (5, 1)),  'prefixtune': (0, (1, 5)), 'ptune': (0, (5, 5, 1, 1)),
+                      'cola-lowrank': (0, (5, 1, 1, 1)), 'cola-linear': (0, (10, 5)), 'cola-mlp': (0, (10, 10))}
     marker_dict = {'full': 'D', 'lora': 's', 'adalora': 'p', 'ia3': 'd', 'promptune': 'd',
                    'prefixtune': 'p', 'ptune': 's', 'cola-lowrank': 'o',
                    'cola-linear': 'o', 'cola-mlp': 'o'}
@@ -358,7 +360,7 @@ def make_vis_step(df_history):
     for df_name in df_history:
         df_name_list = df_name.split('_')
         model_name, method, batch_size, metric_name, stat = df_name_list[2], df_name_list[3], df_name_list[4], \
-        df_name_list[-2], df_name_list[-1]
+            df_name_list[-2], df_name_list[-1]
         mask = len(df_name_list) - 3 == 5 and stat == 'mean' and 'cola' in method
         if 'cola-lowrank' not in method or (model_name != 'llama-2' and batch_size not in ['8', '64']):
             mask = False
