@@ -139,6 +139,7 @@ def train(data_loader, model, optimizer, scheduler, metric, logger):
                                                         np.std(cfg['time_used'][1:])))
                 print('Memory used: {}({})'.format(np.mean(cfg['mem_used'][1:]),
                                                   np.std(cfg['mem_used'][1:])))
+                print('-----------------')
                 exit()
     return
 

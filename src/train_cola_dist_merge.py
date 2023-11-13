@@ -210,6 +210,7 @@ def train(data_loader, model, cola_base, optimizer, scheduler, metric, logger):
                 if cfg['device_cola'] != 'cpu':
                     print('Memory used (ColA): {}/{}'.format(np.mean(cfg['mem_used_cola'][1:]),
                                                              np.std(cfg['mem_used_cola'][1:])))
+                print('-----------------')
                 exit()
     return
 

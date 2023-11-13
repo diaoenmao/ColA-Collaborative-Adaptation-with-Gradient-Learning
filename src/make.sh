@@ -73,3 +73,11 @@ python make.py --mode computation --task_name clm --run test --num_experiment 1 
 python make.py --mode computation --task_name sc --run test --num_experiment 1 --resume_mode 0 --init_seed 0 --round 1 --split_round 65535 --num_gpu 4
 
 python make.py --mode computation --task_name ic --run test --num_experiment 1 --resume_mode 0 --init_seed 0 --round 1 --split_round 65535 --num_gpu 4
+
+python make.py --mode computation_cola --task_name s2s --run test --num_experiment 1 --resume_mode 0 --init_seed 0 --round 1 --split_round 65535 --num_gpu 4
+
+python make.py --mode computation_cola --task_name clm --run test --num_experiment 1 --resume_mode 0 --init_seed 0 --round 1 --split_round 65535 --num_gpu 4
+
+python make.py --mode computation_cola --task_name sc --run test --num_experiment 1 --resume_mode 0 --init_seed 0 --round 1 --split_round 65535 --num_gpu 4
+
+python make.py --mode computation_cola --task_name ic --run test --num_experiment 1 --resume_mode 0 --init_seed 0 --round 1 --split_round 65535 --num_gpu 4

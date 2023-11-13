@@ -96,6 +96,7 @@ def process_control():
     if cfg['test_computation']:
         cfg['num_test_iter'] = 10
         cfg['device_cola'] = 'cpu'
+        # cfg['device_cola'] = cfg['device']
         cfg['time_used'] = []
         cfg['time_used_cola'] = []
         cfg['mem_used'] = []

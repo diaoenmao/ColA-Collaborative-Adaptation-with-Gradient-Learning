@@ -332,7 +332,8 @@ class ColaModel(torch.nn.Module):
         #         module.merge()
         for key, module in self.named_modules():
             if isinstance(module, ColaLayer):
-                module.merge(delta_weight[key])
+                if key in delta_weight:
+                    module.merge(delta_weight[key])
 
     def unmerge_adapter(self, delta_weight):
         """
@@ -343,7 +344,9 @@ class ColaModel(torch.nn.Module):
         #         module.unmerge()
         for key, module in self.named_modules():
             if isinstance(module, ColaLayer):
-                module.unmerge(delta_weight[key])
+                if key in delta_weight:
+                    module.unmerge(delta_weight[key])
+
     @staticmethod
     def _prepare_cola_config(peft_config, model_config):
         if peft_config.target_modules is None:
@@ -589,7 +592,8 @@ class Linear(nn.Linear, ColaLayer):
         else:
             delta_weight_ = delta_weight
 
-        self.weight.data += self.get_delta_weight(delta_weight_, self.active_adapter).to(self.weight.data.device, self.weight.data.dtype)
+        self.weight.data += self.get_delta_weight(delta_weight_, self.active_adapter).to(self.weight.data.device,
+                                                                                         self.weight.data.dtype)
         if self.bias is not None and isinstance(delta_weight, tuple):
             self.bias.data += delta_bias_.data.to(self.bias.data.device, self.bias.data.dtype)
         self.merged = True
@@ -605,7 +609,8 @@ class Linear(nn.Linear, ColaLayer):
             delta_weight_, delta_bias_ = delta_weight
         else:
             delta_weight_ = delta_weight
-        self.weight.data -= self.get_delta_weight(delta_weight_, self.active_adapter).to(self.weight.data.device, self.weight.data.dtype)
+        self.weight.data -= self.get_delta_weight(delta_weight_, self.active_adapter).to(self.weight.data.device,
+                                                                                         self.weight.data.dtype)
         if self.bias is not None and isinstance(delta_weight, tuple):
             self.bias.data -= delta_bias_.data.to(self.bias.data.device, self.bias.data.dtype)
         self.merged = False
@@ -666,22 +671,23 @@ class Embedding(nn.Embedding, ColaLayer):
         self.update_layer(adapter_name, cola_alpha)
         self.active_adapter = adapter_name
 
-    def unmerge(self, delta_weight=None):
-        if delta_weight is None:
-            return
-        if not self.merged:
-            warnings.warn("Already unmerged. Nothing to do.")
-            return
-        self.weight.data -= self.get_delta_weight(delta_weight, self.active_adapter)
-        self.merged = False
-        return
-
-    def merge(self):
+    def merge(self, delta_weight):
         # if self.merged:
         #     warnings.warn("Already merged. Nothing to do.")
         #     return
-        self.weight.data += self.get_delta_weight(delta_weight, self.active_adapter).to(self.weight.data.device, self.weight.data.dtype)
+        self.weight.data += self.get_delta_weight(delta_weight, self.active_adapter).to(self.weight.data.device,
+                                                                                        self.weight.data.dtype)
         self.merged = True
+        return
+
+    def unmerge(self, delta_weight=None):
+        # if delta_weight is None:
+        #     return
+        # if not self.merged:
+        #     warnings.warn("Already unmerged. Nothing to do.")
+        #     return
+        self.weight.data -= self.get_delta_weight(delta_weight, self.active_adapter)
+        self.merged = False
         return
 
     def get_delta_weight(self, delta_weight, adapter):
@@ -702,6 +708,8 @@ class Embedding(nn.Embedding, ColaLayer):
                 result += cola_output
             return result
         else:
+            if self.training:
+                self.output_target.append(0)
             return nn.Embedding.forward(self, x)
 
 
@@ -743,7 +751,8 @@ class Conv2d(nn.Conv2d, ColaLayer):
         else:
             delta_weight_ = delta_weight
 
-        self.weight.data += self.get_delta_weight(delta_weight_, self.active_adapter).to(self.weight.data.device, self.weight.data.dtype)
+        self.weight.data += self.get_delta_weight(delta_weight_, self.active_adapter).to(self.weight.data.device,
+                                                                                         self.weight.data.dtype)
         if self.bias is not None and isinstance(delta_weight, tuple):
             self.bias.data += delta_bias_.data.to(self.bias.data.device, self.bias.data.dtype)
         self.merged = True
@@ -752,10 +761,17 @@ class Conv2d(nn.Conv2d, ColaLayer):
     def unmerge(self, delta_weight=None):
         if delta_weight is None:
             return
-        if not self.merged:
-            warnings.warn("Already unmerged. Nothing to do.")
-            return
-        self.weight.data -= self.get_delta_weight(delta_weight, self.active_adapter)
+        # if not self.merged:
+        #     warnings.warn("Already unmerged. Nothing to do.")
+        #     return
+        if isinstance(delta_weight, tuple):
+            delta_weight_, delta_bias_ = delta_weight
+        else:
+            delta_weight_ = delta_weight
+        self.weight.data -= self.get_delta_weight(delta_weight_, self.active_adapter).to(self.weight.data.device,
+                                                                                         self.weight.data.dtype)
+        if self.bias is not None and isinstance(delta_weight, tuple):
+            self.bias.data -= delta_bias_.data.to(self.bias.data.device, self.bias.data.dtype)
         self.merged = False
         return
 
@@ -806,6 +822,8 @@ class Conv2d(nn.Conv2d, ColaLayer):
                 result += cola_output
 
         else:
+            if self.training:
+                self.output_target.append(0)
             result = F.conv2d(
                 x,
                 self.weight,
