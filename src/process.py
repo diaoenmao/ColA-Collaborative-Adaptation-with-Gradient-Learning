@@ -24,6 +24,7 @@ matplotlib.rcParams['ytick.labelsize'] = 'large'
 matplotlib.rcParams["font.family"] = "Times New Roman"
 matplotlib.rcParams["font.serif"] = "Times New Roman"
 
+
 def make_controls(control_name):
     control_names = []
     for i in range(len(control_name)):
@@ -39,37 +40,84 @@ def make_all_controls(mode, task_name):
         model_names = ['bart-base']
     elif task_name == 'clm':
         data_names = ['dolly-15k']
+        # model_names = ['llama-2']
         model_names = ['gpt2']
     elif task_name == 'sc':
         data_names = ['glue-cola', 'glue-mnli', 'glue-mrpc', 'glue-qnli', 'glue-qqp', 'glue-rte', 'glue-sst2',
                       'glue-stsb']
         model_names = ['roberta-base']
+    elif task_name == 'ic':
+        data_names = ['MNIST', 'CIFAR10']
+        model_names = ['linear', 'mlp', 'cnn']
     else:
         raise ValueError('Not valid task name')
     if mode == 'full':
-        batch_size = ['32']
+        if task_name == 'ic':
+            batch_size = ['256']
+        else:
+            batch_size = ['32']
         control_name = [[data_names, model_names, [task_name], ['full'], batch_size]]
         controls = make_controls(control_name)
     elif mode == 'peft':
-        ft_name = ['lora', 'adalora', 'ia3', 'promptune', 'prefixtune', 'ptune']
-        batch_size = ['32']
+        if task_name == 'ic':
+            ft_name = ['lora']
+            batch_size = ['256']
+        else:
+            ft_name = ['lora', 'adalora', 'ia3', 'promptune', 'prefixtune', 'ptune']
+            if model_names[0] == 'llama-2':
+                batch_size = ['8']
+            else:
+                batch_size = ['32']
         control_name = [[data_names, model_names, [task_name], ft_name, batch_size]]
         controls = make_controls(control_name)
     elif mode == 'cola':
         ft_name = ['cola-lowrank-1', 'cola-linear-1', 'cola-mlp-1']
-        batch_size = ['32']
+        if task_name == 'ic':
+            batch_size = ['256']
+        else:
+            if model_names[0] == 'llama-2':
+                batch_size = ['8']
+            else:
+                batch_size = ['32']
         control_name = [[data_names, model_names, [task_name], ft_name, batch_size]]
         controls = make_controls(control_name)
     elif mode == 'cola_step':
         ft_name = ['cola-lowrank-1', 'cola-lowrank-2', 'cola-lowrank-4', 'cola-lowrank-8']
-        batch_size = ['8']
+        if task_name == 'ic':
+            batch_size = ['64']
+        else:
+            batch_size = ['8']
         control_name = [[data_names, model_names, [task_name], ft_name, batch_size]]
         controls = make_controls(control_name)
     elif mode == 'cola_dist':
         data_names = ['dolly-15k']
         ft_name = ['cola-lowrank-1', 'cola-lowrank~linear-1', 'cola-lowrank~mlp-1']
-        batch_size = ['32']
+        if model_names[0] == 'llama-2':
+            batch_size = ['8']
+        else:
+            batch_size = ['32']
         dist_mode = ['alone', 'col']
+        control_name = [[data_names, model_names, [task_name], ft_name, batch_size, dist_mode]]
+        controls = make_controls(control_name)
+    elif mode == 'cola_merge':
+        ft_name = ['cola-lowrank-1-1', 'cola-linear-1-1']
+        if task_name == 'ic':
+            batch_size = ['256']
+        else:
+            if model_names[0] == 'llama-2':
+                batch_size = ['8']
+            else:
+                batch_size = ['32']
+        control_name = [[data_names, model_names, [task_name], ft_name, batch_size]]
+        controls = make_controls(control_name)
+    elif mode == 'cola_dist_merge':
+        data_names = ['dolly-15k']
+        ft_name = ['cola-lowrank-1-1', 'cola-lowrank~linear-1-1']
+        if model_names[0] == 'llama-2':
+            batch_size = ['8']
+        else:
+            batch_size = ['32']
+        dist_mode = ['col']
         control_name = [[data_names, model_names, [task_name], ft_name, batch_size, dist_mode]]
         controls = make_controls(control_name)
     else:
@@ -78,8 +126,8 @@ def make_all_controls(mode, task_name):
 
 
 def main():
-    modes = ['full', 'peft', 'cola', 'cola_step', 'cola_dist']
-    task_names = ['s2s', 'sc', 'clm']
+    modes = ['full', 'peft', 'cola', 'cola_step', 'cola_dist', 'cola_merge', 'cola_dist_merge']
+    task_names = ['s2s', 'sc', 'clm', 'ic']
     controls = []
     for mode in modes:
         for task_name in task_names:
@@ -108,26 +156,6 @@ def process_result(controls):
     return processed_result
 
 
-# def gather_result(control, model_tag, processed_result):
-#     if len(control) == 1:
-#         exp_idx = exp.index(control[0])
-#         base_result_path_i = os.path.join(result_path, '{}'.format(model_tag))
-#         if os.path.exists(base_result_path_i):
-#             base_result = load(base_result_path_i)
-#             for split in base_result['logger_state_dict']:
-#                 for metric_name in base_result['logger_state_dict'][split]['mean']:
-#                     processed_result[split][metric_name]['mean'][exp_idx] \
-#                         = base_result['logger_state_dict'][split]['mean'][metric_name]
-#                 for metric_name in base_result['logger_state_dict'][split]['history']:
-#                     processed_result[split][metric_name]['history'][exp_idx] \
-#                         = base_result['logger_state_dict'][split]['history'][metric_name]
-#         else:
-#             print('Missing {}'.format(base_result_path_i))
-#             pass
-#     else:
-#         gather_result([control[0]] + control[2:], model_tag, processed_result[control[1]])
-#     return
-
 def gather_result(control, model_tag, processed_result):
     if len(control) == 1:
         exp_idx = exp.index(control[0])
@@ -139,25 +167,47 @@ def gather_result(control, model_tag, processed_result):
                     processed_result[split][metric_name]['mean'][exp_idx] \
                         = base_result['logger_state_dict'][split]['mean'][metric_name]
                 for metric_name in base_result['logger_state_dict'][split]['history']:
-                    x = base_result['logger_state_dict'][split]['history'][metric_name]
-                    if 'cola' in model_tag:
-                        x = x[::2]
-                    if len(x) < 40 and len(x) > 10 and 'info' not in metric_name:
-                        num_miss = 40 - len(x)
-                        last_x = x[-1]
-                        x = x + [last_x + 1e-5*np.random.randn() for _ in  range(num_miss)]
-                    if len(x) < 10 or 'info' in metric_name:
-                        continue
-                    # processed_result[split][metric_name]['history'][exp_idx] \
-                    #     = base_result['logger_state_dict'][split]['history'][metric_name]
                     processed_result[split][metric_name]['history'][exp_idx] \
-                        = x
+                        = base_result['logger_state_dict'][split]['history'][metric_name]
         else:
-            # print('Missing {}'.format(base_result_path_i))
+            print('Missing {}'.format(base_result_path_i))
             pass
     else:
         gather_result([control[0]] + control[2:], model_tag, processed_result[control[1]])
     return
+
+
+# def gather_result(control, model_tag, processed_result):
+#     if len(control) == 1:
+#         exp_idx = exp.index(control[0])
+#         base_result_path_i = os.path.join(result_path, '{}'.format(model_tag))
+#         if os.path.exists(base_result_path_i):
+#             base_result = load(base_result_path_i)
+#             for split in base_result['logger_state_dict']:
+#                 for metric_name in base_result['logger_state_dict'][split]['mean']:
+#                     processed_result[split][metric_name]['mean'][exp_idx] \
+#                         = base_result['logger_state_dict'][split]['mean'][metric_name]
+#                 for metric_name in base_result['logger_state_dict'][split]['history']:
+#                     x = base_result['logger_state_dict'][split]['history'][metric_name]
+#                     if 'cola' in model_tag:
+#                         x = x[::2]
+#                     if len(x) < 40 and len(x) > 10 and 'info' not in metric_name:
+#                         num_miss = 40 - len(x)
+#                         last_x = x[-1]
+#                         x = x + [last_x + 1e-5 * np.random.randn() for _ in range(num_miss)]
+#                     if len(x) < 10 or 'info' in metric_name:
+#                         continue
+#                     # processed_result[split][metric_name]['history'][exp_idx] \
+#                     #     = base_result['logger_state_dict'][split]['history'][metric_name]
+#                     processed_result[split][metric_name]['history'][exp_idx] \
+#                         = x
+#         else:
+#             # print('Missing {}'.format(base_result_path_i))
+#             pass
+#     else:
+#         gather_result([control[0]] + control[2:], model_tag, processed_result[control[1]])
+#     return
+
 
 def summarize_result(key, value):
     if key in ['mean', 'history']:
@@ -180,11 +230,11 @@ def extract_result(extracted_processed_result, processed_result, control):
     def extract(split, metric_name, mode):
         output = False
         if split == 'train':
-            if metric_name in ['test/Rouge', 'test/GLUE']:
+            if metric_name in ['test/Rouge', 'test/GLUE', 'test/Accuracy']:
                 if mode == 'history':
                     output = True
         elif split == 'test':
-            if metric_name in ['test/Rouge', 'test/GLUE']:
+            if metric_name in ['test/Rouge', 'test/GLUE', 'test/Accuracy']:
                 if mode == 'mean':
                     output = True
         elif split == 'test_each':
@@ -231,26 +281,30 @@ def make_df(processed_result, mode):
 def make_vis_method(df_history):
     mode_name = ['full', 'lora', 'adalora', 'ia3', 'promptune', 'ptune', 'cola']
     label_dict = {'full': 'FT', 'lora': 'LoRA', 'adalora': 'AdaLoRA', 'ia3': 'IA3', 'promptune': 'Promp Tuning',
-                  'prefixtune': 'Prefix Tuning', 'ptune': 'P-Tuning', 'cola': 'ColA (Low Rank)'}
+                  'prefixtune': 'Prefix Tuning', 'ptune': 'P-Tuning', 'cola-lowrank': 'ColA (Low Rank)',
+                  'cola-linear': 'ColA (Linear)', 'cola-mlp': 'ColA (MLP)'}
     color_dict = {'full': 'black', 'lora': 'red', 'adalora': 'orange', 'ia3': 'green', 'promptune': 'blue',
-                  'prefixtune': 'dodgerblue', 'ptune': 'lightblue', 'cola': 'gold'}
+                  'prefixtune': 'dodgerblue', 'ptune': 'lightblue', 'cola-lowrank': 'gold',
+                  'cola-linear': 'gray', 'cola-mlp': 'teal'}
     linestyle_dict = {'full': '-', 'lora': '--', 'adalora': ':', 'ia3': '-.', 'promptune': '--',
-                      'prefixtune': ':', 'ptune': '-.', 'cola': '-'}
+                      'prefixtune': ':', 'ptune': '-.', 'cola-lowrank': (0, (5, 1, 1, 1)),
+                      'cola-linear': (0, (10, 5)), 'cola-mlp': (0, (1, 5))}
     marker_dict = {'full': 'D', 'lora': 's', 'adalora': 'p', 'ia3': 'd', 'promptune': 'd',
-                   'prefixtune': 'p', 'ptune': 's', 'cola': 'o'}
-    loc_dict = {'ROUGE': 'lower right', 'GLUE': 'lower right'}
+                   'prefixtune': 'p', 'ptune': 's', 'cola-lowrank': 'o',
+                   'cola-linear': 'o', 'cola-mlp': 'o'}
+    loc_dict = {'ROUGE': 'lower right', 'GLUE': 'lower right', 'Accuracy': 'lower right'}
     fontsize_dict = {'legend': 12, 'label': 16, 'ticks': 16}
     figsize = (5, 4)
     fig = {}
     ax_dict_1 = {}
     for df_name in df_history:
         df_name_list = df_name.split('_')
-        mode, batch_size, metric_name, stat = df_name_list[3], df_name_list[4], df_name_list[-2], df_name_list[-1]
+        model_name, mode, batch_size, metric_name, stat = df_name_list[2], df_name_list[3], df_name_list[4], \
+            df_name_list[-2], df_name_list[-1]
         mask = len(df_name_list) - 3 == 5 and stat == 'mean'
         if 'cola' in mode:
-            if 'cola-lowrank-1' not in mode or batch_size != '32':
+            if model_name != 'llama-2' and batch_size not in ['32', '256']:
                 mask = False
-            mode = 'cola'
         if mask:
             df_name_std = '_'.join([*df_name_list[:-1], 'std'])
             fig_name = '_'.join([*df_name_list[:3], *df_name_list[4:-1]])
@@ -262,7 +316,11 @@ def make_vis_method(df_history):
             y_err = df_history[df_name_std].iloc[0].to_numpy()
             x = np.arange(len(y))
             xlabel = 'Epoch'
-            pivot = mode
+            if 'cola' in mode:
+                mode_list = mode.split('-')
+                pivot = '-'.join([mode_list[0], mode_list[1]])
+            else:
+                pivot = mode
             metric_name = 'ROUGE' if metric_name == 'Rouge' else metric_name
             ylabel = metric_name
             ax_1.plot(x, y, label=label_dict[pivot], color=color_dict[pivot],
@@ -292,16 +350,17 @@ def make_vis_step(df_history):
     color_dict = {'1': 'black', '2': 'red', '4': 'orange', '8': 'gold'}
     linestyle_dict = {'1': '-', '2': '--', '4': ':', '8': '-'}
     marker_dict = {'1': 'D', '2': 's', '4': 'p', '8': 'o'}
-    loc_dict = {'ROUGE': 'lower right', 'GLUE': 'lower right'}
+    loc_dict = {'ROUGE': 'lower right', 'GLUE': 'lower right', 'Accuracy': 'lower right'}
     fontsize_dict = {'legend': 12, 'label': 16, 'ticks': 16}
     figsize = (5, 4)
     fig = {}
     ax_dict_1 = {}
     for df_name in df_history:
         df_name_list = df_name.split('_')
-        method, batch_size, metric_name, stat = df_name_list[3], df_name_list[4], df_name_list[-2], df_name_list[-1]
+        model_name, method, batch_size, metric_name, stat = df_name_list[2], df_name_list[3], df_name_list[4], \
+        df_name_list[-2], df_name_list[-1]
         mask = len(df_name_list) - 3 == 5 and stat == 'mean' and 'cola' in method
-        if 'cola-lowrank' not in method or batch_size != '8':
+        if 'cola-lowrank' not in method or (model_name != 'llama-2' and batch_size not in ['8', '64']):
             mask = False
         mode = method.split('-')[-1]
         if mask:

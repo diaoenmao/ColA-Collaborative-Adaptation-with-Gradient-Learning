@@ -65,11 +65,11 @@ def main():
     else:
         raise ValueError('Not valid task name')
     if mode == 'full':
-        script_name = [['{}_model.py'.format(run)]]
         if task_name == 'ic':
             batch_size = ['256']
         else:
             batch_size = ['32']
+        script_name = [['{}_model.py'.format(run)]]
         control_name = [[data_names, model_names, [task_name], ['full'], batch_size]]
         controls = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode, control_name)
     elif mode == 'peft':
