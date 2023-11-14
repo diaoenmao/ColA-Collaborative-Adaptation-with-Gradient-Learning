@@ -95,14 +95,19 @@ def process_control():
     cfg['test_computation'] = False
     if cfg['test_computation']:
         cfg['num_test_iter'] = 10
-        cfg['device_cola'] = 'cpu'
-        # cfg['device_cola'] = cfg['device']
+        # cfg['device_cola'] = 'cpu'
+        cfg['device_cola'] = cfg['device']
+        cfg['offload_device'] = 'cpu'
+        # cfg['offload_device'] = cfg['device']
+        # cfg['offload_device'] = 'cuda:1'
         cfg['time_used'] = []
         cfg['time_used_cola'] = []
         cfg['mem_used'] = []
         cfg['mem_used_cola'] = []
     else:
         cfg['device_cola'] = cfg['device']
+        # cfg['offload_device'] = 'cpu'
+        cfg['offload_device'] = cfg['device']
     return
 
 

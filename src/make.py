@@ -64,6 +64,7 @@ def main():
         model_names = ['linear', 'mlp', 'cnn']
     else:
         raise ValueError('Not valid task name')
+    offload_gpu = False
     if mode == 'full':
         if task_name == 'ic':
             batch_size = ['256']
@@ -171,6 +172,7 @@ def main():
         controls_peft = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode, control_name)
         controls = controls_full + controls_peft
     elif mode == 'computation_cola':
+        offload_gpu = False
         if task_name == 's2s':
             data_names = ['fpb-sa']
             model_names = ['bart-base']
@@ -191,7 +193,6 @@ def main():
         script_name = [['train_cola.py']]
         control_name = [[data_names, model_names, [task_name], ft_name, batch_size]]
         controls_cola = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode, control_name)
-        controls = controls_cola
 
         ft_name = ['cola-lowrank-1-1', 'cola-linear-1-1']
         batch_size = ['1', '8', '32']
@@ -199,6 +200,7 @@ def main():
         control_name = [[data_names, model_names, [task_name], ft_name, batch_size]]
         controls_cola_merge = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode,
                                             control_name)
+        controls = controls_cola + controls_cola_merge
         if task_name == 'clm':
             ft_name = ['cola-lowrank-1', 'cola-lowrank~linear-1', 'cola-lowrank~mlp-1']
             batch_size = ['1', '8', '32']
@@ -214,7 +216,7 @@ def main():
             control_name = [[data_names, model_names, [task_name], ft_name, batch_size, dist_mode]]
             controls_cola_dist_merge = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode,
                                                      control_name)
-            controls = controls + controls_cola_merge + controls_cola_dist + controls_cola_dist_merge
+            controls = controls + controls_cola_dist + controls_cola_dist_merge
     else:
         raise ValueError('Not valid mode')
     s = '#!/bin/bash\n'
@@ -222,8 +224,12 @@ def main():
     k = 1
     for i in range(len(controls)):
         controls[i] = list(controls[i])
-        s = s + 'CUDA_VISIBLE_DEVICES=\"{}\" python {} --init_seed {} --world_size {} --num_experiment {} ' \
-                '--resume_mode {} --control_name {}&\n'.format(gpu_ids[i % len(gpu_ids)], *controls[i])
+        if offload_gpu:
+            s = s + 'CUDA_VISIBLE_DEVICES=\"{},{}\" python {} --init_seed {} --world_size {} --num_experiment {} ' \
+                    '--resume_mode {} --control_name {}&\n'.format(gpu_ids[i % len(gpu_ids)], num_gpu, *controls[i])
+        else:
+            s = s + 'CUDA_VISIBLE_DEVICES=\"{}\" python {} --init_seed {} --world_size {} --num_experiment {} ' \
+                    '--resume_mode {} --control_name {}&\n'.format(gpu_ids[i % len(gpu_ids)], *controls[i])
         if i % round == round - 1:
             if 'computation' in mode:
                 s = s[:-2] + '\nwait\nsleep 10s\n'

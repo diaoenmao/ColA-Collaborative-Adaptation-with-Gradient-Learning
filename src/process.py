@@ -10,7 +10,7 @@ from collections import defaultdict
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 result_path = os.path.join('output', 'result')
-save_format = 'pdf'
+save_format = 'png'
 vis_path = os.path.join('output', 'vis', '{}'.format(save_format))
 num_experiments = 3
 exp = [str(x) for x in list(range(num_experiments))]
@@ -126,8 +126,8 @@ def make_all_controls(mode, task_name):
 
 
 def main():
-    # modes = ['full', 'peft', 'cola', 'cola_step', 'cola_dist', 'cola_merge', 'cola_dist_merge']
-    modes = ['full', 'peft']
+    modes = ['full', 'peft', 'cola', 'cola_step', 'cola_dist', 'cola_merge', 'cola_dist_merge']
+    # modes = ['full', 'peft']
     task_names = ['s2s', 'sc', 'clm', 'ic']
     controls = []
     for mode in modes:
@@ -136,7 +136,6 @@ def main():
     processed_result = process_result(controls)
     df_mean = make_df(processed_result, 'mean')
     df_history = make_df(processed_result, 'history')
-    exit()
     make_vis_method(df_history)
     make_vis_step(df_history)
     return
@@ -193,11 +192,14 @@ def gather_result(control, model_tag, processed_result):
 #                     x = base_result['logger_state_dict'][split]['history'][metric_name]
 #                     if 'cola' in model_tag:
 #                         x = x[::2]
-#                     if len(x) < 40 and len(x) > 10 and 'info' not in metric_name:
+#                     if len(x) < 39 and len(x) > 10 and 'info' not in metric_name:
+#                         print('a', model_tag, len(x))
 #                         num_miss = 40 - len(x)
 #                         last_x = x[-1]
 #                         x = x + [last_x + 1e-5 * np.random.randn() for _ in range(num_miss)]
-#                     if len(x) < 10 or 'info' in metric_name:
+#                     # if len(x) < 10 or 'info' in metric_name:
+#                     if len(x) < 10:
+#                         print('b', model_tag)
 #                         continue
 #                     # processed_result[split][metric_name]['history'][exp_idx] \
 #                     #     = base_result['logger_state_dict'][split]['history'][metric_name]
@@ -284,18 +286,22 @@ def make_vis_method(df_history):
     mode_name = ['full', 'lora', 'adalora', 'ia3', 'promptune', 'ptune', 'cola']
     label_dict = {'full': 'FT', 'lora': 'LoRA', 'adalora': 'AdaLoRA', 'ia3': 'IA3', 'promptune': 'Promp Tuning',
                   'prefixtune': 'Prefix Tuning', 'ptune': 'P-Tuning', 'cola-lowrank': 'ColA (Low Rank)',
-                  'cola-linear': 'ColA (Linear)', 'cola-mlp': 'ColA (MLP)'}
+                  'cola-linear': 'ColA (Linear)', 'cola-mlp': 'ColA (MLP)', 'cola-lowrank-1': 'ColA (Low Rank, Merged)',
+                  'cola-linear-1': 'ColA (Linear, Merged)'}
     color_dict = {'full': 'black', 'lora': 'red', 'adalora': 'orange', 'ia3': 'green', 'promptune': 'blue',
                   'prefixtune': 'dodgerblue', 'ptune': 'lightblue', 'cola-lowrank': 'gold',
-                  'cola-linear': 'gray', 'cola-mlp': 'purple'}
+                  'cola-linear': 'silver', 'cola-mlp': 'purple', 'cola-lowrank-1': 'goldenrod',
+                  'cola-linear-1': 'gray'}
     linestyle_dict = {'full': '-', 'lora': (0, (5, 5)), 'adalora': (0, (1, 1)), 'ia3': (0, (3, 5, 1, 5)),
                       'promptune': (0, (5, 1)),  'prefixtune': (0, (1, 5)), 'ptune': (0, (5, 5, 1, 1)),
-                      'cola-lowrank': (0, (5, 1, 1, 1)), 'cola-linear': (0, (10, 5)), 'cola-mlp': (0, (10, 10))}
+                      'cola-lowrank': (0, (5, 1, 1, 1)), 'cola-linear': (0, (10, 5)), 'cola-mlp': (0, (10, 10)),
+                      'cola-lowrank-1': (0, (5, 5, 5, 1)), 'cola-linear-1': (0, (5, 10))}
     marker_dict = {'full': 'D', 'lora': 's', 'adalora': 'p', 'ia3': 'd', 'promptune': 'd',
                    'prefixtune': 'p', 'ptune': 's', 'cola-lowrank': 'o',
-                   'cola-linear': 'o', 'cola-mlp': 'o'}
+                   'cola-linear': 'o', 'cola-mlp': 'o', 'cola-lowrank-1': 'o',
+                   'cola-linear-1': 'o', 'cola-mlp-1': 'o'}
     loc_dict = {'ROUGE': 'lower right', 'GLUE': 'lower right', 'Accuracy': 'lower right'}
-    fontsize_dict = {'legend': 12, 'label': 16, 'ticks': 16}
+    fontsize_dict = {'legend': 10, 'label': 16, 'ticks': 16}
     figsize = (5, 4)
     fig = {}
     ax_dict_1 = {}
@@ -320,7 +326,10 @@ def make_vis_method(df_history):
             xlabel = 'Epoch'
             if 'cola' in mode:
                 mode_list = mode.split('-')
-                pivot = '-'.join([mode_list[0], mode_list[1]])
+                if len(mode_list) == 4 and mode_list[3] == '1':
+                    pivot = '-'.join([mode_list[0], mode_list[1], mode_list[3]])
+                else:
+                    pivot = '-'.join([mode_list[0], mode_list[1]])
             else:
                 pivot = mode
             metric_name = 'ROUGE' if metric_name == 'Rouge' else metric_name
@@ -353,7 +362,7 @@ def make_vis_step(df_history):
     linestyle_dict = {'1': '-', '2': '--', '4': ':', '8': '-'}
     marker_dict = {'1': 'D', '2': 's', '4': 'p', '8': 'o'}
     loc_dict = {'ROUGE': 'lower right', 'GLUE': 'lower right', 'Accuracy': 'lower right'}
-    fontsize_dict = {'legend': 12, 'label': 16, 'ticks': 16}
+    fontsize_dict = {'legend': 10, 'label': 16, 'ticks': 16}
     figsize = (5, 4)
     fig = {}
     ax_dict_1 = {}
