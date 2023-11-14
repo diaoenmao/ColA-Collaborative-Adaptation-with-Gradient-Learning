@@ -91,14 +91,12 @@ def make_hf_model(model_name, sub_model_name=None):
         padding_side = "left"
     else:
         padding_side = "right"
-    if 'sdiffusion' in model_name:
-        tokenizer = AutoTokenizer.from_pretrained(cfg['tokenizer_name_or_path'], subfolder="tokenizer", cache_dir=cfg['cache_tokenizer_path'])
-    else:                                        
-        tokenizer = AutoTokenizer.from_pretrained(cfg['tokenizer_name_or_path'], cache_dir=cfg['cache_tokenizer_path'],
-                                                padding_side=padding_side)
+    
     if 'llama' in model_name:
         tokenizer = LlamaTokenizer.from_pretrained(cfg['model_name_or_path'], cache_dir=cfg['cache_tokenizer_path'],
                                                    padding_side=padding_side)
+    elif 'sdiffusion' in model_name:
+        tokenizer = AutoTokenizer.from_pretrained(cfg['tokenizer_name_or_path'], subfolder="tokenizer", cache_dir=cfg['cache_tokenizer_path'])
     else:
         tokenizer = AutoTokenizer.from_pretrained(cfg['tokenizer_name_or_path'], cache_dir=cfg['cache_tokenizer_path'],
                                                   padding_side=padding_side)

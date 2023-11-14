@@ -13,7 +13,7 @@ def process_control():
         cfg['dist_mode'] = 'joint'
     cfg['split_metric'] = False
     make_data_name()
-    if cfg['task_name'] in ['s2s', 'sc', 'clm']:
+    if cfg['task_name'] in ['s2s', 'sc', 'clm', 't2i']:
         cfg['collate_mode'] = 'transformer'
         cfg['bart-base'] = {'max_length': 128}
         cfg['roberta-base'] = {'max_length': 128}
@@ -37,7 +37,7 @@ def process_control():
     if model_name not in cfg:
         cfg[model_name] = {}
     cfg[model_name]['shuffle'] = {'train': True, 'test': False}
-    if cfg['task_name'] in ['s2s', 'sc', 'clm']:
+    if cfg['task_name'] in ['s2s', 'sc', 'clm', 't2i']:
         cfg[model_name]['optimizer_name'] = 'AdamW'
         if cfg['ft_name'] == 'full':
             cfg[model_name]['lr'] = 5e-6
@@ -61,7 +61,7 @@ def process_control():
         cfg[model_name]['num_epochs'] = 400
         cfg[model_name]['batch_size'] = {'train': cfg['batch_size'], 'test': cfg['batch_size']}
         cfg[model_name]['scheduler_name'] = 'CosineAnnealingLR'
-    if ft_name_list[0] == 'cola' and len(ft_name_list) > 1:
+    if (ft_name_list[0] == 'cola' or ft_name_list[0] == 'dreamboothcola') and len(ft_name_list) > 1:
         cfg['cola'] = {}
         cfg['cola']['num_steps'] = int(ft_name_list[2])
         if len(ft_name_list) > 3:
@@ -75,27 +75,27 @@ def process_control():
         cfg['cola']['embedding'] = {'hidden_size': hidden_size, 'dropout': 0.0}
         cfg['cola']['model_name'] = ft_name_list[1]
         cfg['cola']['shuffle'] = {'train': True, 'test': False}
-    if cfg['task_name'] in ['s2s', 'sc', 'clm']:
-        cfg['cola']['optimizer_name'] = 'AdamW'
-        cfg['cola']['lr'] = 3e-4
-        cfg['cola']['momentum'] = 0.9
-        cfg['cola']['betas'] = (0.9, 0.999)
-        cfg['cola']['weight_decay'] = 5e-4
-        cfg['cola']['nesterov'] = True
-        cfg['cola']['batch_size'] = {'train': cfg['batch_size'], 'test': cfg['batch_size']}
-        cfg['cola']['scheduler_name'] = 'LinearAnnealingLR'
-        cfg['cola']['warmup_ratio'] = 0.05
-    else:
-        cfg['cola']['optimizer_name'] = 'SGD'
-        cfg['cola']['lr'] = 3e-2
-        cfg['cola']['momentum'] = 0.9
-        cfg['cola']['betas'] = (0.9, 0.999)
-        cfg['cola']['weight_decay'] = 5e-4
-        cfg['cola']['nesterov'] = True
-        cfg['cola']['batch_size'] = {'train': cfg['batch_size'], 'test': cfg['batch_size']}
-        cfg['cola']['scheduler_name'] = 'CosineAnnealingLR'
+        if cfg['task_name'] in ['s2s', 'sc', 'clm', 't2i']:
+            cfg['cola']['optimizer_name'] = 'AdamW'
+            cfg['cola']['lr'] = 3e-4
+            cfg['cola']['momentum'] = 0.9
+            cfg['cola']['betas'] = (0.9, 0.999)
+            cfg['cola']['weight_decay'] = 5e-4
+            cfg['cola']['nesterov'] = True
+            cfg['cola']['batch_size'] = {'train': cfg['batch_size'], 'test': cfg['batch_size']}
+            cfg['cola']['scheduler_name'] = 'LinearAnnealingLR'
+            cfg['cola']['warmup_ratio'] = 0.05
+        else:
+            cfg['cola']['optimizer_name'] = 'SGD'
+            cfg['cola']['lr'] = 3e-2
+            cfg['cola']['momentum'] = 0.9
+            cfg['cola']['betas'] = (0.9, 0.999)
+            cfg['cola']['weight_decay'] = 5e-4
+            cfg['cola']['nesterov'] = True
+            cfg['cola']['batch_size'] = {'train': cfg['batch_size'], 'test': cfg['batch_size']}
+            cfg['cola']['scheduler_name'] = 'CosineAnnealingLR'
     if cfg['task_name'] == 't2i':
-        cfg[model_name]['num_epochs'] = 1
+        cfg[model_name]['num_epochs'] = 2
         cfg['collate_mode'] = 'dreambooth'
         # all settings are from the peft example: https://github.com/huggingface/peft
         cfg[model_name]['prior_loss_weight'] = 1
@@ -116,6 +116,9 @@ def process_control():
 
         cfg[model_name]['scheduler_name'] = 'ConstantLR'
         cfg[model_name]['factor'] = 1
+
+        cfg['cola']['scheduler_name'] = 'ConstantLR'
+        cfg['cola']['factor'] = 1
 
         cfg[model_name]['num_inference_steps'] = 50
         cfg[model_name]['guidance_scale'] = 7.5
@@ -141,7 +144,7 @@ def make_data_name():
     else:
         cfg['data_name'] = data_name_list[0]
         cfg['subset_name'] = 'none'
-    if cfg['task_name'] in ['s2s', 'sc', 'clm']:
+    if cfg['task_name'] in ['s2s', 'sc', 'clm', 't2i']:
         data_name_dict = {
             # https://huggingface.co/datasets/financial_phrasebank
             'fpb': {'data_name': 'financial_phrasebank',

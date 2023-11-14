@@ -81,7 +81,7 @@ def runExperiment():
         result = {'cfg': cfg, 'epoch': cfg['epoch'] + 1,
                   'optimizer_state_dict': optimizer.state_dict(), 'scheduler_state_dict': scheduler.state_dict(),
                   'metric_state_dict': None, 'logger_state_dict': logger.state_dict()}
-        save(result, os.path.join(checkpoint_path, 'model'))
+        save(result, os.path.join(best_path, 'model'))
         model.save_pretrained(os.path.join(best_path, 'adapter'))
         return
     for epoch in range(cfg['epoch'], cfg[cfg['model_name']]['num_epochs'] + 1):
@@ -161,13 +161,14 @@ def train(data_loader, model, optimizer, scheduler, metric, logger):
 
 def train_t2i(data_loader, unet, vae, text_encoder, optimizer, scheduler, noise_scheduler, metric, logger):
     unet.train(True)
-    
     model_name = cfg['model_name']
     for epoch in range(0, cfg[model_name]['num_epochs']):
         start_time = time.time()
-        for i, batch in enumerate(data_loader):
-            batch = to_device(batch, cfg['device'])
-            latents = vae.encode(batch["pixel_values"].to(dtype=torch.float32)).latent_dist.sample()
+        for i, input in enumerate(data_loader):
+            if cfg['test_computation']:
+                s = time.time()
+            input = to_device(input, cfg['device'])
+            latents = vae.encode(input["pixel_values"].to(dtype=torch.float32)).latent_dist.sample()
             latents = latents * 0.18215
 
             # Sample noise that we'll add to the latents
@@ -184,7 +185,7 @@ def train_t2i(data_loader, unet, vae, text_encoder, optimizer, scheduler, noise_
             noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
 
             # Get the text embedding for conditioning
-            encoder_hidden_states = text_encoder(batch["input_ids"])[0]
+            encoder_hidden_states = text_encoder(input["input_ids"])[0]
 
             # Predict the noise residual
             model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
@@ -214,13 +215,14 @@ def train_t2i(data_loader, unet, vae, text_encoder, optimizer, scheduler, noise_
                 loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
 
             evaluation = {'loss': loss.detach().item()}
-            input_size = batch['input_ids'].size(0) / 2
+            input_size = input['input_ids'].size(0) / 2
             logger.append(evaluation, 'train', n=input_size)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
             scheduler.step()
-
+            if cfg['test_computation']:
+                cfg['time_used'].append(time.time() - s)
             if i % int((len(data_loader) * cfg['log_interval']) + 1) == 0:
                 print('evaluation', evaluation, input_size)
                 batch_time = (time.time() - start_time) / (i + 1)
@@ -234,6 +236,18 @@ def train_t2i(data_loader, unet, vae, text_encoder, optimizer, scheduler, noise_
                                 'Experiment Finished Time: {}'.format(exp_finished_time)]}
                 logger.append(info, 'train')
                 print(logger.write('train', ['loss']), flush=True)
+            if cfg['test_computation']:
+                mem_free, mem_total = torch.cuda.mem_get_info(cfg['device'])
+                cfg['mem_used'].append(mem_total - mem_free)
+                if i == cfg['num_test_iter']:
+                    print(cfg['time_used'])
+                    print(cfg['mem_used'])
+                    print('Run time backward: {}({})'.format(np.mean(cfg['time_used'][1:]),
+                                                            np.std(cfg['time_used'][1:])))
+                    print('Memory used: {}({})'.format(np.mean(cfg['mem_used'][1:]),
+                                                    np.std(cfg['mem_used'][1:])))
+                    print('-----------------')
+                    exit()
     return
 
 def test(data_loader, model, metric, logger):
