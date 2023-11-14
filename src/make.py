@@ -113,7 +113,7 @@ def main():
             batch_size = ['8']
         else:
             batch_size = ['32']
-        dist_mode = ['alone', 'col']
+        dist_mode = ['alone']
         script_name = [['{}_cola_dist.py'.format(run)]]
         control_name = [[data_names, model_names, [task_name], ft_name, batch_size, dist_mode]]
         controls = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode, control_name)
@@ -202,7 +202,7 @@ def main():
         if task_name == 'clm':
             ft_name = ['cola-lowrank-1', 'cola-lowrank~linear-1', 'cola-lowrank~mlp-1']
             batch_size = ['1', '8', '32']
-            dist_mode = ['alone', 'col']
+            dist_mode = ['alone']
             script_name = [['train_cola_dist.py']]
             control_name = [[data_names, model_names, [task_name], ft_name, batch_size, dist_mode]]
             controls_cola_dist = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode,
