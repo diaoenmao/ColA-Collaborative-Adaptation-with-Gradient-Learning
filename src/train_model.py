@@ -1,5 +1,6 @@
 import argparse
 import datetime
+import numpy as np
 import os
 import shutil
 import time
@@ -81,17 +82,31 @@ def train(data_loader, model, optimizer, scheduler, metric, logger):
     model.train(True)
     start_time = time.time()
     for i, input in enumerate(data_loader):
-        input_size = input['labels'].size(0)
-        input = {'input_ids': input['input_ids'], 'attention_mask': input['attention_mask'],
-                 'labels': input['labels']}
-        input = to_device(input, cfg['device'])
-        output = model(**input)
-        input_ = {'target': input['labels']}
-        output_ = {'target': output['logits'], 'loss': output['loss']}
-        output['loss'].backward()
+        if cfg['test_computation']:
+            s = time.time()
+        if cfg['task_name'] in ['s2s', 'sc', 'clm']:
+            input_size = input['labels'].size(0)
+            input = {'input_ids': input['input_ids'], 'attention_mask': input['attention_mask'],
+                     'labels': input['labels']}
+            input = to_device(input, cfg['device'])
+            output = model(**input)
+            input_ = {'target': input['labels']}
+            output_ = {'target': output['logits'], 'loss': output['loss']}
+            output['loss'].backward()
+        else:
+            input = collate(input)
+            input_size = input['data'].size(0)
+            input = to_device(input, cfg['device'])
+            output = model(**input)
+            input_ = {'target': input['target']}
+            output_ = {'target': output['target'], 'loss': output['loss']}
+            output['loss'].backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
         optimizer.step()
         scheduler.step()
         optimizer.zero_grad()
+        if cfg['test_computation']:
+            cfg['time_used'].append(time.time() - s)
         evaluation = metric.evaluate('train', 'batch', input_, output_)
         logger.append(evaluation, 'train', n=input_size)
         if i % int((len(data_loader) * cfg['log_interval']) + 1) == 0:
@@ -106,6 +121,18 @@ def train(data_loader, model, optimizer, scheduler, metric, logger):
                              'Experiment Finished Time: {}'.format(exp_finished_time)]}
             logger.append(info, 'train')
             print(logger.write('train', metric.metric_name['train']))
+        if cfg['test_computation']:
+            mem_free, mem_total = torch.cuda.mem_get_info(cfg['device'])
+            cfg['mem_used'].append(mem_total - mem_free)
+            if i == cfg['num_test_iter']:
+                print(cfg['time_used'])
+                print(cfg['mem_used'])
+                print('Run time backward: {}({})'.format(np.mean(cfg['time_used'][1:]),
+                                                        np.std(cfg['time_used'][1:])))
+                print('Memory used: {}({})'.format(np.mean(cfg['mem_used'][1:]),
+                                                  np.std(cfg['mem_used'][1:])))
+                print('-----------------')
+                exit()
     return
 
 
@@ -113,13 +140,21 @@ def test(data_loader, model, metric, logger):
     with torch.no_grad():
         model.train(False)
         for i, input in enumerate(data_loader):
-            input_size = input['labels'].size(0)
-            input = {'input_ids': input['input_ids'], 'attention_mask': input['attention_mask'],
-                     'labels': input['labels']}
-            input = to_device(input, cfg['device'])
-            output = model(**input)
-            input_ = {'target': input['labels']}
-            output_ = {'target': output['logits'], 'loss': output['loss']}
+            if cfg['task_name'] in ['s2s', 'sc', 'clm']:
+                input_size = input['labels'].size(0)
+                input = {'input_ids': input['input_ids'], 'attention_mask': input['attention_mask'],
+                         'labels': input['labels']}
+                input = to_device(input, cfg['device'])
+                output = model(**input)
+                input_ = {'target': input['labels']}
+                output_ = {'target': output['logits'], 'loss': output['loss']}
+            else:
+                input = collate(input)
+                input_size = input['data'].size(0)
+                input = to_device(input, cfg['device'])
+                output = model(**input)
+                input_ = {'target': input['target']}
+                output_ = {'target': output['target'], 'loss': output['loss']}
             if cfg['task_name'] == 's2s':
                 output_['generate'] = model.generate(input_ids=input["input_ids"],
                                                      max_new_tokens=cfg['max_new_tokens'])

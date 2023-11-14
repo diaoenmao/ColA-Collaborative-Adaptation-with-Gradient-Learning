@@ -323,21 +323,29 @@ class ColaModel(torch.nn.Module):
                     module.unmerge()
                 module.active_adapter = adapter_name
 
-    def merge_adapter(self):
+    def merge_adapter(self, delta_weight):
         """
         This method merges the ColA layers into the base model.
         """
-        for module in self.model.modules():
+        # for module in self.model.modules():
+        #     if isinstance(module, ColaLayer):
+        #         module.merge()
+        for key, module in self.named_modules():
             if isinstance(module, ColaLayer):
-                module.merge()
+                if key in delta_weight:
+                    module.merge(delta_weight[key])
 
-    def unmerge_adapter(self):
+    def unmerge_adapter(self, delta_weight):
         """
         This method unmerges the ColA layers from the base model.
         """
-        for module in self.model.modules():
+        # for module in self.model.modules():
+        #     if isinstance(module, ColaLayer):
+        #         module.unmerge()
+        for key, module in self.named_modules():
             if isinstance(module, ColaLayer):
-                module.unmerge()
+                if key in delta_weight:
+                    module.unmerge(delta_weight[key])
 
     @staticmethod
     def _prepare_cola_config(peft_config, model_config):
@@ -541,8 +549,9 @@ class ColaLayer:
 
     def backward_hook(self, grad):
         if self.training:
-            grad_ = grad.detach().to('cpu')
-            self.output_target[-1] = (self.output_target[-1] - grad_).detach()
+            with torch.no_grad():
+                grad_ = grad.detach().to('cpu')
+                self.output_target[-1] = (self.output_target[-1] - grad_).detach()
         return
 
 
@@ -575,23 +584,35 @@ class Linear(nn.Linear, ColaLayer):
         self.is_target_conv_1d_layer = is_target_conv_1d_layer
 
     def merge(self, delta_weight):
-        # if self.active_adapter:
+        # if self.merged:
+        #     warnings.warn("Already merged. Nothing to do.")
         #     return
-        if self.merged:
-            warnings.warn("Already merged. Nothing to do.")
-            return
+        if isinstance(delta_weight, tuple):
+            delta_weight_, delta_bias_ = delta_weight
+        else:
+            delta_weight_ = delta_weight
 
-        self.weight.data += self.get_delta_weight(delta_weight, self.active_adapter)
+        self.weight.data += self.get_delta_weight(delta_weight_, self.active_adapter).to(self.weight.data.device,
+                                                                                         self.weight.data.dtype)
+        if self.bias is not None and isinstance(delta_weight, tuple):
+            self.bias.data += delta_bias_.data.to(self.bias.data.device, self.bias.data.dtype)
         self.merged = True
         return
 
     def unmerge(self, delta_weight=None):
         if delta_weight is None:
             return
-        if not self.merged:
-            warnings.warn("Already unmerged. Nothing to do.")
-            return
-        self.weight.data -= self.get_delta_weight(delta_weight, self.active_adapter)
+        # if not self.merged:
+        #     warnings.warn("Already unmerged. Nothing to do.")
+        #     return
+        if isinstance(delta_weight, tuple):
+            delta_weight_, delta_bias_ = delta_weight
+        else:
+            delta_weight_ = delta_weight
+        self.weight.data -= self.get_delta_weight(delta_weight_, self.active_adapter).to(self.weight.data.device,
+                                                                                         self.weight.data.dtype)
+        if self.bias is not None and isinstance(delta_weight, tuple):
+            self.bias.data -= delta_bias_.data.to(self.bias.data.device, self.bias.data.dtype)
         self.merged = False
         return
 
@@ -617,13 +638,13 @@ class Linear(nn.Linear, ColaLayer):
 
             if self.cola_base[self.active_adapter]['model'] is not None:
                 x = x.to(self.cola_base[self.active_adapter]['dtype'])
-                with torch.no_grad():
-                    cola_output = self.cola_base[self.active_adapter]['model'](x) * self.cola_alpha[self.active_adapter]
-                    cola_output.detach_()
-                    if self.training:
-                        self.output_target.append(cola_output.to('cpu'))
+                cola_output = self.cola_base[self.active_adapter]['model'](x) * self.cola_alpha[self.active_adapter]
+                if self.training:
+                    self.output_target.append(cola_output.to('cpu'))
                 result += cola_output
         else:
+            if self.training:
+                self.output_target.append(0)
             result = F.linear(x, transpose(self.weight, self.fan_in_fan_out), bias=self.bias)
 
         result = result.to(previous_dtype)
@@ -650,22 +671,23 @@ class Embedding(nn.Embedding, ColaLayer):
         self.update_layer(adapter_name, cola_alpha)
         self.active_adapter = adapter_name
 
-    def unmerge(self, delta_weight=None):
-        if delta_weight is None:
-            return
-        if not self.merged:
-            warnings.warn("Already unmerged. Nothing to do.")
-            return
-        self.weight.data -= self.get_delta_weight(delta_weight, self.active_adapter)
-        self.merged = False
+    def merge(self, delta_weight):
+        # if self.merged:
+        #     warnings.warn("Already merged. Nothing to do.")
+        #     return
+        self.weight.data += self.get_delta_weight(delta_weight, self.active_adapter).to(self.weight.data.device,
+                                                                                        self.weight.data.dtype)
+        self.merged = True
         return
 
-    def merge(self):
-        if self.merged:
-            warnings.warn("Already merged. Nothing to do.")
-            return
-        self.weight.data += self.get_delta_weight(delta_weight, self.active_adapter)
-        self.merged = True
+    def unmerge(self, delta_weight=None):
+        # if delta_weight is None:
+        #     return
+        # if not self.merged:
+        #     warnings.warn("Already unmerged. Nothing to do.")
+        #     return
+        self.weight.data -= self.get_delta_weight(delta_weight, self.active_adapter)
+        self.merged = False
         return
 
     def get_delta_weight(self, delta_weight, adapter):
@@ -680,14 +702,14 @@ class Embedding(nn.Embedding, ColaLayer):
             result = nn.Embedding.forward(self, x)
 
             if self.cola_base[self.active_adapter]['model'] is not None:
-                with torch.no_grad():
-                    cola_output = self.cola_base[self.active_adapter]['model'](x) * self.cola_alpha[self.active_adapter]
-                    cola_output.detach_()
-                    if self.training:
-                        self.output_target.append(cola_output.to('cpu'))
+                cola_output = self.cola_base[self.active_adapter]['model'](x) * self.cola_alpha[self.active_adapter]
+                if self.training:
+                    self.output_target.append(cola_output.to('cpu'))
                 result += cola_output
             return result
         else:
+            if self.training:
+                self.output_target.append(0)
             return nn.Embedding.forward(self, x)
 
 
@@ -721,20 +743,35 @@ class Conv2d(nn.Conv2d, ColaLayer):
         self.active_adapter = adapter_name
 
     def merge(self, delta_weight):
-        if self.merged:
-            warnings.warn("Already merged. Nothing to do.")
-            return
-        self.weight.data += self.get_delta_weight(delta_weight, self.active_adapter)
+        # if self.merged:
+        #     warnings.warn("Already merged. Nothing to do.")
+        #     return
+        if isinstance(delta_weight, tuple):
+            delta_weight_, delta_bias_ = delta_weight
+        else:
+            delta_weight_ = delta_weight
+
+        self.weight.data += self.get_delta_weight(delta_weight_, self.active_adapter).to(self.weight.data.device,
+                                                                                         self.weight.data.dtype)
+        if self.bias is not None and isinstance(delta_weight, tuple):
+            self.bias.data += delta_bias_.data.to(self.bias.data.device, self.bias.data.dtype)
         self.merged = True
         return
 
     def unmerge(self, delta_weight=None):
         if delta_weight is None:
             return
-        if not self.merged:
-            warnings.warn("Already unmerged. Nothing to do.")
-            return
-        self.weight.data -= self.get_delta_weight(delta_weight, self.active_adapter)
+        # if not self.merged:
+        #     warnings.warn("Already unmerged. Nothing to do.")
+        #     return
+        if isinstance(delta_weight, tuple):
+            delta_weight_, delta_bias_ = delta_weight
+        else:
+            delta_weight_ = delta_weight
+        self.weight.data -= self.get_delta_weight(delta_weight_, self.active_adapter).to(self.weight.data.device,
+                                                                                         self.weight.data.dtype)
+        if self.bias is not None and isinstance(delta_weight, tuple):
+            self.bias.data -= delta_bias_.data.to(self.bias.data.device, self.bias.data.dtype)
         self.merged = False
         return
 
@@ -779,14 +816,14 @@ class Conv2d(nn.Conv2d, ColaLayer):
 
             if self.cola_base[self.active_adapter]['model'] is not None:
                 x = x.to(self.cola_base[self.active_adapter]['dtype'])
-                with torch.no_grad():
-                    cola_output = self.cola_base[self.active_adapter]['model'](x) * self.cola_alpha[self.active_adapter]
-                    cola_output.detach_()
-                    if self.training:
-                        self.output_target.append(cola_output.to('cpu'))
+                cola_output = self.cola_base[self.active_adapter]['model'](x) * self.cola_alpha[self.active_adapter]
+                if self.training:
+                    self.output_target.append(cola_output.to('cpu'))
                 result += cola_output
 
         else:
+            if self.training:
+                self.output_target.append(0)
             result = F.conv2d(
                 x,
                 self.weight,
@@ -844,23 +881,19 @@ if is_bnb_available():
                         x = x.float()
 
                     if self.cola_base[self.active_adapter]['model'] is not None:
-                        with torch.no_grad():
-                            cola_output = self.cola_base[self.active_adapter]['model'](x).to(expected_dtype) * \
-                                          self.cola_alpha[self.active_adapter]
-                            cola_output.detach_()
-                            if self.training:
-                                self.output_target.append(cola_output.to('cpu'))
+                        cola_output = self.cola_base[self.active_adapter]['model'](x).to(expected_dtype) * \
+                                      self.cola_alpha[self.active_adapter]
+                        if self.training:
+                            self.output_target.append(cola_output.to('cpu'))
                         output = cola_output
                     else:
                         output = 0
                 else:
                     if self.cola_base[self.active_adapter]['model'] is not None:
-                        with torch.no_grad():
-                            cola_output = self.cola_base[self.active_adapter]['model'](x) * \
-                                          self.cola_alpha[self.active_adapter]
-                            cola_output.detach_()
-                            if self.training:
-                                self.output_target.append(cola_output.to('cpu'))
+                        cola_output = self.cola_base[self.active_adapter]['model'](x) * \
+                                      self.cola_alpha[self.active_adapter]
+                        if self.training:
+                            self.output_target.append(cola_output.to('cpu'))
                         output = cola_output
                     else:
                         output = 0
@@ -908,23 +941,19 @@ if is_bnb_available():
                         expected_dtype = result.dtype
                         x = x.to(self.cola_base[self.active_adapter].weight.dtype)
                         if self.cola_base[self.active_adapter]['model'] is not None:
-                            with torch.no_grad():
-                                cola_output = self.cola_base[self.active_adapter]['model'](x).to(expected_dtype) * \
-                                              self.cola_alpha[self.active_adapter]
-                                cola_output.detach_()
-                                if self.training:
-                                    self.output_target.append(cola_output.to('cpu'))
+                            cola_output = self.cola_base[self.active_adapter]['model'](x).to(expected_dtype) * \
+                                          self.cola_alpha[self.active_adapter]
+                            if self.training:
+                                self.output_target.append(cola_output.to('cpu'))
                             output = cola_output
                         else:
                             output = 0
                     else:
                         if self.cola_base[self.active_adapter]['model'] is not None:
-                            with torch.no_grad():
-                                cola_output = self.cola_base[self.active_adapter]['model'](x) * \
-                                              self.cola_alpha[self.active_adapter]
-                                cola_output.detach_()
-                                if self.training:
-                                    self.output_target.append(cola_output.to('cpu'))
+                            cola_output = self.cola_base[self.active_adapter]['model'](x) * \
+                                          self.cola_alpha[self.active_adapter]
+                            if self.training:
+                                self.output_target.append(cola_output.to('cpu'))
                             output = cola_output
                         else:
                             output = 0

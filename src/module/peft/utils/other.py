@@ -304,32 +304,13 @@ TRANSFORMERS_MODELS_TO_COLA_TARGET_MODULES_MAPPING = {
     "deberta": ["in_proj"],
     "layoutlm": ["query", "value"],
     "llama": ["q_proj", "v_proj"],
+    # "llama": ["proj"],
     "chatglm": ["query_key_value"],
     "starcoder": ["c_attn"],
 }
 
 UNET_TO_COLA_TARGET_MODULES_MAPPING = ["to_q", "to_v", "query", "value"]
 UNET_TO_LORA_TARGET_MODULES_MAPPING = ["to_q", "to_v", "query", "value"]
-# TRANSFORMERS_MODELS_TO_COLA_TARGET_MODULES_MAPPING = {
-#     "t5": ["q", "k", "v", "o", "wi", "wo"],
-#     "mt5": ["q", "k", "v", "o", "wi_0", "wi_1", "wo"],
-#     "bart": ["q_proj", "k_proj", "v_proj", "out_proj", "fc1", "fc2"],
-#     "gpt2": ["c_attn", "score"],
-#     "bloom": ["query_key_value"],
-#     "opt": ["q_proj", "k_proj", "v_proj", "out_proj", "fc1", "fc2"],
-#     "gptj": ["q_proj", "v_proj"],
-#     "gpt_neox": ["query_key_value"],
-#     "gpt_neo": ["q_proj", "v_proj"],
-#     "llama": ["q_proj", "v_proj"],
-#     "bert": ["query", "value"],
-#     "roberta": ["query", "key", "value", "dense", "classifier.out_proj"],
-#     "xlm-roberta": ["query", "value"],
-#     "electra": ["query", "value"],
-#     "deberta-v2": ["query_proj", "key_proj", "value_proj", "dense"],
-#     "gpt_bigcode": ["c_attn"],
-#     "deberta": ["in_proj"],
-#     "layoutlm": ["query", "value"],
-# }
 
 TRANSFORMERS_MODELS_TO_LORA_TARGET_MODULES_MAPPING = {
     "t5": ["q", "v"],
@@ -350,6 +331,7 @@ TRANSFORMERS_MODELS_TO_LORA_TARGET_MODULES_MAPPING = {
     "deberta": ["in_proj"],
     "layoutlm": ["query", "value"],
     "llama": ["q_proj", "v_proj"],
+    # "llama": ["proj"],
     "chatglm": ["query_key_value"],
     "gpt_bigcode": ["c_attn"],
     "mpt": ["Wqkv"],
@@ -373,6 +355,7 @@ TRANSFORMERS_MODELS_TO_IA3_TARGET_MODULES_MAPPING = {
     "bart": ["q_proj", "v_proj", "fc2"],
     "gpt_bigcode": ["c_attn", "mlp.c_proj"],
     "llama": ["k_proj", "v_proj", "down_proj"],
+    # "llama": ["proj"],
     "bert": ["key", "value", "output.dense"],
     "deberta-v2": ["key_proj", "value_proj", "output.dense"],
     "deberta": ["in_proj", "output.dense"],
@@ -415,6 +398,7 @@ TRANSFORMERS_MODELS_TO_ADALORA_TARGET_MODULES_MAPPING = {
     "gpt_neox": ["query_key_value"],
     "gpt_neo": ["q_proj", "v_proj"],
     "llama": ["q_proj", "v_proj"],
+    # "llama": ["proj"],
     "bert": ["query", "value"],
     "roberta": ["query", "key", "value", "dense"],
     # "xlm-roberta": ["query", "value"],

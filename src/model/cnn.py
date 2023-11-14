@@ -8,13 +8,11 @@ class CNN(nn.Module):
     def __init__(self, data_shape, hidden_size, target_size):
         super().__init__()
         blocks = [nn.Conv2d(data_shape[0], hidden_size[0], 3, 1, 1),
-                  nn.BatchNorm2d(hidden_size[0]),
-                  nn.ReLU(inplace=True),
+                  nn.ReLU(),
                   nn.MaxPool2d(2)]
         for i in range(len(hidden_size) - 1):
             blocks.extend([nn.Conv2d(hidden_size[i], hidden_size[i + 1], 3, 1, 1),
-                           nn.BatchNorm2d(hidden_size[i + 1]),
-                           nn.ReLU(inplace=True),
+                           nn.ReLU(),
                            nn.MaxPool2d(2)])
         blocks = blocks[:-1]
         blocks.extend([nn.AdaptiveAvgPool2d(1),
@@ -35,7 +33,7 @@ class CNN(nn.Module):
         x = self.classify(x)
         return x
 
-    def forward(self, input):
+    def forward(self, **input):
         output = {}
         x = input['data']
         x = self.f(x)

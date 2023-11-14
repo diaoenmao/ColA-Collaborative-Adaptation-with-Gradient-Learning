@@ -6,7 +6,7 @@ from collections import defaultdict
 from config import cfg, process_args
 from dataset import make_dataset, make_data_loader, process_dataset
 from metric import make_metric, make_logger
-from model import make_model, freeze_model, make_cola
+from model import make_model, freeze_model, make_cola, make_delta_weight
 from module import save, to_device, process_control, resume, PeftModel
 
 cudnn.benchmark = True
@@ -74,17 +74,12 @@ def runExperiment():
     return
 
 
-def make_delta_weight(cola_base):
-    with torch.no_grad():
-        delta_weight = {}
-        for k in cola_base:
-            delta_weight[k] = cola_base[k].make_delta_weight()
-    return delta_weight
-
-
 def test(data_loader, model, cola_base, metric, logger):
     with torch.no_grad():
         model.train(False)
+        for k in cola_base:
+            for i in range(len(cola_base[k].model)):
+                cola_base[k].model[i] = cola_base[k].model[i].to(cfg['device'])
         for i, input in enumerate(data_loader):
             for k in cola_base:
                 cola_base[k].make_split(input['split'])
@@ -118,6 +113,9 @@ def test(data_loader, model, cola_base, metric, logger):
 def test_each(data_loader, model, cola_base, metric, logger):
     with torch.no_grad():
         model.train(False)
+        for k in cola_base:
+            for i in range(len(cola_base[k].model)):
+                cola_base[k].model[i] = cola_base[k].model[i].to(cfg['device'])
         for i, input in enumerate(data_loader):
             for k in cola_base:
                 cola_base[k].make_split(input['split'])

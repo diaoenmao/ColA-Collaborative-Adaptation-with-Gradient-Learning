@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+import model
+from torchvision import transforms
 from transformers import get_linear_schedule_with_warmup
 from config import cfg
 from diffusers import DDPMScheduler
@@ -12,7 +14,11 @@ from module.peft import get_peft_model, TaskType, LoraConfig, AdaLoraConfig, IA3
 
 
 def make_model(model_name, sub_model_name=None):
-    model, tokenizer = make_hf_model(model_name, sub_model_name)
+    if cfg['task_name'] in ['s2s', 'sc', 'clm', 't2i']:
+        model, tokenizer = make_hf_model(model_name, sub_model_name)
+    else:
+        model = eval('model.{}()'.format(model_name))
+        tokenizer = None
     return model, tokenizer
 
 
@@ -65,21 +71,6 @@ def init_param(m):
     return m
 
 
-def make_batchnorm(m, momentum, track_running_stats):
-    if isinstance(m, (nn.BatchNorm1d, nn.BatchNorm2d)):
-        m.momentum = momentum
-        m.track_running_stats = track_running_stats
-        if track_running_stats:
-            m.register_buffer('running_mean', torch.zeros(m.num_features, device=cfg['device']))
-            m.register_buffer('running_var', torch.ones(m.num_features, device=cfg['device']))
-            m.register_buffer('num_batches_tracked', torch.tensor(0, dtype=torch.long, device=cfg['device']))
-        else:
-            m.running_mean = None
-            m.running_var = None
-            m.num_batches_tracked = None
-    return m
-
-
 def make_optimizer(parameters, tag):
     if cfg[tag]['optimizer_name'] == 'SGD':
         optimizer = optim.SGD(parameters, lr=cfg[tag]['lr'], momentum=cfg[tag]['momentum'],
@@ -116,7 +107,9 @@ def make_scheduler(optimizer, tag):
     elif cfg[tag]['scheduler_name'] == 'ExponentialLR':
         scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.99)
     elif cfg[tag]['scheduler_name'] == 'CosineAnnealingLR':
-        scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cfg[tag]['num_epochs'], eta_min=0)
+        scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cfg['num_steps']['train'] *
+                                                                          cfg[cfg['model_name']]['num_epochs'],
+                                                         eta_min=0)
     elif cfg[tag]['scheduler_name'] == 'ReduceLROnPlateau':
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=cfg[tag]['factor'],
                                                          patience=cfg[tag]['patience'], verbose=False,
@@ -159,6 +152,8 @@ def make_ft_model(model):
         peft_config = make_config_sc()
     elif cfg['task_name'] == 't2i':
         peft_config = make_config_t2i()
+    elif cfg['task_name'] == 'ic':
+        peft_config = make_config_ic(model)
     else:
         raise ValueError('Not valid task name')
     model = get_peft_model(model, peft_config)
@@ -190,6 +185,28 @@ def make_config_t2i():
     else:
         raise ValueError('Not valid ft name')
     return peft_config
+
+def unfreeze_model(model):
+    if cfg['ft_name'] == 'cola':
+        for n, p in model.named_parameters():
+            p.requires_grad = True
+    return
+
+
+def make_delta_weight(cola_base):
+    with torch.no_grad():
+        delta_weight = {}
+        for k in cola_base:
+            delta_weight[k] = cola_base[k].make_delta_weight()
+            if isinstance(delta_weight[k], tuple):
+                delta_weight_0, delta_weight_1 = delta_weight[k]
+                delta_weight_0 = delta_weight_0.to('cpu')
+                delta_weight_1 = delta_weight_1.to('cpu')
+                delta_weight[k] = (delta_weight_0, delta_weight_1)
+            else:
+                delta_weight[k] = delta_weight[k].to('cpu')
+    return delta_weight
+
 
 def make_config_clm():
     if cfg['ft_name'] == 'lora':
@@ -317,6 +334,26 @@ def make_config_sc():
                                           encoder_hidden_size=128)
     elif cfg['ft_name'] == 'cola':
         peft_config = ColaConfig(task_type=TaskType.SEQ_CLS, inference_mode=False)
+    else:
+        raise ValueError('Not valid ft name')
+    return peft_config
+
+
+def make_config_ic(model):
+    target_modules = []
+    for k, v in model.named_modules():
+        if isinstance(v, (nn.Linear, nn.Conv1d, nn.Conv2d)):
+            target_modules.append(k)
+    if cfg['ft_name'] == 'lora':
+        peft_config = LoraConfig(
+            target_modules=target_modules,
+            r=8,
+            lora_alpha=8,
+            lora_dropout=0.0,
+            inference_mode=False,
+        )
+    elif cfg['ft_name'] == 'cola':
+        peft_config = ColaConfig(target_modules=target_modules, inference_mode=False)
     else:
         raise ValueError('Not valid ft name')
     return peft_config

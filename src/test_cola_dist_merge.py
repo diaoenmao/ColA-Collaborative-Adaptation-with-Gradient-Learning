@@ -4,9 +4,9 @@ import torch
 import torch.backends.cudnn as cudnn
 from collections import defaultdict
 from config import cfg, process_args
-from dataset import make_dataset, make_data_loader, process_dataset, collate
+from dataset import make_dataset, make_data_loader, process_dataset
 from metric import make_metric, make_logger
-from model import make_model, freeze_model, make_cola, Router, make_delta_weight
+from model import make_model, freeze_model, make_cola, make_delta_weight
 from module import save, to_device, process_control, resume, PeftModel
 
 cudnn.benchmark = True
@@ -43,40 +43,26 @@ def runExperiment():
     dataset = process_dataset(dataset, tokenizer)
     data_loader = make_data_loader(dataset, tokenizer, cfg['model_name'])
     metric = make_metric({'train': ['Loss'], 'test': ['Loss']}, tokenizer)
+    cfg['split_metric'] = True
+    split_metric = make_metric({'train': ['Loss'], 'test': ['Loss']}, tokenizer)
     result = resume(os.path.join(best_path, 'model'))
     model = PeftModel.from_pretrained(model, os.path.join(best_path, 'adapter'))
     freeze_model(model)
     model = model.to(cfg['device'])
-    cola_base = make_cola(model, cfg['cola']['model_name'])
+    cola_base = make_cola(model, cfg['cola']['model_name'], cfg['dist_mode'])
     for k in cola_base:
-        cola_base[k].load_state_dict(result['cola_base_state_dict'][k])
-        cola_base[k] = cola_base[k].to(cfg['device'])
-    model.load_cola_base(cola_base)
+        for i in range(cfg['num_split']):
+            cola_base[k].model[i].load_state_dict(result['cola_base_state_dict'][k][i])
+            cola_base[k].model[i] = cola_base[k].model[i].to(cfg['device'])
     cfg['epoch'] = result['epoch']
     test_logger = make_logger(os.path.join('output', 'runs', 'test_{}'.format(cfg['model_tag'])))
-    test_merge_logger = make_logger(os.path.join('output', 'runs', 'test_merge_{}'.format(cfg['model_tag'])))
+    test_each_logger = make_logger(os.path.join('output', 'runs', 'test_each_{}'.format(cfg['model_tag'])))
     test(data_loader['test'], model, cola_base, metric, test_logger)
-    if cfg['ft_name'] in ['cola'] and 'mlp' not in cfg['cola']['model_name']:
-        delta_weight = make_delta_weight(cola_base)
-        model = model.merge_and_unload(delta_weight)
-        test(data_loader['test'], model, cola_base, metric, test_merge_logger)
+    test_each(data_loader['test'], model, cola_base, split_metric, test_each_logger)
     result = resume(os.path.join(checkpoint_path, 'model'))
     result = {'cfg': cfg, 'epoch': cfg['epoch'], 'logger_state_dict': {'train': result['logger_state_dict'],
                                                                        'test': test_logger.state_dict(),
-                                                                       'test_merge': test_merge_logger.state_dict()}}
-    if cfg['data_name'] == 'dolly':
-        cfg['dist_mode'] = 'alone'
-        cfg['split_metric'] = True
-        split_metric = make_metric({'train': ['Loss'], 'test': ['Loss']}, tokenizer)
-        test_each_logger = make_logger(os.path.join('output', 'runs', 'test_each_{}'.format(cfg['model_tag'])))
-        for name in cola_base:
-            cola_base_name = []
-            for i in range(cfg['num_split']):
-                cola_model_i = cola_base[name]
-                cola_base_name.append(cola_model_i)
-            cola_base[name] = Router(cola_base_name, 'alone')
-        test_each(data_loader['test'], model, cola_base, split_metric, test_each_logger)
-        result['logger_state_dict']['test_each'] = test_each_logger.state_dict()
+                                                                       'test_each': test_each_logger.state_dict()}}
     save(result, os.path.join(result_path, cfg['model_tag']))
     return
 
@@ -84,37 +70,31 @@ def runExperiment():
 def test(data_loader, model, cola_base, metric, logger):
     with torch.no_grad():
         model.train(False)
-        for k in cola_base:
-            cola_base[k] = cola_base[k].to(cfg['device'])
+        delta_weight = make_delta_weight(cola_base)
+        model.merge_adapter(delta_weight)
         for i, input in enumerate(data_loader):
-            if cfg['task_name'] in ['s2s', 'sc', 'clm']:
-                input_size = input['labels'].size(0)
-                input = {'input_ids': input['input_ids'], 'attention_mask': input['attention_mask'],
-                         'labels': input['labels']}
-                input = to_device(input, cfg['device'])
-                output = model(**input)
-                input_ = {'target': input['labels']}
-                output_ = {'target': output['logits'], 'loss': output['loss']}
-            else:
-                input = collate(input)
-                input_size = input['data'].size(0)
-                input = to_device(input, cfg['device'])
-                output = model(**input)
-                input_ = {'target': input['target']}
-                output_ = {'target': output['target'], 'loss': output['loss']}
+            for k in cola_base:
+                cola_base[k].make_split(input['split'])
+            input_size = input['labels'].size(0)
+            input = {'input_ids': input['input_ids'], 'attention_mask': input['attention_mask'],
+                     'labels': input['labels']}
+            input = to_device(input, cfg['device'])
+            output = model(**input)
+            input_ = {'target': input['labels']}
+            output_ = {'target': output['logits'], 'loss': output['loss']}
             if cfg['task_name'] == 's2s':
                 output_['generate'] = model.generate(input_ids=input["input_ids"],
                                                      max_new_tokens=cfg['max_new_tokens'])
             elif cfg['task_name'] == 'clm':
-                if cfg['data_name'] in ['dolly']:
-                    output_['generate'] = model.generate(input_ids=input["input_ids"],
-                                                         attention_mask=input["attention_mask"],
-                                                         max_new_tokens=cfg['max_new_tokens'],
-                                                         eos_token_id=cfg['pad_token_id'],
-                                                         no_repeat_ngram_size=2)
+                output_['generate'] = model.generate(input_ids=input["input_ids"],
+                                                     attention_mask=input["attention_mask"],
+                                                     max_new_tokens=cfg['max_new_tokens'],
+                                                     eos_token_id=cfg['pad_token_id'],
+                                                     no_repeat_ngram_size=2)
             metric.add('test', input_, output_)
             evaluation = metric.evaluate('test', 'batch', input_, output_)
             logger.append(evaluation, 'test', input_size)
+        model.unmerge_adapter(delta_weight)
         evaluation = metric.evaluate('test', 'full')
         logger.append(evaluation, 'test')
         info = {'info': ['Model: {}'.format(cfg['model_tag']), 'Test Epoch: {}({:.0f}%)'.format(cfg['epoch'], 100.)]}
@@ -126,8 +106,8 @@ def test(data_loader, model, cola_base, metric, logger):
 def test_each(data_loader, model, cola_base, metric, logger):
     with torch.no_grad():
         model.train(False)
-        for k in cola_base:
-            cola_base[k] = cola_base[k].to(cfg['device'])
+        delta_weight = make_delta_weight(cola_base)
+        model.merge_adapter(delta_weight)
         for i, input in enumerate(data_loader):
             for k in cola_base:
                 cola_base[k].make_split(input['split'])
@@ -165,6 +145,7 @@ def test_each(data_loader, model, cola_base, metric, logger):
             metric.add('test', input_, output_)
             evaluation = metric.evaluate('test', 'batch', input_, output_)
             logger.append(evaluation, 'test', input_size)
+        model.unmerge_adapter(delta_weight)
         evaluation = metric.evaluate('test', 'full')
         logger.append(evaluation, 'test')
         info = {'info': ['Model: {}'.format(cfg['model_tag']), 'Test Epoch: {}({:.0f}%)'.format(cfg['epoch'], 100.)]}
