@@ -105,6 +105,7 @@ def process_control():
         cfg['mem_used'] = []
         cfg['mem_used_cola'] = []
     else:
+        # cfg['device_cola'] = 'cpu'
         cfg['device_cola'] = cfg['device']
         # cfg['offload_device'] = 'cpu'
         cfg['offload_device'] = cfg['device']

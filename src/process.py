@@ -10,7 +10,7 @@ from collections import defaultdict
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 result_path = os.path.join('output', 'result')
-save_format = 'png'
+save_format = 'pdf'
 vis_path = os.path.join('output', 'vis', '{}'.format(save_format))
 num_experiments = 3
 exp = [str(x) for x in list(range(num_experiments))]
@@ -357,7 +357,7 @@ def make_vis_method(df_history):
 
 def make_vis_step(df_history):
     mode_name = ['1', '2', '4', '8']
-    label_dict = {'1': '$I=1$', '2': '$I=1$', '4': '$I=4$', '8': '$I=8$'}
+    label_dict = {'1': '$I=1$', '2': '$I=2$', '4': '$I=4$', '8': '$I=8$'}
     color_dict = {'1': 'black', '2': 'red', '4': 'orange', '8': 'gold'}
     linestyle_dict = {'1': '-', '2': '--', '4': ':', '8': '-'}
     marker_dict = {'1': 'D', '2': 's', '4': 'p', '8': 'o'}
