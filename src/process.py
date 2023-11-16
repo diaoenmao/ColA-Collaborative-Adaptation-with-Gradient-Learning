@@ -285,9 +285,9 @@ def make_df(processed_result, mode):
 def make_vis_method(df_history):
     mode_name = ['full', 'lora', 'adalora', 'ia3', 'promptune', 'ptune', 'cola']
     label_dict = {'full': 'FT', 'lora': 'LoRA', 'adalora': 'AdaLoRA', 'ia3': 'IA3', 'promptune': 'Promp Tuning',
-                  'prefixtune': 'Prefix Tuning', 'ptune': 'P-Tuning', 'cola-lowrank': 'ColA (Low Rank)',
-                  'cola-linear': 'ColA (Linear)', 'cola-mlp': 'ColA (MLP)', 'cola-lowrank-1': 'ColA (Low Rank, Merged)',
-                  'cola-linear-1': 'ColA (Linear, Merged)'}
+                  'prefixtune': 'Prefix Tuning', 'ptune': 'P-Tuning', 'cola-lowrank': 'ColA (Low Rank, Unmerged)',
+                  'cola-linear': 'ColA (Linear, Unmerged)', 'cola-mlp': 'ColA (MLP, Unmerged)',
+                  'cola-lowrank-1': 'ColA (Low Rank, Merged)', 'cola-linear-1': 'ColA (Linear, Merged)'}
     color_dict = {'full': 'black', 'lora': 'red', 'adalora': 'orange', 'ia3': 'green', 'promptune': 'blue',
                   'prefixtune': 'dodgerblue', 'ptune': 'lightblue', 'cola-lowrank': 'gold',
                   'cola-linear': 'silver', 'cola-mlp': 'purple', 'cola-lowrank-1': 'goldenrod',

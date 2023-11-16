@@ -42,7 +42,7 @@ class LowRank(nn.Module):
 
     def reset_parameters(self):
         nn.init.kaiming_uniform_(self.cola_A.weight, a=math.sqrt(5))
-        nn.init.ones_(self.cola_B.weight)
+        nn.init.zeros_(self.cola_B.weight)
         return
 
     def fit(self, input, optimizer, scheduler):
