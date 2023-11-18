@@ -77,7 +77,12 @@ def process_control():
         cfg['cola']['shuffle'] = {'train': True, 'test': False}
         if cfg['task_name'] in ['s2s', 'sc', 'clm', 't2i']:
             cfg['cola']['optimizer_name'] = 'AdamW'
-            cfg['cola']['lr'] = 3e-4
+            if 'linear' in ft_name_list[1] and (
+                    (cfg['task_name'] == 'sc' and cfg['subset_name'] in ['mnli', 'sst2', 'qnli', 'qqp', 'rte']) or (
+                    cfg['task_name'] == 'clm' and cfg['model_name'] == 'llama-2')):
+                cfg['cola']['lr'] = 5e-6
+            else:
+                cfg['cola']['lr'] = 3e-4
             cfg['cola']['momentum'] = 0.9
             cfg['cola']['betas'] = (0.9, 0.999)
             cfg['cola']['weight_decay'] = 5e-4
@@ -126,14 +131,20 @@ def process_control():
     cfg['test_computation'] = False
     if cfg['test_computation']:
         cfg['num_test_iter'] = 10
-        cfg['device_cola'] = 'cpu'
-        # cfg['device_cola'] = cfg['device']
+        # cfg['device_cola'] = 'cpu'
+        cfg['device_cola'] = cfg['device']
+        cfg['offload_device'] = 'cpu'
+        # cfg['offload_device'] = cfg['device']
+        # cfg['offload_device'] = 'cuda:1'
         cfg['time_used'] = []
         cfg['time_used_cola'] = []
         cfg['mem_used'] = []
         cfg['mem_used_cola'] = []
     else:
+        # cfg['device_cola'] = 'cpu'
         cfg['device_cola'] = cfg['device']
+        # cfg['offload_device'] = 'cpu'
+        cfg['offload_device'] = cfg['device']
     return
 
 

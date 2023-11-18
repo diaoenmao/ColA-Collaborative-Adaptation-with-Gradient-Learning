@@ -57,7 +57,7 @@ def make_hf_model(model_name, sub_model_name=None):
         if 'llama' in model_name:
             # "Training Llama in float16 is not recommended and known to produce nan, as such the model should be trained in bfloat16.""
             model = LlamaForCausalLM.from_pretrained(cfg['model_name_or_path'], torch_dtype=torch.bfloat16,
-                                                     device_map='auto', cache_dir=cfg['cache_model_path'])
+                                                     device_map=cfg['device'], cache_dir=cfg['cache_model_path'])
         else:
             model = AutoModelForCausalLM.from_pretrained(cfg['model_name_or_path'], cache_dir=cfg['cache_model_path'])
     elif cfg['task_name'] == 's2s':

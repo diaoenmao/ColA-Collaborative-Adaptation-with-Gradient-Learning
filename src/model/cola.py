@@ -51,9 +51,8 @@ class LowRank(nn.Module):
         output = {}
         x = input['data'].to(self.cola_A.weight.dtype)
         output['target'] = self.forward(x)
-        if cfg['cola']['merge']:
-            with torch.no_grad():
-                input['target'] = (output['target'] + input['target']).detach()
+        with torch.no_grad():
+            input['target'] = (output['target'] - input['target']).detach()
         output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='sum')
         output['loss'].backward()
         if cfg['task_name'] in ['ic']:
@@ -117,9 +116,8 @@ class Linear(nn.Module):
         output = {}
         x = input['data'].to(self.linear.weight.dtype)
         output['target'] = self.forward(x)
-        if cfg['cola']['merge']:
-            with torch.no_grad():
-                input['target'] = (output['target'] + input['target']).detach()
+        with torch.no_grad():
+            input['target'] = (output['target'] - input['target']).detach()
         output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='sum')
         output['loss'].backward()
         if cfg['task_name'] in ['ic']:
@@ -184,9 +182,8 @@ class MLP(nn.Module):
         output = {}
         x = input['data'].to(self.linear.weight.dtype)
         output['target'] = self.forward(x)
-        if cfg['cola']['merge']:
-            with torch.no_grad():
-                input['target'] = (output['target'] + input['target']).detach()
+        with torch.no_grad():
+            input['target'] = (output['target'] - input['target']).detach()
         output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='sum')
         output['loss'].backward()
         if cfg['task_name'] in ['ic']:
@@ -242,9 +239,8 @@ class Embedding(nn.Module):
         output = {}
         x = input['data']
         output['target'] = self.forward(x)
-        if cfg['cola']['merge']:
-            with torch.no_grad():
-                input['target'] = (output['target'] + input['target']).detach()
+        with torch.no_grad():
+            input['target'] = (output['target'] - input['target']).detach()
         output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='sum')
         output['loss'].backward()
         if cfg['task_name'] in ['ic']:
@@ -296,20 +292,11 @@ class Router(nn.Module):
         return
 
     def fit(self, input, optimizer=None, scheduler=None):
-        if self.dist_mode == 'alone':
-            for i in range(len(self.unique_split)):
-                data_i, target_i = input['data'][self.indices[i]], input['target'][self.indices[i]]
-                input_i = {'data': data_i, 'target': target_i}
-                self.model[self.unique_split[i]].fit(input_i, optimizer[self.unique_split[i]],
-                                                     scheduler[self.unique_split[i]])
-        elif self.dist_mode == 'col':
-            for i in range(len(self.unique_split)):
-                data_i, target_i = input['data'][self.indices[i]], input['target'][self.indices[i]]
-                input_i = {'data': data_i, 'target': target_i}
-                self.model[self.unique_split[i]].fit(input_i, optimizer[self.unique_split[i]],
-                                                     scheduler[self.unique_split[i]])
-        else:
-            raise ValueError('Not valid dist mode')
+        for i in range(len(self.unique_split)):
+            data_i, target_i = input['data'][self.indices[i]], input['target'][self.indices[i]]
+            input_i = {'data': data_i, 'target': target_i}
+            self.model[self.unique_split[i]].fit(input_i, optimizer[self.unique_split[i]],
+                                                 scheduler[self.unique_split[i]])
         return
 
     def make_delta_weight(self):
@@ -321,28 +308,13 @@ class Router(nn.Module):
         return delta_weight
 
     def forward(self, x):
-        if self.dist_mode == 'alone':
-            x_ = []
-            for i in range(len(self.unique_split)):
-                x_i = x[self.indices[i]]
-                x_i = self.model[self.unique_split[i]](x_i)
-                x_.append(x_i)
-            x_ = torch.cat(x_, dim=0)
-            x = x_[self.sorted_indices]
-        elif self.dist_mode == 'col':
-            x_ = []
-            for i in range(len(self.unique_split)):
-                x_i = x[self.indices[i]]
-                x_i_ = []
-                for j in range(len(self.model)):
-                    x_i_j = self.model[j](x_i)
-                    x_i_.append(x_i_j)
-                x_i = torch.stack(x_i_, dim=-1).mean(dim=-1)
-                x_.append(x_i)
-            x_ = torch.cat(x_, dim=0)
-            x = x_[self.sorted_indices]
-        else:
-            raise ValueError('Not valid dist mode')
+        x_ = []
+        for i in range(len(self.unique_split)):
+            x_i = x[self.indices[i]]
+            x_i = self.model[self.unique_split[i]](x_i)
+            x_.append(x_i)
+        x_ = torch.cat(x_, dim=0)
+        x = x_[self.sorted_indices]
         return x
 
 

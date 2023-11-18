@@ -200,11 +200,11 @@ def make_delta_weight(cola_base):
             delta_weight[k] = cola_base[k].make_delta_weight()
             if isinstance(delta_weight[k], tuple):
                 delta_weight_0, delta_weight_1 = delta_weight[k]
-                delta_weight_0 = delta_weight_0.to('cpu')
-                delta_weight_1 = delta_weight_1.to('cpu')
+                delta_weight_0 = delta_weight_0.to(cfg['offload_device'])
+                delta_weight_1 = delta_weight_1.to(cfg['offload_device'])
                 delta_weight[k] = (delta_weight_0, delta_weight_1)
             else:
-                delta_weight[k] = delta_weight[k].to('cpu')
+                delta_weight[k] = delta_weight[k].to(cfg['offload_device'])
     return delta_weight
 
 

@@ -30,6 +30,8 @@ from ..utils import (
 if is_bnb_available():
     import bitsandbytes as bnb
 
+from config import cfg
+
 
 @dataclass
 class ColaConfig(PeftConfig):
@@ -530,7 +532,7 @@ class ColaLayer:
 
         self.input = []
         self.output_target = []
-
+        self.offload_device = cfg['offload_device']
         self.hook = self.register_forward_hook(self.forward_hook)
 
     def update_layer(self, adapter_name="default", cola_alpha=None, cola_base=None):
@@ -541,7 +543,7 @@ class ColaLayer:
 
     def forward_hook(self, module, input, output):
         if self.training:
-            input_ = input[0].detach().to('cpu')
+            input_ = input[0].detach().to(self.offload_device)
             self.input.append(input_)
             output.requires_grad_(True)
             output.register_hook(self.backward_hook)
@@ -550,8 +552,9 @@ class ColaLayer:
     def backward_hook(self, grad):
         if self.training:
             with torch.no_grad():
-                grad_ = grad.detach().to('cpu')
-                self.output_target[-1] = (self.output_target[-1] - grad_).detach()
+                grad_ = grad.detach().to(self.offload_device)
+                # self.output_target[-1] = (self.output_target[-1] - grad_).detach()
+                self.output_target[-1] = grad_.detach()
         return
 
 
@@ -640,7 +643,7 @@ class Linear(nn.Linear, ColaLayer):
                 x = x.to(self.cola_base[self.active_adapter]['dtype'])
                 cola_output = self.cola_base[self.active_adapter]['model'](x) * self.cola_alpha[self.active_adapter]
                 if self.training:
-                    self.output_target.append(cola_output.to('cpu'))
+                    self.output_target.append(cola_output.to(self.offload_device))
                 result += cola_output
         else:
             if self.training:
@@ -704,7 +707,7 @@ class Embedding(nn.Embedding, ColaLayer):
             if self.cola_base[self.active_adapter]['model'] is not None:
                 cola_output = self.cola_base[self.active_adapter]['model'](x) * self.cola_alpha[self.active_adapter]
                 if self.training:
-                    self.output_target.append(cola_output.to('cpu'))
+                    self.output_target.append(cola_output.to(self.offload_device))
                 result += cola_output
             return result
         else:
@@ -818,7 +821,7 @@ class Conv2d(nn.Conv2d, ColaLayer):
                 x = x.to(self.cola_base[self.active_adapter]['dtype'])
                 cola_output = self.cola_base[self.active_adapter]['model'](x) * self.cola_alpha[self.active_adapter]
                 if self.training:
-                    self.output_target.append(cola_output.to('cpu'))
+                    self.output_target.append(cola_output.to(self.offload_device))
                 result += cola_output
 
         else:
@@ -884,7 +887,7 @@ if is_bnb_available():
                         cola_output = self.cola_base[self.active_adapter]['model'](x).to(expected_dtype) * \
                                       self.cola_alpha[self.active_adapter]
                         if self.training:
-                            self.output_target.append(cola_output.to('cpu'))
+                            self.output_target.append(cola_output.to(self.offload_device))
                         output = cola_output
                     else:
                         output = 0
@@ -893,7 +896,7 @@ if is_bnb_available():
                         cola_output = self.cola_base[self.active_adapter]['model'](x) * \
                                       self.cola_alpha[self.active_adapter]
                         if self.training:
-                            self.output_target.append(cola_output.to('cpu'))
+                            self.output_target.append(cola_output.to(self.offload_device))
                         output = cola_output
                     else:
                         output = 0
@@ -944,7 +947,7 @@ if is_bnb_available():
                             cola_output = self.cola_base[self.active_adapter]['model'](x).to(expected_dtype) * \
                                           self.cola_alpha[self.active_adapter]
                             if self.training:
-                                self.output_target.append(cola_output.to('cpu'))
+                                self.output_target.append(cola_output.to(self.offload_device))
                             output = cola_output
                         else:
                             output = 0
@@ -953,7 +956,7 @@ if is_bnb_available():
                             cola_output = self.cola_base[self.active_adapter]['model'](x) * \
                                           self.cola_alpha[self.active_adapter]
                             if self.training:
-                                self.output_target.append(cola_output.to('cpu'))
+                                self.output_target.append(cola_output.to(self.offload_device))
                             output = cola_output
                         else:
                             output = 0
