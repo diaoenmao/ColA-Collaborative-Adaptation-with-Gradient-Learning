@@ -76,7 +76,8 @@ def process_control():
         if cfg['task_name'] in ['s2s', 'sc', 'clm']:
             cfg['cola']['optimizer_name'] = 'AdamW'
             if 'linear' in ft_name_list[1] and (
-                    cfg['task_name'] == 'sc' or (cfg['task_name'] == 'clm' and cfg['model_name'] == 'llama-2')):
+                    (cfg['task_name'] == 'sc' and cfg['subset_name'] in ['mnli', 'sst2', 'qnli', 'qqp', 'rte']) or (
+                    cfg['task_name'] == 'clm' and cfg['model_name'] == 'llama-2')):
                 cfg['cola']['lr'] = 5e-6
             else:
                 cfg['cola']['lr'] = 3e-4
