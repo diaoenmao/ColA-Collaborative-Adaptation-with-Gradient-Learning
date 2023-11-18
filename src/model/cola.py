@@ -51,9 +51,8 @@ class LowRank(nn.Module):
         output = {}
         x = input['data'].to(self.cola_A.weight.dtype)
         output['target'] = self.forward(x)
-        if cfg['cola']['merge']:
-            with torch.no_grad():
-                input['target'] = (output['target'] + input['target']).detach()
+        with torch.no_grad():
+            input['target'] = (output['target'] - input['target']).detach()
         output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='sum')
         output['loss'].backward()
         if cfg['task_name'] in ['ic']:
@@ -117,9 +116,8 @@ class Linear(nn.Module):
         output = {}
         x = input['data'].to(self.linear.weight.dtype)
         output['target'] = self.forward(x)
-        if cfg['cola']['merge']:
-            with torch.no_grad():
-                input['target'] = (output['target'] + input['target']).detach()
+        with torch.no_grad():
+            input['target'] = (output['target'] - input['target']).detach()
         output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='sum')
         output['loss'].backward()
         if cfg['task_name'] in ['ic']:
@@ -184,9 +182,8 @@ class MLP(nn.Module):
         output = {}
         x = input['data'].to(self.linear.weight.dtype)
         output['target'] = self.forward(x)
-        if cfg['cola']['merge']:
-            with torch.no_grad():
-                input['target'] = (output['target'] + input['target']).detach()
+        with torch.no_grad():
+            input['target'] = (output['target'] - input['target']).detach()
         output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='sum')
         output['loss'].backward()
         if cfg['task_name'] in ['ic']:
@@ -242,9 +239,8 @@ class Embedding(nn.Module):
         output = {}
         x = input['data']
         output['target'] = self.forward(x)
-        if cfg['cola']['merge']:
-            with torch.no_grad():
-                input['target'] = (output['target'] + input['target']).detach()
+        with torch.no_grad():
+            input['target'] = (output['target'] - input['target']).detach()
         output['loss'] = 0.5 * F.mse_loss(output['target'], input['target'], reduction='sum')
         output['loss'].backward()
         if cfg['task_name'] in ['ic']:

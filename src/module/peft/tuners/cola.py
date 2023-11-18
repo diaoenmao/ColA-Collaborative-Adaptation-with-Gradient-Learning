@@ -553,7 +553,8 @@ class ColaLayer:
         if self.training:
             with torch.no_grad():
                 grad_ = grad.detach().to(self.offload_device)
-                self.output_target[-1] = (self.output_target[-1] - grad_).detach()
+                # self.output_target[-1] = (self.output_target[-1] - grad_).detach()
+                self.output_target[-1] = grad_.detach()
         return
 
 

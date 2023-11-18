@@ -75,7 +75,11 @@ def process_control():
         cfg['cola']['shuffle'] = {'train': True, 'test': False}
         if cfg['task_name'] in ['s2s', 'sc', 'clm']:
             cfg['cola']['optimizer_name'] = 'AdamW'
-            cfg['cola']['lr'] = 3e-4
+            if 'linear' in ft_name_list[1] and (
+                    cfg['task_name'] == 'sc' or (cfg['task_name'] == 'clm' and cfg['model_name'] == 'llama-2')):
+                cfg['cola']['lr'] = 5e-6
+            else:
+                cfg['cola']['lr'] = 3e-4
             cfg['cola']['momentum'] = 0.9
             cfg['cola']['betas'] = (0.9, 0.999)
             cfg['cola']['weight_decay'] = 5e-4

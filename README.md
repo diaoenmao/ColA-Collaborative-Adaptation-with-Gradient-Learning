@@ -4,6 +4,7 @@
 See `requirements.txt`
 
 ## Instructions
+ - Use `verify.py` to verify method and theory
  - Experimental control are configured in `config.yml`
  - Use `make.sh` to generate run script with `make.py`
  - Use `make.py` to generate exp script to `scripts`
