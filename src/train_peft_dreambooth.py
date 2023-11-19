@@ -144,7 +144,7 @@ def train(data_loader, unet, vae, text_encoder, optimizer, scheduler, noise_sche
         else:
             loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
 
-        output_ = {'Loss': loss.detach().item()}
+        output_ = {'loss': loss.detach()}
         input_size = input['input_ids'].size(0) / 2
         optimizer.zero_grad()
         loss.backward()
@@ -165,7 +165,7 @@ def train(data_loader, unet, vae, text_encoder, optimizer, scheduler, noise_sche
                              'Learning rate: {:.6f}'.format(lr), 'Epoch Finished Time: {}'.format(epoch_finished_time),
                              'Experiment Finished Time: {}'.format(exp_finished_time)]}
             logger.append(info, 'train')
-            print(logger.write('train', metric.metric_name['train']))
+            print(logger.write('train', metric.metric_name['train']), flush=True)
         if cfg['test_computation']:
             mem_free, mem_total = torch.cuda.mem_get_info(cfg['device'])
             cfg['mem_used'].append(mem_total - mem_free)

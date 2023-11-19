@@ -98,7 +98,7 @@ def runExperiment():
     vae = vae.to(cfg['device'])
     text_encoder, _ = make_model(cfg['model_name'], 'text_encoder')
     text_encoder = text_encoder.to(cfg['device'])
-    noise_scheduler = make_noise_scheduler(model_name)
+    noise_scheduler = make_noise_scheduler(cfg['model_name'])
     for epoch in range(cfg['epoch'], cfg[cfg['model_name']]['num_epochs'] + 1):
         cfg['epoch'] = epoch
         train(data_loader['train'], model, vae, text_encoder, cola_base, optimizer, scheduler, noise_scheduler,
@@ -180,7 +180,7 @@ def train(data_loader, unet, vae, text_encoder, cola_base, optimizer, scheduler,
         else:
             loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
 
-        output_ = {'Loss': loss.detach().item()}
+        output_ = {'loss': loss.detach()}
         input_size = input['input_ids'].size(0) / 2
         loss.backward()
         unet.zero_grad()
@@ -212,12 +212,12 @@ def train(data_loader, unet, vae, text_encoder, cola_base, optimizer, scheduler,
             exp_finished_time = epoch_finished_time + datetime.timedelta(
                 seconds=round((cfg[cfg['model_name']]['num_epochs'] - cfg['epoch']) * batch_time * len(data_loader)))
             info = {'info': ['Model: {}'.format(cfg['model_tag']),
-                             'Train Epoch: {}({:.0f}%)'.format(epoch, 100. * i / len(data_loader)),
+                             'Train Epoch: {}({:.0f}%)'.format(cfg['epoch'], 100. * i / len(data_loader)),
                              'Learning rate: {:.6f}'.format(lr),
                              'Epoch Finished Time: {}'.format(epoch_finished_time),
                              'Experiment Finished Time: {}'.format(exp_finished_time)]}
             logger.append(info, 'train')
-            print(logger.write('train', ['loss']), flush=True)
+            print(logger.write('train', metric.metric_name['train']), flush=True)
         if cfg['test_computation']:
             mem_free, mem_total = torch.cuda.mem_get_info(cfg['device'])
             cfg['mem_used'].append(mem_total - mem_free)
