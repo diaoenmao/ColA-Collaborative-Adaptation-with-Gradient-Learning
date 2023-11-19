@@ -231,7 +231,7 @@ def train_t2i(data_loader, unet, vae, text_encoder, optimizer, scheduler, noise_
                 exp_finished_time = epoch_finished_time + datetime.timedelta(
                     seconds=round((cfg[cfg['model_name']]['num_epochs'] - cfg['epoch']) * batch_time * len(data_loader)))
                 info = {'info': ['Model: {}'.format(cfg['model_tag']),
-                                'Train Epoch: {}({:.0f}%)'.format(cfg['epoch'], 100. * i / len(data_loader)),
+                                'Train Epoch: {}({:.0f}%)'.format(epoch, 100. * i / len(data_loader)),
                                 'Learning rate: {:.6f}'.format(lr), 'Epoch Finished Time: {}'.format(epoch_finished_time),
                                 'Experiment Finished Time: {}'.format(exp_finished_time)]}
                 logger.append(info, 'train')

@@ -59,12 +59,15 @@ def runExperiment():
         model_name = cfg['model_name']
         pic_folder_path = os.path.join(result_path, cfg['model_tag'], cfg['subset_name'])
         makedir_exist_ok(pic_folder_path)
-        for i in range(20):
+        for i in range(30):
             INSTANCE_PROMPT = f"a photo of {cfg['unique_id']} {cfg['unique_class']}"
             image = model(INSTANCE_PROMPT, num_inference_steps=cfg[model_name]['num_inference_steps'], \
                           guidance_scale=cfg[model_name]['guidance_scale']).images[0]
-            image_path = os.path.join(pic_folder_path, f"{i}.png")
-            image.save(image_path)
+            if image.mode == 'RGBA':
+                image = image.convert('RGB')
+            image_path = os.path.join(pic_folder_path, f"{i}.pdf")
+            # Save as PDF
+            image.save(image_path, "PDF", resolution=100.0)
         return
     else:
         model.load_cola_base(cola_base)

@@ -100,8 +100,9 @@ def process_control():
             cfg['cola']['batch_size'] = {'train': cfg['batch_size'], 'test': cfg['batch_size']}
             cfg['cola']['scheduler_name'] = 'CosineAnnealingLR'
     if cfg['task_name'] == 't2i':
-        cfg[model_name]['num_epochs'] = 2
+        cfg[model_name]['num_epochs'] = 4
         cfg['collate_mode'] = 'dreambooth'
+        cfg[model_name]['lr'] = 1e-4
         # all settings are from the peft example: https://github.com/huggingface/peft
         cfg[model_name]['prior_loss_weight'] = 1
         cfg[model_name]['resolution'] = 512
@@ -121,9 +122,10 @@ def process_control():
 
         cfg[model_name]['scheduler_name'] = 'ConstantLR'
         cfg[model_name]['factor'] = 1
-
-        cfg['cola']['scheduler_name'] = 'ConstantLR'
-        cfg['cola']['factor'] = 1
+        if 'cola' in cfg:
+            cfg['cola']['scheduler_name'] = 'ConstantLR'
+            cfg['cola']['factor'] = 1
+            cfg['cola']['lr'] = 1e-4
 
         cfg[model_name]['num_inference_steps'] = 50
         cfg[model_name]['guidance_scale'] = 7.5
