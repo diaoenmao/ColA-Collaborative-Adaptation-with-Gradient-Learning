@@ -11,11 +11,9 @@ from torchvision import transforms
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.dataloader import default_collate
 from transformers import default_data_collator
-from module import check_exists, makedir_exist_ok, save, load
-from .utils import download_url, extract_file
 from config import cfg
+from model import make_model
 from module import to_device
-from model.model import make_model
 
 data_stats = {'MNIST': ((0.1307,), (0.3081,)), 'FashionMNIST': ((0.2860,), (0.3530,)),
               'CIFAR10': ((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
