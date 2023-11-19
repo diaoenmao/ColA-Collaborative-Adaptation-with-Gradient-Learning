@@ -30,7 +30,6 @@ def main():
 
 
 def runExperiment():
-    model, tokenizer = make_model(cfg['model_name'])
     output_format = 'png'
     cfg['seed'] = int(cfg['model_tag'].split('_')[0])
     torch.manual_seed(cfg['seed'])
