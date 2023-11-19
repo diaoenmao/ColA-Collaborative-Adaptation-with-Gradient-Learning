@@ -38,13 +38,11 @@ def runExperiment():
     result_path = os.path.join('output', 'result')
     model_tag_path = os.path.join(model_path, cfg['model_tag'])
     best_path = os.path.join(model_tag_path, 'best')
+    checkpoint_path = os.path.join(model_tag_path, 'checkpoint')
     model, tokenizer = make_model(cfg['model_name'])
-    result = resume(os.path.join(best_path, 'model'))
-    if cfg['task_name'] == 't2i':
-        model.unet = PeftModel.from_pretrained(model.unet, os.path.join(best_path, 'adapter'))
-    else:
-        model = PeftModel.from_pretrained(model, os.path.join(best_path, 'adapter'))
-    freeze_model(model)
+    result = resume(os.path.join(checkpoint_path, 'model'))
+    model.unet = PeftModel.from_pretrained(model.unet, os.path.join(checkpoint_path, 'adapter'))
+    freeze_model(model.unet)
     model = model.to(cfg['device'])
     cola_base = make_cola(model.unet, cfg['cola']['model_name'])
     for k in cola_base:
@@ -68,3 +66,5 @@ def runExperiment():
 
 if __name__ == "__main__":
     main()
+
+

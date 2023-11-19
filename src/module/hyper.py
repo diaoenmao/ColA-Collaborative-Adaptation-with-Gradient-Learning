@@ -73,8 +73,6 @@ def process_control():
         cfg[model_name]['nesterov'] = True
         cfg[model_name]['num_epochs'] = 4
         cfg[model_name]['batch_size'] = {'train': cfg['batch_size'], 'test': cfg['batch_size']}
-        cfg[model_name]['scheduler_name'] = 'LinearAnnealingLR'
-        cfg[model_name]['warmup_ratio'] = 0.05
 
         # all settings are from the peft example: https://github.com/huggingface/peft
         cfg[model_name]['prior_loss_weight'] = 1
@@ -140,33 +138,16 @@ def process_control():
             cfg['cola']['scheduler_name'] = 'CosineAnnealingLR'
         elif cfg['task_name'] in ['t2i']:
             cfg['collate_mode'] = 'dreambooth'
-
             cfg['sub_model_name'] = 'unet'
-
-            cfg[model_name]['num_epochs'] = 4
-            # all settings are from the peft example: https://github.com/huggingface/peft
-            cfg[model_name]['prior_loss_weight'] = 1
-            cfg[model_name]['resolution'] = 512
-            cfg[model_name]['num_class_image'] = 200
-            # The dimension used by the LoRA update matrices
-            cfg[model_name]['lora_r'] = 16
-            # Scaling factor
-            cfg[model_name]['lora_alpha'] = 27
-            cfg[model_name]['lora_dropout'] = 0
-            cfg[model_name]['lora_bias'] = "none"
-
-            cfg[model_name]['noise_scheduler_name'] = 'DDPM'
-            cfg[model_name]['beta_start'] = 0.00085
-            cfg[model_name]['beta_end'] = 0.012
-            cfg[model_name]['beta_schedule'] = 'scaled_linear'
-            cfg[model_name]['num_train_timesteps'] = 1000
-
+            cfg['cola']['optimizer_name'] = 'AdamW'
+            cfg['cola']['lr'] = 1e-4
+            cfg['cola']['momentum'] = 0.9
+            cfg['cola']['betas'] = (0.9, 0.999)
+            cfg['cola']['weight_decay'] = 5e-4
+            cfg['cola']['nesterov'] = True
+            cfg['cola']['batch_size'] = {'train': cfg['batch_size'], 'test': cfg['batch_size']}
             cfg['cola']['scheduler_name'] = 'ConstantLR'
             cfg['cola']['factor'] = 1
-            cfg['cola']['lr'] = 1e-4
-
-            cfg[model_name]['num_inference_steps'] = 50
-            cfg[model_name]['guidance_scale'] = 7.5
         else:
             raise ValueError('Not valid task name')
 
