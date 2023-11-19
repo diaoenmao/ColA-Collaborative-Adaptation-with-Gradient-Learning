@@ -7,7 +7,8 @@ from diffusers import (
     DiffusionPipeline,
     UNet2DConditionModel,
 )
-from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM, AutoModelForSequenceClassification, AutoTokenizer, PretrainedConfig
+from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM, AutoModelForSequenceClassification, AutoTokenizer, \
+    PretrainedConfig
 from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM, AutoModelForSequenceClassification, \
     AutoTokenizer, LlamaTokenizer, LlamaForCausalLM
 
@@ -75,7 +76,8 @@ def make_hf_model(model_name, sub_model_name=None):
                                                                        cache_dir=cfg['cache_model_path'])
     elif cfg['task_name'] == 't2i':
         if sub_model_name is None:
-            model = DiffusionPipeline.from_pretrained(cfg['model_name_or_path'], safety_checker=None, cache_dir=cfg['cache_model_path'])
+            model = DiffusionPipeline.from_pretrained(cfg['model_name_or_path'], safety_checker=None,
+                                                      cache_dir=cfg['cache_model_path'])
         elif sub_model_name == 'vae':
             model = AutoencoderKL.from_pretrained(cfg['model_name_or_path'], subfolder="vae")
         elif sub_model_name == 'unet':
@@ -91,12 +93,13 @@ def make_hf_model(model_name, sub_model_name=None):
         padding_side = "left"
     else:
         padding_side = "right"
-    
+
     if 'llama' in model_name:
         tokenizer = LlamaTokenizer.from_pretrained(cfg['model_name_or_path'], cache_dir=cfg['cache_tokenizer_path'],
                                                    padding_side=padding_side)
     elif 'sdiffusion' in model_name:
-        tokenizer = AutoTokenizer.from_pretrained(cfg['tokenizer_name_or_path'], subfolder="tokenizer", cache_dir=cfg['cache_tokenizer_path'])
+        tokenizer = AutoTokenizer.from_pretrained(cfg['tokenizer_name_or_path'], subfolder="tokenizer",
+                                                  cache_dir=cfg['cache_tokenizer_path'])
     else:
         tokenizer = AutoTokenizer.from_pretrained(cfg['tokenizer_name_or_path'], cache_dir=cfg['cache_tokenizer_path'],
                                                   padding_side=padding_side)
@@ -106,6 +109,7 @@ def make_hf_model(model_name, sub_model_name=None):
         model.config.pad_token_id = tokenizer.pad_token_id
     cfg['pad_token_id'] = tokenizer.pad_token_id
     return model, tokenizer
+
 
 def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: str):
     text_encoder_config = PretrainedConfig.from_pretrained(

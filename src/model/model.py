@@ -128,6 +128,7 @@ def make_scheduler(optimizer, tag):
         raise ValueError('Not valid scheduler name')
     return scheduler
 
+
 def make_noise_scheduler(tag):
     if 'noise_scheduler_name' not in cfg[tag]:
         raise ValueError('Not valid noise scheduler name')
@@ -141,7 +142,8 @@ def make_noise_scheduler(tag):
         )
     else:
         raise ValueError('Not valid noise scheduler name')
-    return noise_scheduler 
+    return noise_scheduler
+
 
 def make_ft_model(model):
     if cfg['task_name'] == 'clm':
@@ -166,25 +168,6 @@ def freeze_model(model):
             p.requires_grad = False
     return
 
-def make_config_t2i():
-    model_name = cfg['model_name']
-    if cfg['ft_name'] == 'dreamboothlora':
-        peft_config = LoraConfig(
-            r=cfg[model_name]['lora_r'],
-            lora_alpha=cfg[model_name]['lora_alpha'],
-            target_modules=UNET_TO_LORA_TARGET_MODULES_MAPPING,
-            lora_dropout=cfg[model_name]['lora_dropout'],
-            bias=cfg[model_name]['lora_bias'],
-            inference_mode=False,
-        )
-    elif cfg['ft_name'] == 'dreamboothcola':
-        peft_config = ColaConfig(
-            target_modules=UNET_TO_COLA_TARGET_MODULES_MAPPING,
-            inference_mode=False,
-        )
-    else:
-        raise ValueError('Not valid ft name')
-    return peft_config
 
 def unfreeze_model(model):
     if cfg['ft_name'] == 'cola':
@@ -354,6 +337,32 @@ def make_config_ic(model):
         )
     elif cfg['ft_name'] == 'cola':
         peft_config = ColaConfig(target_modules=target_modules, inference_mode=False)
+    else:
+        raise ValueError('Not valid ft name')
+    return peft_config
+
+
+def make_config_t2i():
+    model_name = cfg['model_name']
+    if cfg['ft_name'] == 'lora':
+        peft_config = LoraConfig(
+            # r=cfg[model_name]['lora_r'],
+            # lora_alpha=cfg[model_name]['lora_alpha'],
+            # target_modules=UNET_TO_LORA_TARGET_MODULES_MAPPING,
+            # lora_dropout=cfg[model_name]['lora_dropout'],
+            # bias=cfg[model_name]['lora_bias'],
+            # inference_mode=False,
+            target_modules=UNET_TO_LORA_TARGET_MODULES_MAPPING,
+            r=8,
+            lora_alpha=8,
+            lora_dropout=0.0,
+            inference_mode=False,
+        )
+    elif cfg['ft_name'] == 'cola':
+        peft_config = ColaConfig(
+            target_modules=UNET_TO_COLA_TARGET_MODULES_MAPPING,
+            inference_mode=False,
+        )
     else:
         raise ValueError('Not valid ft name')
     return peft_config

@@ -2,7 +2,6 @@ import copy
 import dataset
 import numpy as np
 import os
-import sys
 import copy
 import torch
 from functools import partial
@@ -13,7 +12,6 @@ from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.dataloader import default_collate
 from transformers import default_data_collator
 from module import check_exists, makedir_exist_ok, save, load
-from .dreambooth_dataset import DreamBoothDataset
 from .utils import download_url, extract_file
 from config import cfg
 from module import to_device
@@ -115,12 +113,11 @@ def make_dataset(data_name, subset_name=None, verbose=True):
     elif data_name in ['dolly']:
         dataset_ = load_dataset(cfg['hf_data_name'], cfg['hf_subset_name'], cache_dir=root)
         dataset_ = dataset_['train'].train_test_split(test_size=0.1, seed=cfg['seed'])
-    elif data_name in ['dbdataset']:
-        model_name = cfg['model_name']
-        model, tokenizer = make_model(model_name)
+    elif data_name in ['dreambooth']:
+        model, tokenizer = make_model(cfg['model_name'])
 
         # other prompts can be found in: https://github.com/google/dreambooth/blob/main/dataset/prompts_and_classes.txt
-        dataset_['train'] = DreamBoothDataset(
+        dataset_['train'] = dataset.DreamBooth(
             root=root,
             split='train',
             model=model,
@@ -131,7 +128,7 @@ def make_dataset(data_name, subset_name=None, verbose=True):
             class_prompt=f"a photo of {cfg['unique_class']}",
         )
 
-        size = cfg[model_name]['resolution']
+        size = cfg[cfg['model_name']]['resolution']
         center_crop = False
         dataset_['train'].transform = transforms.Compose(
             [
@@ -150,6 +147,7 @@ def make_dataset(data_name, subset_name=None, verbose=True):
 
 def input_collate(batch):
     return {key: [b[key] for b in batch] for key in batch[0]}
+
 
 def dreambooth_input_collate(batch):
     input_ids = [b["instance_prompt_ids"] for b in batch]
@@ -215,8 +213,6 @@ def collate(input):
 
 
 def process_dataset(dataset, tokenizer):
-    if cfg['data_name'] == 'dbdataset':
-        return dataset
     if cfg['task_name'] in ['s2s', 'sc', 'clm']:
         text_column = cfg['text_column']
         label_column = cfg['label_column']
@@ -584,10 +580,14 @@ def process_dataset(dataset, tokenizer):
             raise ValueError('Not valid data name')
         cfg['data_size'] = {k: len(processed_dataset[k]) for k in processed_dataset}
         cfg['target_size'] = len(tokenizer)
-    else:
+    elif cfg['task_name'] in ['ic']:
         processed_dataset = dataset
         cfg['data_size'] = {k: len(processed_dataset[k]) for k in processed_dataset}
         cfg['target_size'] = processed_dataset['train'].target_size
+    elif cfg['task_name'] in ['t2i']:
+        processed_dataset = dataset
+    else:
+        raise ValueError('Not valid task name')
     return processed_dataset
 
 

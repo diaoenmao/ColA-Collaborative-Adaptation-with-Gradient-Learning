@@ -6,7 +6,7 @@ from config import cfg, process_args
 from dataset import make_dataset, make_data_loader, process_dataset, collate, make_batchnorm_stats
 from metric import make_metric, make_logger
 from model import make_model
-from module import save, makedir_exist_ok, to_device, process_control, resume, PeftModel
+from module import save, to_device, process_control, resume, PeftModel
 
 cudnn.benchmark = True
 parser = argparse.ArgumentParser(description='cfg')
@@ -15,6 +15,7 @@ for k in cfg:
 parser.add_argument('--control_name', default=None, type=str)
 args = vars(parser.parse_args())
 process_args(args)
+
 
 def main():
     process_control()
@@ -25,6 +26,7 @@ def main():
         print('Experiment: {}'.format(cfg['model_tag']))
         runExperiment()
     return
+
 
 def runExperiment():
     cfg['seed'] = int(cfg['model_tag'].split('_')[0])
@@ -39,23 +41,6 @@ def runExperiment():
     model, tokenizer = make_model(cfg['model_name'])
     dataset = process_dataset(dataset, tokenizer)
     data_loader = make_data_loader(dataset, tokenizer, cfg['model_name'])
-    if cfg['task_name'] == 't2i':
-        model_name = cfg['model_name']
-        model.unet = PeftModel.from_pretrained(model.unet, os.path.join(best_path, 'adapter'))
-        model = model.to(cfg['device'])
-        pic_folder_path = os.path.join(result_path, cfg['model_tag'], cfg['subset_name'])
-        makedir_exist_ok(pic_folder_path)
-        for i in range(30):
-            INSTANCE_PROMPT = f"a photo of {cfg['unique_id']} {cfg['unique_class']}"
-            image = model(INSTANCE_PROMPT, num_inference_steps=cfg[model_name]['num_inference_steps'], \
-                          guidance_scale=cfg[model_name]['guidance_scale']).images[0]
-            # Convert to RGB if your model outputs RGBA format, as PDF doesn't support RGBA
-            if image.mode == 'RGBA':
-                image = image.convert('RGB')
-            image_path = os.path.join(pic_folder_path, f"{i}.pdf")
-            # Save as PDF
-            image.save(image_path, "PDF", resolution=100.0)
-        return
     metric = make_metric({'train': ['Loss'], 'test': ['Loss']}, tokenizer)
     result = resume(os.path.join(best_path, 'model'))
     model = PeftModel.from_pretrained(model, os.path.join(best_path, 'adapter'))
@@ -75,6 +60,7 @@ def runExperiment():
                                                                        'test_merge': test_merge_logger.state_dict()}}
     save(result, os.path.join(result_path, cfg['model_tag']))
     return
+
 
 def test(data_loader, model, metric, logger):
     with torch.no_grad():

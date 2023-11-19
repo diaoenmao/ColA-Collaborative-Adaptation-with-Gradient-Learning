@@ -35,7 +35,12 @@ def make_metric(metric_name, tokenizer):
         else:
             raise ValueError('Not valid data name')
     elif cfg['task_name'] == 't2i':
-        return None
+        if cfg['data_name'] in ['dreambooth']:
+            pivot = -float('inf')
+            pivot_direction = 'up'
+            pivot_name = 'Loss'
+        else:
+            raise ValueError('Not valid data name')
     elif cfg['task_name'] == 'ic':
         pivot = -float('inf')
         pivot_direction = 'up'

@@ -12,14 +12,14 @@ from module import check_exists, makedir_exist_ok, save, load
 from .utils import download_url, extract_file, make_classes_counts
 
 
-class DreamBoothDataset(Dataset):
+class DreamBooth(Dataset):
     data_name = 'DreamBooth'
     api_url = f'https://api.github.com/repos/google/dreambooth/contents/dataset'
 
     def __init__(
-            self, 
-            root, 
-            split, 
+            self,
+            root,
+            split,
             model,
             tokenizer,
             instance_data_dir,
@@ -27,7 +27,7 @@ class DreamBoothDataset(Dataset):
             class_data_dir=None,
             class_prompt=None,
             transform=None
-        ):
+    ):
         self.root = os.path.expanduser(root)
         self.split = split
         self.tokenizer = tokenizer
@@ -43,7 +43,7 @@ class DreamBoothDataset(Dataset):
             self.process(model)
         self.make_data()
         return
-    
+
     def __getitem__(self, index):
         input = {}
         instance_image = Image.open(self.instance_images_path[index % self.num_instance_images])
@@ -74,7 +74,7 @@ class DreamBoothDataset(Dataset):
 
     def __len__(self):
         return self._length
-    
+
     @property
     def processed_folder(self):
         return os.path.join(self.root, 'processed')
@@ -88,7 +88,8 @@ class DreamBoothDataset(Dataset):
         model.to(cfg['device'])
         for i in range(cfg[cfg['model_name']]['num_class_image']):
             prompt = self.class_prompt
-            image = model(prompt, num_inference_steps=cfg[model_name]['num_inference_steps'], guidance_scale=cfg[model_name]['guidance_scale']).images[0]
+            image = model(prompt, num_inference_steps=cfg[model_name]['num_inference_steps'],
+                          guidance_scale=cfg[model_name]['guidance_scale']).images[0]
             image_path = os.path.join(self.class_data_dir, f"class_pic_{i}.png")
             # Save the image to the specified path
             image.save(image_path)
@@ -115,7 +116,6 @@ class DreamBoothDataset(Dataset):
             self._length = max(self.num_class_images, self.num_instance_images)
         else:
             self.class_data_root = None
-
         return None
 
     def download_github_directory(self, api_url, destination):
