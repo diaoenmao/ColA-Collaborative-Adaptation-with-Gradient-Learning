@@ -34,6 +34,8 @@ def make_metric(metric_name, tokenizer):
             metric_name['test'].extend(['GLUE'])
         else:
             raise ValueError('Not valid data name')
+    elif cfg['task_name'] == 't2i':
+        return None
     elif cfg['task_name'] == 'ic':
         pivot = -float('inf')
         pivot_direction = 'up'

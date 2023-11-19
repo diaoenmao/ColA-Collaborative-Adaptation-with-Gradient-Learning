@@ -5,12 +5,13 @@ import os
 import shutil
 import time
 import torch
+import torch.nn.functional as F
 import torch.backends.cudnn as cudnn
 from collections import defaultdict
 from config import cfg, process_args
 from dataset import make_dataset, make_data_loader, process_dataset, collate
 from metric import make_metric, make_logger
-from model import make_model, make_optimizer, make_scheduler, make_ft_model, freeze_model, unfreeze_model, make_cola
+from model import make_model, make_optimizer, make_scheduler, make_ft_model, freeze_model, unfreeze_model, make_cola, make_noise_scheduler
 from module import save, to_device, process_control, resume, makedir_exist_ok, PeftModel
 
 cudnn.benchmark = True
@@ -43,6 +44,8 @@ def runExperiment():
     best_path = os.path.join(model_tag_path, 'best')
     dataset = make_dataset(cfg['data_name'], cfg['subset_name'])
     model, tokenizer = make_model(cfg['model_name'])
+    if cfg['task_name'] == 't2i':
+        model, tokenizer = make_model(cfg['model_name'], 'unet')
     dataset = process_dataset(dataset, tokenizer)
     data_loader = make_data_loader(dataset, tokenizer, cfg['model_name'])
     result = resume(os.path.join(checkpoint_path, 'model'), resume_mode=cfg['resume_mode'])
@@ -92,6 +95,22 @@ def runExperiment():
         print("Number of ColA trainable parameters: {}".format(num_params))
         metric.load_state_dict(result['metric_state_dict'])
         logger.load_state_dict(result['logger_state_dict'])
+    if cfg['task_name'] == 't2i':
+        model_name = cfg['model_name']
+        vae, _ = make_model(model_name, 'vae')
+        vae = vae.to(cfg['device'])
+        text_encoder, _ = make_model(model_name, 'text_encoder')
+        text_encoder = text_encoder.to(cfg['device'])
+        noise_scheduler = make_noise_scheduler(model_name)
+        train_t2i(data_loader['train'], model, vae, text_encoder, cola_base, optimizer, scheduler, noise_scheduler, metric, logger)
+        result = {'cfg': cfg, 'epoch': cfg['epoch'] + 1,
+                  'cola_base_state_dict': {k: cola_base[k].state_dict() for k in cola_base},
+                  'optimizer_state_dict': {k: optimizer[k].state_dict() for k in optimizer},
+                  'scheduler_state_dict': {k: scheduler[k].state_dict() for k in scheduler},
+                  'metric_state_dict': None, 'logger_state_dict': logger.state_dict()}
+        save(result, os.path.join(best_path, 'model'))
+        model.save_pretrained(os.path.join(best_path, 'adapter'))
+        return
     for epoch in range(cfg['epoch'], cfg[cfg['model_name']]['num_epochs'] + 1):
         cfg['epoch'] = epoch
         train(data_loader['train'], model, cola_base, optimizer, scheduler, metric, logger)
@@ -204,6 +223,129 @@ def train(data_loader, model, cola_base, optimizer, scheduler, metric, logger):
                 exit()
     return
 
+def train_t2i(data_loader, unet, vae, text_encoder, cola_base, optimizer, scheduler, noise_scheduler, metric, logger):
+    unet.train(True)
+    start_time = time.time()
+    input_buffer = defaultdict(list)
+    output_target_buffer = defaultdict(list)
+    model_name = cfg['model_name']
+    for epoch in range(0, cfg[model_name]['num_epochs']):
+        for i, input in enumerate(data_loader):
+            for k in cola_base:
+                lr = optimizer[k].param_groups[0]['lr']
+                cola_base[k] = cola_base[k].to(cfg['device'])
+                cola_base[k].train(False)
+                freeze_model(cola_base[k])
+            if cfg['test_computation']:
+                s = time.time()
+            input = to_device(input, cfg['device'])
+            latents = vae.encode(input["pixel_values"].to(dtype=torch.float32)).latent_dist.sample()
+            latents = latents * 0.18215
+
+            # Sample noise that we'll add to the latents
+            noise = torch.randn_like(latents)
+            bsz = latents.shape[0]
+            # Sample a random timestep for each image
+            timesteps = torch.randint(
+                0, noise_scheduler.config.num_train_timesteps, (bsz,), device=latents.device
+            )
+            timesteps = timesteps.long()
+
+            # Add noise to the latents according to the noise magnitude at each timestep
+            # (this is the forward diffusion process)
+            noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
+
+            # Get the text embedding for conditioning
+            encoder_hidden_states = text_encoder(input["input_ids"])[0]
+
+            # Predict the noise residual
+            model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
+
+            # Get the target for loss depending on the prediction type
+            if noise_scheduler.config.prediction_type == "epsilon":
+                target = noise
+            elif noise_scheduler.config.prediction_type == "v_prediction":
+                target = noise_scheduler.get_velocity(latents, noise, timesteps)
+            else:
+                raise ValueError(f"Unknown prediction type {noise_scheduler.config.prediction_type}")
+
+            if cfg[model_name]['prior_loss_weight'] > 0:
+                # Chunk the noise and model_pred into two parts and compute the loss on each part separately.
+                model_pred, model_pred_prior = torch.chunk(model_pred, 2, dim=0)
+                target, target_prior = torch.chunk(target, 2, dim=0)
+
+                # Compute instance loss
+                loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+
+                # Compute prior loss
+                prior_loss = F.mse_loss(model_pred_prior.float(), target_prior.float(), reduction="mean")
+
+                # Add the prior loss to the instance loss.
+                loss = loss + cfg[model_name]['prior_loss_weight'] * prior_loss
+            else:
+                loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+
+            evaluation = {'loss': loss.detach().item()}
+            input_size = input['input_ids'].size(0) / 2
+            logger.append(evaluation, 'train', n=input_size)
+            loss.backward()
+            unet.zero_grad()
+            input_i, output_target_i = unet.flush()
+            if cfg['test_computation']:
+                cfg['time_used'].append(time.time() - s)
+            for k in input_i:
+                input_buffer[k].append(input_i[k])
+                output_target_buffer[k].append(output_target_i[k])
+            if (i + 1) % cfg['cola']['num_steps'] == 0:
+                for k in input_buffer:
+                    if cfg['test_computation']:
+                        s = time.time()
+                    cola_base[k] = cola_base[k].to(cfg['device_cola'])
+                    unfreeze_model(cola_base[k])
+                    input_cola = torch.cat(input_buffer[k], dim=0)
+                    output_target_cola = torch.cat(output_target_buffer[k], dim=0)
+                    input_cola = {'data': input_cola, 'target': output_target_cola}
+                    cola_base[k].fit(input_cola, optimizer[k], scheduler[k])
+                    if cfg['test_computation']:
+                        cfg['time_used_cola'].append(time.time() - s)
+                input_buffer = defaultdict(list)
+                output_target_buffer = defaultdict(list)
+            if i % int((len(data_loader) * cfg['log_interval']) + 1) == 0:
+                batch_time = (time.time() - start_time) / (i + 1)
+                epoch_finished_time = datetime.timedelta(seconds=round(batch_time * (len(data_loader) - i - 1)))
+                exp_finished_time = epoch_finished_time + datetime.timedelta(
+                    seconds=round((cfg[cfg['model_name']]['num_epochs'] - cfg['epoch']) * batch_time * len(data_loader)))
+                info = {'info': ['Model: {}'.format(cfg['model_tag']),
+                                'Train Epoch: {}({:.0f}%)'.format(epoch, 100. * i / len(data_loader)),
+                                'Learning rate: {:.6f}'.format(lr),
+                                'Epoch Finished Time: {}'.format(epoch_finished_time),
+                                'Experiment Finished Time: {}'.format(exp_finished_time)]}
+                logger.append(info, 'train')
+                print(logger.write('train', ['loss']), flush=True)
+            if cfg['test_computation']:
+                mem_free, mem_total = torch.cuda.mem_get_info(cfg['device'])
+                cfg['mem_used'].append(mem_total - mem_free)
+                if cfg['device_cola'] != 'cpu':
+                    mem_free_cola, mem_total_cola = torch.cuda.mem_get_info(cfg['device_cola'])
+                    cfg['mem_used_cola'].append(mem_total_cola - mem_free_cola)
+                if i == cfg['num_test_iter']:
+                    print(cfg['time_used'])
+                    print(cfg['mem_used'])
+                    print(cfg['time_used_cola'])
+                    print(cfg['mem_used_cola'])
+                    print('Run time backward: {}({})'.format(np.mean(cfg['time_used'][1:]),
+                                                            np.std(cfg['time_used'][1:])))
+                    print('Run time (ColA, M={}): {}({})'.format(len(list(cola_base.keys())),
+                                                                np.mean(cfg['time_used_cola'][1:]),
+                                                                np.std(cfg['time_used_cola'][1:])))
+                    print('Memory used: {}/({})'.format(np.mean(cfg['mem_used'][1:]),
+                                                        np.std(cfg['mem_used'][1:])))
+                    if cfg['device_cola'] != 'cpu':
+                        print('Memory used (ColA): {}/{}'.format(np.mean(cfg['mem_used_cola'][1:]),
+                                                                np.std(cfg['mem_used_cola'][1:])))
+                    print('-----------------')
+                    exit()
+    return
 
 def test(data_loader, model, cola_base, metric, logger):
     with torch.no_grad():

@@ -7,7 +7,7 @@ from config import cfg, process_args
 from dataset import make_dataset, make_data_loader, process_dataset, collate
 from metric import make_metric, make_logger
 from model import make_model, freeze_model, make_cola, Router, make_delta_weight
-from module import save, to_device, process_control, resume, PeftModel
+from module import save, makedir_exist_ok, to_device, process_control, resume, PeftModel
 
 cudnn.benchmark = True
 parser = argparse.ArgumentParser(description='cfg')
@@ -44,14 +44,33 @@ def runExperiment():
     data_loader = make_data_loader(dataset, tokenizer, cfg['model_name'])
     metric = make_metric({'train': ['Loss'], 'test': ['Loss']}, tokenizer)
     result = resume(os.path.join(best_path, 'model'))
-    model = PeftModel.from_pretrained(model, os.path.join(best_path, 'adapter'))
+    if cfg['task_name'] == 't2i':
+        model.unet = PeftModel.from_pretrained(model.unet, os.path.join(best_path, 'adapter'))
+    else:
+        model = PeftModel.from_pretrained(model, os.path.join(best_path, 'adapter'))
     freeze_model(model)
     model = model.to(cfg['device'])
-    cola_base = make_cola(model, cfg['cola']['model_name'])
+    cola_base = make_cola(model.unet, cfg['cola']['model_name'])
     for k in cola_base:
         cola_base[k].load_state_dict(result['cola_base_state_dict'][k])
         cola_base[k] = cola_base[k].to(cfg['device'])
-    model.load_cola_base(cola_base)
+    if cfg['task_name'] == 't2i':
+        model.unet.load_cola_base(cola_base)
+        model_name = cfg['model_name']
+        pic_folder_path = os.path.join(result_path, cfg['model_tag'], cfg['subset_name'])
+        makedir_exist_ok(pic_folder_path)
+        for i in range(30):
+            INSTANCE_PROMPT = f"a photo of {cfg['unique_id']} {cfg['unique_class']}"
+            image = model(INSTANCE_PROMPT, num_inference_steps=cfg[model_name]['num_inference_steps'], \
+                          guidance_scale=cfg[model_name]['guidance_scale']).images[0]
+            if image.mode == 'RGBA':
+                image = image.convert('RGB')
+            image_path = os.path.join(pic_folder_path, f"{i}.pdf")
+            # Save as PDF
+            image.save(image_path, "PDF", resolution=100.0)
+        return
+    else:
+        model.load_cola_base(cola_base)
     cfg['epoch'] = result['epoch']
     test_logger = make_logger(os.path.join('output', 'runs', 'test_{}'.format(cfg['model_tag'])))
     test_merge_logger = make_logger(os.path.join('output', 'runs', 'test_merge_{}'.format(cfg['model_tag'])))

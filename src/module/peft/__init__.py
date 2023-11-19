@@ -60,6 +60,8 @@ from .tuners import (
 )
 from .utils import (
     TRANSFORMERS_MODELS_TO_PREFIX_TUNING_POSTPROCESS_MAPPING,
+    UNET_TO_COLA_TARGET_MODULES_MAPPING,
+    UNET_TO_LORA_TARGET_MODULES_MAPPING,
     PeftConfig,
     PeftType,
     PromptLearningConfig,

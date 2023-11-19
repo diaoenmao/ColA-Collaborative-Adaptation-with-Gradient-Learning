@@ -309,6 +309,9 @@ TRANSFORMERS_MODELS_TO_COLA_TARGET_MODULES_MAPPING = {
     "starcoder": ["c_attn"],
 }
 
+UNET_TO_COLA_TARGET_MODULES_MAPPING = ["to_q", "to_v", "query", "value"]
+UNET_TO_LORA_TARGET_MODULES_MAPPING = ["to_q", "to_v", "query", "value"]
+
 TRANSFORMERS_MODELS_TO_LORA_TARGET_MODULES_MAPPING = {
     "t5": ["q", "v"],
     "mt5": ["q", "v"],
