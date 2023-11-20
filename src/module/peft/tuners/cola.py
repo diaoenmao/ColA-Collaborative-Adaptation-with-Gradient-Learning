@@ -643,7 +643,7 @@ class Linear(nn.Linear, ColaLayer):
                 x = x.to(self.cola_base[self.active_adapter]['dtype'])
                 cola_output = self.cola_base[self.active_adapter]['model'](x) * self.cola_alpha[self.active_adapter]
                 if self.training:
-                    self.output_target.append(cola_output.to(self.offload_device))
+                    self.output_target.append(0)
                 result += cola_output
         else:
             if self.training:
@@ -707,7 +707,7 @@ class Embedding(nn.Embedding, ColaLayer):
             if self.cola_base[self.active_adapter]['model'] is not None:
                 cola_output = self.cola_base[self.active_adapter]['model'](x) * self.cola_alpha[self.active_adapter]
                 if self.training:
-                    self.output_target.append(cola_output.to(self.offload_device))
+                    self.output_target.append(0)
                 result += cola_output
             return result
         else:
@@ -821,7 +821,7 @@ class Conv2d(nn.Conv2d, ColaLayer):
                 x = x.to(self.cola_base[self.active_adapter]['dtype'])
                 cola_output = self.cola_base[self.active_adapter]['model'](x) * self.cola_alpha[self.active_adapter]
                 if self.training:
-                    self.output_target.append(cola_output.to(self.offload_device))
+                    self.output_target.append(0)
                 result += cola_output
 
         else:
@@ -887,7 +887,7 @@ if is_bnb_available():
                         cola_output = self.cola_base[self.active_adapter]['model'](x).to(expected_dtype) * \
                                       self.cola_alpha[self.active_adapter]
                         if self.training:
-                            self.output_target.append(cola_output.to(self.offload_device))
+                            self.output_target.append(0)
                         output = cola_output
                     else:
                         output = 0
@@ -896,7 +896,7 @@ if is_bnb_available():
                         cola_output = self.cola_base[self.active_adapter]['model'](x) * \
                                       self.cola_alpha[self.active_adapter]
                         if self.training:
-                            self.output_target.append(cola_output.to(self.offload_device))
+                            self.output_target.append(0)
                         output = cola_output
                     else:
                         output = 0
@@ -947,7 +947,7 @@ if is_bnb_available():
                             cola_output = self.cola_base[self.active_adapter]['model'](x).to(expected_dtype) * \
                                           self.cola_alpha[self.active_adapter]
                             if self.training:
-                                self.output_target.append(cola_output.to(self.offload_device))
+                                self.output_target.append(0)
                             output = cola_output
                         else:
                             output = 0
@@ -956,7 +956,7 @@ if is_bnb_available():
                             cola_output = self.cola_base[self.active_adapter]['model'](x) * \
                                           self.cola_alpha[self.active_adapter]
                             if self.training:
-                                self.output_target.append(cola_output.to(self.offload_device))
+                                self.output_target.append(0)
                             output = cola_output
                         else:
                             output = 0

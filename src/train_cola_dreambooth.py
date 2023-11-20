@@ -140,9 +140,9 @@ def train(data_loader, unet, vae, text_encoder, cola_base, optimizer, scheduler,
             s = time.time()
         if cfg['cola']['merge']:
             delta_weight = make_delta_weight(cola_base)
-            model.merge_adapter(delta_weight)
-        input = to_device(input, cfg['device'])
+            unet.merge_adapter(delta_weight)
         with torch.no_grad():
+            input = to_device(input, cfg['device'])
             latents = vae.encode(input["pixel_values"].to(dtype=torch.float32)).latent_dist.sample()
             latents = latents * 0.18215
 
@@ -189,13 +189,13 @@ def train(data_loader, unet, vae, text_encoder, cola_base, optimizer, scheduler,
         else:
             loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
 
-        output_ = {'loss': loss.detach()}
+        output_ = {'loss': loss}
         input_size = input['input_ids'].size(0) / 2
-        loss.backward()
+        output_['loss'].backward()
         unet.zero_grad()
         input_i, output_target_i = unet.flush()
         if cfg['cola']['merge']:
-            model.unmerge_adapter(delta_weight)
+            unet.unmerge_adapter(delta_weight)
         if cfg['test_computation']:
             cfg['time_used'].append(time.time() - s)
         for k in input_i:

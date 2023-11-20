@@ -139,10 +139,10 @@ def train(data_loader, unet, vae, text_encoder, optimizer, scheduler, noise_sche
         else:
             loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
 
-        output_ = {'loss': loss.detach()}
+        output_ = {'loss': loss}
         input_size = input['input_ids'].size(0) / 2
         optimizer.zero_grad()
-        loss.backward()
+        output['loss'].backward()
         optimizer.step()
         scheduler.step()
         if cfg['test_computation']:

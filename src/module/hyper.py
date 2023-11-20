@@ -66,12 +66,12 @@ def process_control():
     elif cfg['task_name'] in ['t2i']:
         cfg['collate_mode'] = 'dreambooth'
         cfg[model_name]['optimizer_name'] = 'AdamW'
-        cfg[model_name]['lr'] = 5e-6
+        cfg[model_name]['lr'] = 1e-4
         cfg[model_name]['momentum'] = 0.9
         cfg[model_name]['betas'] = (0.9, 0.999)
         cfg[model_name]['weight_decay'] = 5e-4
         cfg[model_name]['nesterov'] = True
-        cfg[model_name]['num_epochs'] = 4
+        cfg[model_name]['num_epochs'] = 40
         cfg[model_name]['batch_size'] = {'train': cfg['batch_size'], 'test': cfg['batch_size']}
 
         # all settings are from the peft example: https://github.com/huggingface/peft
@@ -134,7 +134,7 @@ def process_control():
             cfg['collate_mode'] = 'dreambooth'
             cfg['sub_model_name'] = 'unet'
             cfg['cola']['optimizer_name'] = 'AdamW'
-            cfg['cola']['lr'] = 5e-6
+            cfg['cola']['lr'] = 1e-4
             cfg['cola']['momentum'] = 0.9
             cfg['cola']['betas'] = (0.9, 0.999)
             cfg['cola']['weight_decay'] = 5e-4

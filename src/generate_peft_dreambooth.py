@@ -39,12 +39,13 @@ def runExperiment():
     model_tag_path = os.path.join(model_path, cfg['model_tag'])
     best_path = os.path.join(model_tag_path, 'best')
     model, tokenizer = make_model(cfg['model_name'])
+    result = resume(os.path.join(best_path, 'model'))
     model.unet = PeftModel.from_pretrained(model.unet, os.path.join(best_path, 'adapter'))
     model = model.to(cfg['device'])
     generate_dir = os.path.join(result_path, cfg['model_tag'])
     makedir_exist_ok(generate_dir)
     with torch.no_grad():
-        model.train(False)
+        model.unet.train(False)
         for i in range(num_generated):
             INSTANCE_PROMPT = f"a photo of {cfg['unique_id']} {cfg['unique_class']}"
             image = model(INSTANCE_PROMPT, num_inference_steps=cfg[cfg['model_name']]['num_inference_steps'], \

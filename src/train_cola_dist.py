@@ -138,11 +138,11 @@ def train(data_loader, model, cola_base, optimizer, scheduler, metric, logger):
                 cola_base[k].model[j].train(False)
                 freeze_model(cola_base[k].model[j])
             cola_base[k].make_split(split_i)
+        if cfg['test_computation']:
+            s = time.time()
         if cfg['cola']['merge']:
             delta_weight = make_delta_weight(cola_base)
             model.merge_adapter(delta_weight)
-        if cfg['test_computation']:
-            s = time.time()
         input_size = input['labels'].size(0)
         input = {'input_ids': input['input_ids'], 'attention_mask': input['attention_mask'],
                  'labels': input['labels']}

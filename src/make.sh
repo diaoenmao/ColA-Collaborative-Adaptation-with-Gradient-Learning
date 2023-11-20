@@ -66,6 +66,9 @@ python make.py --mode cola_merge --task_name ic --run test --num_experiment 1 --
 python make.py --mode cola_dist_merge --task_name clm --run train --num_experiment 1 --resume_mode 1 --init_seed 0 --round 8 --split_round 1 --num_gpu 4
 python make.py --mode cola_dist_merge --task_name clm --run test --num_experiment 1 --resume_mode 1 --init_seed 0 --round 8 --split_round 1 --num_gpu 4
 
+python make.py --mode full_dreambooth --task_name t2i --run train --num_experiment 1 --resume_mode 1 --init_seed 0 --round 8 --split_round 1 --num_gpu 4
+python make.py --mode full_dreambooth --task_name t2i --run generate --num_experiment 1 --resume_mode 1 --init_seed 0 --round 8 --split_round 1 --num_gpu 4
+
 python make.py --mode peft_dreambooth --task_name t2i --run train --num_experiment 1 --resume_mode 1 --init_seed 0 --round 8 --split_round 1 --num_gpu 4
 python make.py --mode peft_dreambooth --task_name t2i --run generate --num_experiment 1 --resume_mode 1 --init_seed 0 --round 8 --split_round 1 --num_gpu 4
 

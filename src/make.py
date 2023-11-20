@@ -179,6 +179,9 @@ def main():
         elif task_name == 'sc':
             data_names = ['glue-cola']
             model_names = ['roberta-base']
+        elif task_name == 'ic':
+            data_names = ['MNIST']
+            model_names = ['linear', 'mlp', 'cnn']
         elif task_name == 't2i':
             data_names = ['dreambooth-dog']
             model_names = ['sdiffusion']

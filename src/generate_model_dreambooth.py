@@ -45,7 +45,7 @@ def runExperiment():
     generate_dir = os.path.join(result_path, cfg['model_tag'])
     makedir_exist_ok(generate_dir)
     with torch.no_grad():
-        model.train(False)
+        model.unet.train(False)
         for i in range(num_generated):
             INSTANCE_PROMPT = f"a photo of {cfg['unique_id']} {cfg['unique_class']}"
             image = model(INSTANCE_PROMPT, num_inference_steps=cfg[cfg['model_name']]['num_inference_steps'], \
