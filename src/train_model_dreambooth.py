@@ -75,8 +75,8 @@ def runExperiment():
                   'optimizer_state_dict': optimizer.state_dict(), 'scheduler_state_dict': scheduler.state_dict(),
                   'metric_state_dict': metric.state_dict(), 'logger_state_dict': logger.state_dict()}
         save(result, os.path.join(checkpoint_path, 'model'))
-        if metric.compare(logger.mean['test/{}'.format(metric.pivot_name)]):
-            metric.update(logger.mean['test/{}'.format(metric.pivot_name)])
+        if metric.compare(logger.mean['train/{}'.format(metric.pivot_name)]):
+            metric.update(logger.mean['train/{}'.format(metric.pivot_name)])
             makedir_exist_ok(best_path)
             shutil.copy(os.path.join(checkpoint_path, 'model'), os.path.join(best_path, 'model'))
         logger.reset()
@@ -85,29 +85,32 @@ def runExperiment():
 
 def train(data_loader, unet, vae, text_encoder, optimizer, scheduler, noise_scheduler, metric, logger):
     unet.train(True)
+    vae.train(False)
+    text_encoder.train(False)
     start_time = time.time()
     for i, input in enumerate(data_loader):
         if cfg['test_computation']:
             s = time.time()
         input = to_device(input, cfg['device'])
-        latents = vae.encode(input["pixel_values"].to(dtype=torch.float32)).latent_dist.sample()
-        latents = latents * 0.18215
+        with torch.no_grad():
+            latents = vae.encode(input["pixel_values"].to(dtype=torch.float32)).latent_dist.sample()
+            latents = latents * 0.18215
 
-        # Sample noise that we'll add to the latents
-        noise = torch.randn_like(latents)
-        bsz = latents.shape[0]
-        # Sample a random timestep for each image
-        timesteps = torch.randint(
-            0, noise_scheduler.config.num_train_timesteps, (bsz,), device=latents.device
-        )
-        timesteps = timesteps.long()
+            # Sample noise that we'll add to the latents
+            noise = torch.randn_like(latents)
+            bsz = latents.shape[0]
+            # Sample a random timestep for each image
+            timesteps = torch.randint(
+                0, noise_scheduler.config.num_train_timesteps, (bsz,), device=latents.device
+            )
+            timesteps = timesteps.long()
 
-        # Add noise to the latents according to the noise magnitude at each timestep
-        # (this is the forward diffusion process)
-        noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
+            # Add noise to the latents according to the noise magnitude at each timestep
+            # (this is the forward diffusion process)
+            noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
 
-        # Get the text embedding for conditioning
-        encoder_hidden_states = text_encoder(input["input_ids"])[0]
+            # Get the text embedding for conditioning
+            encoder_hidden_states = text_encoder(input["input_ids"])[0]
 
         # Predict the noise residual
         model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
@@ -170,6 +173,7 @@ def train(data_loader, unet, vae, text_encoder, optimizer, scheduler, noise_sche
                                                    np.std(cfg['mem_used'][1:])))
                 print('-----------------')
                 exit()
+    logger.save(True)
     return
 
 

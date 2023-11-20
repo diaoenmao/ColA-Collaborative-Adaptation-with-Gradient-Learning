@@ -54,22 +54,29 @@ def runExperiment():
         for i in range(cfg['num_split']):
             cola_base[k].model[i].load_state_dict(result['cola_base_state_dict'][k][i])
             cola_base[k].model[i] = cola_base[k].model[i].to(cfg['device'])
-    model.load_cola_base(cola_base)
+    if not cfg['cola']['merge']:
+        model.load_cola_base(cola_base)
     cfg['epoch'] = result['epoch']
     test_logger = make_logger(os.path.join('output', 'runs', 'test_{}'.format(cfg['model_tag'])))
-    test_each_logger = make_logger(os.path.join('output', 'runs', 'test_each_{}'.format(cfg['model_tag'])))
-    test_merge_logger = make_logger(os.path.join('output', 'runs', 'test_merge_{}'.format(cfg['model_tag'])))
     test(data_loader['test'], model, cola_base, metric, test_logger)
+    test_each_logger = make_logger(os.path.join('output', 'runs', 'test_each_{}'.format(cfg['model_tag'])))
     test_each(data_loader['test'], model, cola_base, split_metric, test_each_logger)
-    if cfg['ft_name'] in ['cola'] and 'mlp' not in cfg['cola']['model_name']:
-        delta_weight = make_delta_weight(cola_base)
-        model = model.merge_and_unload(delta_weight)
-        test(data_loader['test'], model, cola_base, metric, test_merge_logger)
-    result = resume(os.path.join(checkpoint_path, 'model'))
-    result = {'cfg': cfg, 'epoch': cfg['epoch'], 'logger_state_dict': {'train': result['logger_state_dict'],
-                                                                       'test': test_logger.state_dict(),
-                                                                       'test_each': test_each_logger.state_dict(),
-                                                                       'test_merge': test_merge_logger.state_dict()}}
+    if not cfg['cola']['merge']:
+        test_merge_logger = make_logger(os.path.join('output', 'runs', 'test_merge_{}'.format(cfg['model_tag'])))
+        if cfg['ft_name'] in ['cola'] and 'mlp' not in cfg['cola']['model_name']:
+            delta_weight = make_delta_weight(cola_base)
+            model = model.merge_and_unload(delta_weight)
+            test(data_loader['test'], model, cola_base, metric, test_merge_logger)
+            result = resume(os.path.join(checkpoint_path, 'model'))
+            result = {'cfg': cfg, 'epoch': cfg['epoch'], 'logger_state_dict': {'train': result['logger_state_dict'],
+                                                                               'test': test_logger.state_dict(),
+                                                                               'test_each': test_each_logger.state_dict(),
+                                                                               'test_merge': test_merge_logger.state_dict()}}
+    else:
+        result = resume(os.path.join(checkpoint_path, 'model'))
+        result = {'cfg': cfg, 'epoch': cfg['epoch'], 'logger_state_dict': {'train': result['logger_state_dict'],
+                                                                           'test': test_logger.state_dict(),
+                                                                           'test_each': test_each_logger.state_dict()}}
     save(result, os.path.join(result_path, cfg['model_tag']))
     return
 
@@ -77,9 +84,13 @@ def runExperiment():
 def test(data_loader, model, cola_base, metric, logger):
     with torch.no_grad():
         model.train(False)
-        for k in cola_base:
-            for i in range(len(cola_base[k].model)):
-                cola_base[k].model[i] = cola_base[k].model[i].to(cfg['device'])
+        if cfg['cola']['merge']:
+            delta_weight = make_delta_weight(cola_base)
+            model.merge_adapter(delta_weight)
+        else:
+            for k in cola_base:
+                for i in range(len(cola_base[k].model)):
+                    cola_base[k].model[i] = cola_base[k].model[i].to(cfg['device'])
         for i, input in enumerate(data_loader):
             for k in cola_base:
                 cola_base[k].make_split(input['split'])
@@ -102,6 +113,8 @@ def test(data_loader, model, cola_base, metric, logger):
             metric.add('test', input_, output_)
             evaluation = metric.evaluate('test', 'batch', input_, output_)
             logger.append(evaluation, 'test', input_size)
+        if cfg['cola']['merge']:
+            model.unmerge_adapter(delta_weight)
         evaluation = metric.evaluate('test', 'full')
         logger.append(evaluation, 'test')
         info = {'info': ['Model: {}'.format(cfg['model_tag']), 'Test Epoch: {}({:.0f}%)'.format(cfg['epoch'], 100.)]}
@@ -113,9 +126,13 @@ def test(data_loader, model, cola_base, metric, logger):
 def test_each(data_loader, model, cola_base, metric, logger):
     with torch.no_grad():
         model.train(False)
-        for k in cola_base:
-            for i in range(len(cola_base[k].model)):
-                cola_base[k].model[i] = cola_base[k].model[i].to(cfg['device'])
+        if cfg['cola']['merge']:
+            delta_weight = make_delta_weight(cola_base)
+            model.merge_adapter(delta_weight)
+        else:
+            for k in cola_base:
+                for i in range(len(cola_base[k].model)):
+                    cola_base[k].model[i] = cola_base[k].model[i].to(cfg['device'])
         for i, input in enumerate(data_loader):
             for k in cola_base:
                 cola_base[k].make_split(input['split'])
@@ -153,6 +170,8 @@ def test_each(data_loader, model, cola_base, metric, logger):
             metric.add('test', input_, output_)
             evaluation = metric.evaluate('test', 'batch', input_, output_)
             logger.append(evaluation, 'test', input_size)
+        if cfg['cola']['merge']:
+            model.unmerge_adapter(delta_weight)
         evaluation = metric.evaluate('test', 'full')
         logger.append(evaluation, 'test')
         info = {'info': ['Model: {}'.format(cfg['model_tag']), 'Test Epoch: {}({:.0f}%)'.format(cfg['epoch'], 100.)]}

@@ -8,7 +8,8 @@ from module import save, makedir_exist_ok, process_control
 
 if __name__ == "__main__":
     data_names = ['fpb-sa', 'wikisql', 'samsum', 'e2enlg', 'webnlg-2017', 'dart', 'glue-cola', 'glue-mnli', 'glue-mrpc',
-                  'glue-qnli', 'glue-qqp', 'glue-rte', 'glue-sst2', 'glue-stsb', 'dolly-15k', 'MNIST', 'CIFAR10']
+                  'glue-qnli', 'glue-qqp', 'glue-rte', 'glue-sst2', 'glue-stsb', 'dolly-15k', 'MNIST', 'CIFAR10',
+                  'dreambooth-dog']
     cfg['seed'] = 0
     with torch.no_grad():
         for data_name in data_names:

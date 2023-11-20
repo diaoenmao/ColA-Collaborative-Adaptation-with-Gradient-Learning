@@ -66,7 +66,7 @@ def process_control():
     elif cfg['task_name'] in ['t2i']:
         cfg['collate_mode'] = 'dreambooth'
         cfg[model_name]['optimizer_name'] = 'AdamW'
-        cfg[model_name]['lr'] = 1e-4
+        cfg[model_name]['lr'] = 5e-6
         cfg[model_name]['momentum'] = 0.9
         cfg[model_name]['betas'] = (0.9, 0.999)
         cfg[model_name]['weight_decay'] = 5e-4
@@ -78,12 +78,6 @@ def process_control():
         cfg[model_name]['prior_loss_weight'] = 1
         cfg[model_name]['resolution'] = 512
         cfg[model_name]['num_class_image'] = 200
-        # The dimension used by the LoRA update matrices
-        cfg[model_name]['lora_r'] = 16
-        # Scaling factor
-        cfg[model_name]['lora_alpha'] = 27
-        cfg[model_name]['lora_dropout'] = 0
-        cfg[model_name]['lora_bias'] = "none"
 
         cfg[model_name]['noise_scheduler_name'] = 'DDPM'
         cfg[model_name]['beta_start'] = 0.00085
@@ -140,7 +134,7 @@ def process_control():
             cfg['collate_mode'] = 'dreambooth'
             cfg['sub_model_name'] = 'unet'
             cfg['cola']['optimizer_name'] = 'AdamW'
-            cfg['cola']['lr'] = 1e-4
+            cfg['cola']['lr'] = 5e-6
             cfg['cola']['momentum'] = 0.9
             cfg['cola']['betas'] = (0.9, 0.999)
             cfg['cola']['weight_decay'] = 5e-4

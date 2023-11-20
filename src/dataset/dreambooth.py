@@ -145,3 +145,4 @@ class DreamBooth(Dataset):
                 new_api_url = file_info['url']  # URL for the subdirectory
                 self.download_github_directory(new_api_url, new_destination)
         print('download dreambooth dataset end')
+        return

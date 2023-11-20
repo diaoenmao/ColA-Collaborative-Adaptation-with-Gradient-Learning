@@ -34,19 +34,19 @@ def make_metric(metric_name, tokenizer):
             metric_name['test'].extend(['GLUE'])
         else:
             raise ValueError('Not valid data name')
-    elif cfg['task_name'] == 't2i':
-        if cfg['data_name'] in ['dreambooth']:
-            pivot = -float('inf')
-            pivot_direction = 'up'
-            pivot_name = 'Loss'
-        else:
-            raise ValueError('Not valid data name')
     elif cfg['task_name'] == 'ic':
         pivot = -float('inf')
         pivot_direction = 'up'
         pivot_name = 'Accuracy'
         for k in metric_name:
             metric_name[k].extend(['Accuracy'])
+    elif cfg['task_name'] == 't2i':
+        if cfg['data_name'] in ['dreambooth']:
+            pivot = float('inf')
+            pivot_direction = 'down'
+            pivot_name = 'Loss'
+        else:
+            raise ValueError('Not valid data name')
     else:
         raise ValueError('Not valid task name')
     metric = Metric(metric_name, pivot, pivot_direction, pivot_name, tokenizer)

@@ -346,12 +346,6 @@ def make_config_t2i():
     model_name = cfg['model_name']
     if cfg['ft_name'] == 'lora':
         peft_config = LoraConfig(
-            # r=cfg[model_name]['lora_r'],
-            # lora_alpha=cfg[model_name]['lora_alpha'],
-            # target_modules=UNET_TO_LORA_TARGET_MODULES_MAPPING,
-            # lora_dropout=cfg[model_name]['lora_dropout'],
-            # bias=cfg[model_name]['lora_bias'],
-            # inference_mode=False,
             target_modules=UNET_TO_LORA_TARGET_MODULES_MAPPING,
             r=8,
             lora_alpha=8,

@@ -31,6 +31,7 @@ def main():
 
 def runExperiment():
     output_format = 'png'
+    num_generated = 30
     cfg['seed'] = int(cfg['model_tag'].split('_')[0])
     torch.manual_seed(cfg['seed'])
     torch.cuda.manual_seed(cfg['seed'])
@@ -38,29 +39,33 @@ def runExperiment():
     result_path = os.path.join('output', 'result')
     model_tag_path = os.path.join(model_path, cfg['model_tag'])
     best_path = os.path.join(model_tag_path, 'best')
-    checkpoint_path = os.path.join(model_tag_path, 'checkpoint')
     model, tokenizer = make_model(cfg['model_name'])
     result = resume(os.path.join(checkpoint_path, 'model'))
-    model.unet = PeftModel.from_pretrained(model.unet, os.path.join(checkpoint_path, 'adapter'))
+    model.unet = PeftModel.from_pretrained(model.unet, os.path.join(best_path, 'adapter'))
     freeze_model(model.unet)
     model = model.to(cfg['device'])
     cola_base = make_cola(model.unet, cfg['cola']['model_name'])
     for k in cola_base:
         cola_base[k].load_state_dict(result['cola_base_state_dict'][k])
         cola_base[k] = cola_base[k].to(cfg['device'])
-    model.unet.load_cola_base(cola_base)
-    model_name = cfg['model_name']
+    if not cfg['cola']['merge']:
+        model.unet.load_cola_base(cola_base)
+    else:
+        delta_weight = make_delta_weight(cola_base)
+        model.unet.merge_adapter(delta_weight)
     generate_dir = os.path.join(result_path, cfg['model_tag'], cfg['subset_name'])
     makedir_exist_ok(generate_dir)
-    for i in range(30):
-        INSTANCE_PROMPT = f"a photo of {cfg['unique_id']} {cfg['unique_class']}"
-        image = model(INSTANCE_PROMPT, num_inference_steps=cfg[model_name]['num_inference_steps'], \
-                      guidance_scale=cfg[model_name]['guidance_scale']).images[0]
-        if image.mode == 'RGBA':
-            image = image.convert('RGB')
-        image_path = os.path.join(generate_dir, f"{i}.{output_format}")
-        # Save as PDF
-        image.save(image_path, output_format.upper(), resolution=100.0)
+    with torch.no_grad():
+        model.train(False)
+        for i in range(num_generated):
+            INSTANCE_PROMPT = f"a photo of {cfg['unique_id']} {cfg['unique_class']}"
+            image = model(INSTANCE_PROMPT, num_inference_steps=cfg[cfg['model_name']]['num_inference_steps'], \
+                          guidance_scale=cfg[cfg['model_name']]['guidance_scale']).images[0]
+            if image.mode == 'RGBA':
+                image = image.convert('RGB')
+            image_path = os.path.join(generate_dir, f"{i}.{output_format}")
+            # Save as PDF
+            image.save(image_path, output_format.upper(), resolution=100.0)
     return
 
 

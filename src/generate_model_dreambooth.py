@@ -30,6 +30,7 @@ def main():
 
 def runExperiment():
     output_format = 'png'
+    num_generated = 30
     cfg['seed'] = int(cfg['model_tag'].split('_')[0])
     torch.manual_seed(cfg['seed'])
     torch.cuda.manual_seed(cfg['seed'])
@@ -37,23 +38,24 @@ def runExperiment():
     result_path = os.path.join('output', 'result')
     model_tag_path = os.path.join(model_path, cfg['model_tag'])
     best_path = os.path.join(model_tag_path, 'best')
-    checkpoint_path = os.path.join(model_tag_path, 'checkpoint')
     model, tokenizer = make_model(cfg['model_name'])
-    result = resume(os.path.join(checkpoint_path, 'model'))
+    result = resume(os.path.join(best_path, 'model'))
     model.unet.load_state_dict(result['model_state_dict'])
     model = model.to(cfg['device'])
     generate_dir = os.path.join(result_path, cfg['model_tag'])
     makedir_exist_ok(generate_dir)
-    for i in range(30):
-        INSTANCE_PROMPT = f"a photo of {cfg['unique_id']} {cfg['unique_class']}"
-        image = model(INSTANCE_PROMPT, num_inference_steps=cfg[cfg['model_name']]['num_inference_steps'], \
-                      guidance_scale=cfg[cfg['model_name']]['guidance_scale']).images[0]
-        # Convert to RGB if your model outputs RGBA format, as PDF doesn't support RGBA
-        if image.mode == 'RGBA':
-            image = image.convert('RGB')
-        image_path = os.path.join(generate_dir, f"{i}.{output_format}")
-        # Save as PDF
-        image.save(image_path, output_format.upper(), resolution=100.0)
+    with torch.no_grad():
+        model.train(False)
+        for i in range(num_generated):
+            INSTANCE_PROMPT = f"a photo of {cfg['unique_id']} {cfg['unique_class']}"
+            image = model(INSTANCE_PROMPT, num_inference_steps=cfg[cfg['model_name']]['num_inference_steps'], \
+                          guidance_scale=cfg[cfg['model_name']]['guidance_scale']).images[0]
+            # Convert to RGB if your model outputs RGBA format, as PDF doesn't support RGBA
+            if image.mode == 'RGBA':
+                image = image.convert('RGB')
+            image_path = os.path.join(generate_dir, f"{i}.{output_format}")
+            # Save as PDF
+            image.save(image_path, output_format.upper(), resolution=100.0)
     return
 
 

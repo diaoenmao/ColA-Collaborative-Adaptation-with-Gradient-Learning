@@ -12,7 +12,7 @@ from config import cfg, process_args
 from dataset import make_dataset, make_data_loader, process_dataset, collate
 from metric import make_metric, make_logger
 from model import make_model, make_optimizer, make_scheduler, make_ft_model, freeze_model, unfreeze_model, make_cola, \
-    make_noise_scheduler
+    make_delta_weight, make_noise_scheduler
 from module import save, to_device, process_control, resume, makedir_exist_ok, PeftModel
 
 cudnn.benchmark = True
@@ -57,7 +57,8 @@ def runExperiment():
         model = model.to(cfg['device'])
         model.print_trainable_parameters()
         cola_base = make_cola(model, cfg['cola']['model_name'])
-        model.load_cola_base(cola_base)
+        if not cfg['cola']['merge']:
+            model.load_cola_base(cola_base)
         optimizer = {}
         scheduler = {}
         num_params = 0
@@ -78,7 +79,8 @@ def runExperiment():
         cola_base = make_cola(model, cfg['cola']['model_name'])
         for k in cola_base:
             cola_base[k].load_state_dict(result['cola_base_state_dict'][k])
-        model.load_cola_base(cola_base)
+        if not cfg['cola']['merge']:
+            model.load_cola_base(cola_base)
         optimizer = {}
         scheduler = {}
         num_params = 0
@@ -110,8 +112,8 @@ def runExperiment():
                   'metric_state_dict': metric.state_dict(), 'logger_state_dict': logger.state_dict()}
         save(result, os.path.join(checkpoint_path, 'model'))
         model.save_pretrained(os.path.join(checkpoint_path, 'adapter'))
-        if metric.compare(logger.mean['test/{}'.format(metric.pivot_name)]):
-            metric.update(logger.mean['test/{}'.format(metric.pivot_name)])
+        if metric.compare(logger.mean['train/{}'.format(metric.pivot_name)]):
+            metric.update(logger.mean['train/{}'.format(metric.pivot_name)])
             makedir_exist_ok(best_path)
             shutil.copy(os.path.join(checkpoint_path, 'model'), os.path.join(best_path, 'model'))
             shutil.copytree(os.path.join(checkpoint_path, 'adapter'), os.path.join(best_path, 'adapter'),
@@ -122,36 +124,43 @@ def runExperiment():
 
 def train(data_loader, unet, vae, text_encoder, cola_base, optimizer, scheduler, noise_scheduler, metric, logger):
     unet.train(True)
+    vae.train(False)
+    text_encoder.train(False)
     start_time = time.time()
     input_buffer = defaultdict(list)
     output_target_buffer = defaultdict(list)
     for i, input in enumerate(data_loader):
         for k in cola_base:
             lr = optimizer[k].param_groups[0]['lr']
-            cola_base[k] = cola_base[k].to(cfg['device'])
+            if not cfg['cola']['merge']:
+                cola_base[k] = cola_base[k].to(cfg['device'])
             cola_base[k].train(False)
             freeze_model(cola_base[k])
         if cfg['test_computation']:
             s = time.time()
+        if cfg['cola']['merge']:
+            delta_weight = make_delta_weight(cola_base)
+            model.merge_adapter(delta_weight)
         input = to_device(input, cfg['device'])
-        latents = vae.encode(input["pixel_values"].to(dtype=torch.float32)).latent_dist.sample()
-        latents = latents * 0.18215
+        with torch.no_grad():
+            latents = vae.encode(input["pixel_values"].to(dtype=torch.float32)).latent_dist.sample()
+            latents = latents * 0.18215
 
-        # Sample noise that we'll add to the latents
-        noise = torch.randn_like(latents)
-        bsz = latents.shape[0]
-        # Sample a random timestep for each image
-        timesteps = torch.randint(
-            0, noise_scheduler.config.num_train_timesteps, (bsz,), device=latents.device
-        )
-        timesteps = timesteps.long()
+            # Sample noise that we'll add to the latents
+            noise = torch.randn_like(latents)
+            bsz = latents.shape[0]
+            # Sample a random timestep for each image
+            timesteps = torch.randint(
+                0, noise_scheduler.config.num_train_timesteps, (bsz,), device=latents.device
+            )
+            timesteps = timesteps.long()
 
-        # Add noise to the latents according to the noise magnitude at each timestep
-        # (this is the forward diffusion process)
-        noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
+            # Add noise to the latents according to the noise magnitude at each timestep
+            # (this is the forward diffusion process)
+            noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
 
-        # Get the text embedding for conditioning
-        encoder_hidden_states = text_encoder(input["input_ids"])[0]
+            # Get the text embedding for conditioning
+            encoder_hidden_states = text_encoder(input["input_ids"])[0]
 
         # Predict the noise residual
         model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
@@ -185,6 +194,8 @@ def train(data_loader, unet, vae, text_encoder, cola_base, optimizer, scheduler,
         loss.backward()
         unet.zero_grad()
         input_i, output_target_i = unet.flush()
+        if cfg['cola']['merge']:
+            model.unmerge_adapter(delta_weight)
         if cfg['test_computation']:
             cfg['time_used'].append(time.time() - s)
         for k in input_i:
@@ -241,6 +252,7 @@ def train(data_loader, unet, vae, text_encoder, cola_base, optimizer, scheduler,
                                                              np.std(cfg['mem_used_cola'][1:])))
                 print('-----------------')
                 exit()
+    logger.save(True)
     return
 
 
