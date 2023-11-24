@@ -543,8 +543,7 @@ class ColaLayer:
 
     def forward_hook(self, module, input, output):
         if self.training:
-            input_ = input[0].detach().to(self.offload_device)
-            self.input.append(input_)
+            self.input.append(input[0].detach().to(self.offload_device, non_blocking=True))
             output.requires_grad_(True)
             output.register_hook(self.backward_hook)
         return
@@ -552,9 +551,7 @@ class ColaLayer:
     def backward_hook(self, grad):
         if self.training:
             with torch.no_grad():
-                grad_ = grad.detach().to(self.offload_device)
-                # self.output_target[-1] = (self.output_target[-1] - grad_).detach()
-                self.output_target[-1] = grad_.detach()
+                self.output_target[-1] = grad.detach().to(self.offload_device, non_blocking=True)
         return
 
 
