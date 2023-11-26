@@ -3,7 +3,7 @@ import os
 import torch
 import torch.backends.cudnn as cudnn
 from config import cfg, process_args
-from dataset import make_dataset, make_data_loader, process_dataset, collate, make_batchnorm_stats
+from dataset import make_dataset, make_data_loader, process_dataset, collate
 from metric import make_metric, make_logger
 from model import make_model
 from module import save, makedir_exist_ok, to_device, process_control, resume, PeftModel

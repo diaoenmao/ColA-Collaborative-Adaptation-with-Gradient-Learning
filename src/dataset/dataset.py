@@ -2,7 +2,6 @@ import copy
 import dataset
 import numpy as np
 import os
-import copy
 import torch
 from functools import partial
 from collections import defaultdict
@@ -587,25 +586,3 @@ def process_dataset(dataset, tokenizer):
     else:
         raise ValueError('Not valid task name')
     return processed_dataset
-
-
-def make_batchnorm_stats(dataset_, model, tag):
-    dataset_ = copy.deepcopy(dataset_)
-    model = copy.deepcopy(model)
-    with torch.no_grad():
-        for k, v in model.named_modules():
-            if isinstance(v, (torch.nn.BatchNorm1d, torch.nn.BatchNorm2d)):
-                v.momentum = None
-                v.track_running_stats = True
-                v.register_buffer('running_mean', torch.zeros(v.num_features, device=cfg['device']))
-                v.register_buffer('running_var', torch.ones(v.num_features, device=cfg['device']))
-                v.register_buffer('num_batches_tracked', torch.tensor(0, dtype=torch.long, device=cfg['device']))
-        transform = dataset.Compose([transforms.ToTensor(), transforms.Normalize(*data_stats[cfg['data_name']])])
-        dataset_.transform = transform
-        data_loader = make_data_loader({'train': dataset_}, None, tag, shuffle={'train': False})['train']
-        model.train(True)
-        for i, input in enumerate(data_loader):
-            input = collate(input)
-            input = to_device(input, cfg['device'])
-            model(**input)
-    return model

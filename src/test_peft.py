@@ -3,7 +3,7 @@ import os
 import torch
 import torch.backends.cudnn as cudnn
 from config import cfg, process_args
-from dataset import make_dataset, make_data_loader, process_dataset, collate, make_batchnorm_stats
+from dataset import make_dataset, make_data_loader, process_dataset, collate
 from metric import make_metric, make_logger
 from model import make_model
 from module import save, to_device, process_control, resume, PeftModel
@@ -45,8 +45,6 @@ def runExperiment():
     result = resume(os.path.join(best_path, 'model'))
     model = PeftModel.from_pretrained(model, os.path.join(best_path, 'adapter'))
     model = model.to(cfg['device'])
-    if cfg['model_name'] in ['cnn', 'resnet18', 'wresnet28x2']:
-        model = make_batchnorm_stats(dataset['train'], model, cfg['model_name'])
     cfg['epoch'] = result['epoch']
     test_logger = make_logger(os.path.join('output', 'runs', 'test_{}'.format(cfg['model_tag'])))
     test_merge_logger = make_logger(os.path.join('output', 'runs', 'test_merge_{}'.format(cfg['model_tag'])))
