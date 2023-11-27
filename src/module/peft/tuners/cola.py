@@ -593,9 +593,10 @@ class Linear(nn.Linear, ColaLayer):
             delta_weight_ = delta_weight
 
         self.weight.data += self.get_delta_weight(delta_weight_, self.active_adapter).to(self.weight.data.device,
-                                                                                         self.weight.data.dtype)
+                                                                                         self.weight.data.dtype,
+                                                                                         non_blocking=True)
         if self.bias is not None and isinstance(delta_weight, tuple):
-            self.bias.data += delta_bias_.data.to(self.bias.data.device, self.bias.data.dtype)
+            self.bias.data += delta_bias_.data.to(self.bias.data.device, self.bias.data.dtype, non_blocking=True)
         self.merged = True
         return
 
@@ -610,9 +611,10 @@ class Linear(nn.Linear, ColaLayer):
         else:
             delta_weight_ = delta_weight
         self.weight.data -= self.get_delta_weight(delta_weight_, self.active_adapter).to(self.weight.data.device,
-                                                                                         self.weight.data.dtype)
+                                                                                         self.weight.data.dtype,
+                                                                                         non_blocking=True)
         if self.bias is not None and isinstance(delta_weight, tuple):
-            self.bias.data -= delta_bias_.data.to(self.bias.data.device, self.bias.data.dtype)
+            self.bias.data -= delta_bias_.data.to(self.bias.data.device, self.bias.data.dtype, non_blocking=True)
         self.merged = False
         return
 
