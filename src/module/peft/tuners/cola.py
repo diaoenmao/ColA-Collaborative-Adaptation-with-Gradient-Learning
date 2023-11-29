@@ -543,7 +543,7 @@ class ColaLayer:
 
     def forward_hook(self, module, input, output):
         if self.training:
-            self.input.append(input[0].detach().to(self.offload_device, non_blocking=True))
+            self.input.append(input[0].detach().to(self.offload_device))
             output.requires_grad_(True)
             output.register_hook(self.backward_hook)
         return
@@ -551,7 +551,7 @@ class ColaLayer:
     def backward_hook(self, grad):
         if self.training:
             with torch.no_grad():
-                self.output_target[-1] = grad.detach().to(self.offload_device, non_blocking=True)
+                self.output_target[-1] = grad.detach().to(self.offload_device)
         return
 
 
@@ -593,10 +593,9 @@ class Linear(nn.Linear, ColaLayer):
             delta_weight_ = delta_weight
 
         self.weight.data += self.get_delta_weight(delta_weight_, self.active_adapter).to(self.weight.data.device,
-                                                                                         self.weight.data.dtype,
-                                                                                         non_blocking=True)
+                                                                                         self.weight.data.dtype)
         if self.bias is not None and isinstance(delta_weight, tuple):
-            self.bias.data += delta_bias_.data.to(self.bias.data.device, self.bias.data.dtype, non_blocking=True)
+            self.bias.data += delta_bias_.data.to(self.bias.data.device, self.bias.data.dtype)
         self.merged = True
         return
 
@@ -611,10 +610,9 @@ class Linear(nn.Linear, ColaLayer):
         else:
             delta_weight_ = delta_weight
         self.weight.data -= self.get_delta_weight(delta_weight_, self.active_adapter).to(self.weight.data.device,
-                                                                                         self.weight.data.dtype,
-                                                                                         non_blocking=True)
+                                                                                         self.weight.data.dtype)
         if self.bias is not None and isinstance(delta_weight, tuple):
-            self.bias.data -= delta_bias_.data.to(self.bias.data.device, self.bias.data.dtype, non_blocking=True)
+            self.bias.data -= delta_bias_.data.to(self.bias.data.device, self.bias.data.dtype)
         self.merged = False
         return
 
