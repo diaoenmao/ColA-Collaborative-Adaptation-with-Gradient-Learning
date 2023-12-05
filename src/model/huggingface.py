@@ -7,10 +7,8 @@ from diffusers import (
     DiffusionPipeline,
     UNet2DConditionModel,
 )
-from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM, AutoModelForSequenceClassification, AutoTokenizer, \
-    PretrainedConfig
 from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM, AutoModelForSequenceClassification, \
-    AutoTokenizer, LlamaTokenizer, LlamaForCausalLM
+    AutoTokenizer, PretrainedConfig, LlamaTokenizer, LlamaForCausalLM
 
 
 def make_hf_model(model_name, sub_model_name=None):
