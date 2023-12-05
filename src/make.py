@@ -10,7 +10,7 @@ parser.add_argument('--world_size', default=1, type=int)
 parser.add_argument('--init_seed', default=0, type=int)
 parser.add_argument('--round', default=4, type=int)
 parser.add_argument('--experiment_step', default=1, type=int)
-parser.add_argument('--num_experiment', default=1, type=int)
+parser.add_argument('--num_experiments', default=1, type=int)
 parser.add_argument('--resume_mode', default=0, type=int)
 parser.add_argument('--mode', default=None, type=str)
 parser.add_argument('--split_round', default=65535, type=int)
@@ -18,12 +18,12 @@ parser.add_argument('--task_name', default=None, type=str)
 args = vars(parser.parse_args())
 
 
-def make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode, control_name):
+def make_controls(script_name, init_seeds, world_size, num_experiments, resume_mode, control_name):
     control_names = []
     for i in range(len(control_name)):
         control_names.extend(list('_'.join(x) for x in itertools.product(*control_name[i])))
     control_names = [control_names]
-    controls = script_name + init_seeds + world_size + num_experiment + resume_mode + control_names
+    controls = script_name + init_seeds + world_size + num_experiments + resume_mode + control_names
     controls = list(itertools.product(*controls))
     return controls
 
@@ -36,16 +36,16 @@ def main():
     round = args['round']
     experiment_step = args['experiment_step']
     init_seed = args['init_seed']
-    num_experiment = args['num_experiment']
+    num_experiments = args['num_experiments']
     resume_mode = args['resume_mode']
     mode = args['mode']
     split_round = args['split_round']
     task_name = args['task_name']
     gpu_ids = [','.join(str(i) for i in list(range(x, x + world_size))) for x in
                list(range(init_gpu, init_gpu + num_gpu, world_size))]
-    init_seeds = [list(range(init_seed, init_seed + num_experiment, experiment_step))]
+    init_seeds = [list(range(init_seed, init_seed + num_experiments, experiment_step))]
     world_size = [[world_size]]
-    num_experiment = [[experiment_step]]
+    num_experiments = [[experiment_step]]
     resume_mode = [[resume_mode]]
     filename = '{}_{}_{}'.format(run, mode, task_name)
     if task_name == 's2s':
@@ -75,7 +75,7 @@ def main():
             batch_size = ['32']
         script_name = [['{}_model.py'.format(run)]]
         control_name = [[data_names, model_names, [task_name], ['full'], batch_size]]
-        controls = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode, control_name)
+        controls = make_controls(script_name, init_seeds, world_size, num_experiments, resume_mode, control_name)
     elif mode == 'peft':
         if task_name == 'ic':
             ft_name = ['lora']
@@ -88,7 +88,7 @@ def main():
                 batch_size = ['32']
         script_name = [['{}_peft.py'.format(run)]]
         control_name = [[data_names, model_names, [task_name], ft_name, batch_size]]
-        controls = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode, control_name)
+        controls = make_controls(script_name, init_seeds, world_size, num_experiments, resume_mode, control_name)
     elif mode == 'cola':
         ft_name = ['cola-lowrank-1', 'cola-linear-1', 'cola-mlp-1']
         if task_name == 'ic':
@@ -100,7 +100,7 @@ def main():
                 batch_size = ['32']
         script_name = [['{}_cola.py'.format(run)]]
         control_name = [[data_names, model_names, [task_name], ft_name, batch_size]]
-        controls = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode, control_name)
+        controls = make_controls(script_name, init_seeds, world_size, num_experiments, resume_mode, control_name)
     elif mode == 'cola_step':
         ft_name = ['cola-lowrank-1', 'cola-lowrank-2', 'cola-lowrank-4', 'cola-lowrank-8']
         if task_name == 'ic':
@@ -109,7 +109,7 @@ def main():
             batch_size = ['8']
         script_name = [['{}_cola.py'.format(run)]]
         control_name = [[data_names, model_names, [task_name], ft_name, batch_size]]
-        controls = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode, control_name)
+        controls = make_controls(script_name, init_seeds, world_size, num_experiments, resume_mode, control_name)
     elif mode == 'cola_dist':
         data_names = ['dolly-15k']
         ft_name = ['cola-lowrank-1', 'cola-lowrank~linear-1', 'cola-lowrank~mlp-1']
@@ -120,7 +120,7 @@ def main():
         dist_mode = ['alone']
         script_name = [['{}_cola_dist.py'.format(run)]]
         control_name = [[data_names, model_names, [task_name], ft_name, batch_size, dist_mode]]
-        controls = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode, control_name)
+        controls = make_controls(script_name, init_seeds, world_size, num_experiments, resume_mode, control_name)
     elif mode == 'cola_merge':
         ft_name = ['cola-lowrank-1-1', 'cola-linear-1-1']
         if task_name == 'ic':
@@ -132,7 +132,7 @@ def main():
                 batch_size = ['32']
         script_name = [['{}_cola.py'.format(run)]]
         control_name = [[data_names, model_names, [task_name], ft_name, batch_size]]
-        controls = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode, control_name)
+        controls = make_controls(script_name, init_seeds, world_size, num_experiments, resume_mode, control_name)
     elif mode == 'cola_dist_merge':
         data_names = ['dolly-15k']
         ft_name = ['cola-lowrank-1-1', 'cola-lowrank~linear-1-1']
@@ -143,31 +143,31 @@ def main():
         dist_mode = ['col']
         script_name = [['{}_cola_dist.py'.format(run)]]
         control_name = [[data_names, model_names, [task_name], ft_name, batch_size, dist_mode]]
-        controls = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode, control_name)
+        controls = make_controls(script_name, init_seeds, world_size, num_experiments, resume_mode, control_name)
     elif mode == 'full_dreambooth':
         ft_name = ['full']
         batch_size = ['1']
         script_name = [['{}_model_dreambooth.py'.format(run)]]
         control_name = [[data_names, model_names, [task_name], ft_name, batch_size]]
-        controls = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode, control_name)
+        controls = make_controls(script_name, init_seeds, world_size, num_experiments, resume_mode, control_name)
     elif mode == 'peft_dreambooth':
         ft_name = ['lora']
         batch_size = ['1']
         script_name = [['{}_peft_dreambooth.py'.format(run)]]
         control_name = [[data_names, model_names, [task_name], ft_name, batch_size]]
-        controls = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode, control_name)
+        controls = make_controls(script_name, init_seeds, world_size, num_experiments, resume_mode, control_name)
     elif mode == 'cola_dreambooth':
         ft_name = ['cola-lowrank-1', 'cola-linear-1', 'cola-mlp-1']
         batch_size = ['1']
         script_name = [['{}_cola_dreambooth.py'.format(run)]]
         control_name = [[data_names, model_names, [task_name], ft_name, batch_size]]
-        controls = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode, control_name)
+        controls = make_controls(script_name, init_seeds, world_size, num_experiments, resume_mode, control_name)
     elif mode == 'cola_dreambooth_merge':
         ft_name = ['cola-lowrank-1-1', 'cola-linear-1-1']
         batch_size = ['1']
         script_name = [['{}_cola_dreambooth.py'.format(run)]]
         control_name = [[data_names, model_names, [task_name], ft_name, batch_size]]
-        controls = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode, control_name)
+        controls = make_controls(script_name, init_seeds, world_size, num_experiments, resume_mode, control_name)
     elif mode == 'computation':
         if task_name == 's2s':
             data_names = ['fpb-sa']
@@ -194,7 +194,7 @@ def main():
         else:
             script_name = [['train_model.py']]
         control_name = [[data_names, model_names, [task_name], ft_name, batch_size]]
-        controls_full = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode, control_name)
+        controls_full = make_controls(script_name, init_seeds, world_size, num_experiments, resume_mode, control_name)
         if task_name in ['ic', 't2i']:
             ft_name = ['lora']
         else:
@@ -205,7 +205,7 @@ def main():
         else:
             script_name = [['train_peft.py']]
         control_name = [[data_names, model_names, [task_name], ft_name, batch_size]]
-        controls_peft = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode, control_name)
+        controls_peft = make_controls(script_name, init_seeds, world_size, num_experiments, resume_mode, control_name)
         controls = controls_full + controls_peft
     elif mode == 'computation_cola':
         offload_gpu = False
@@ -234,7 +234,7 @@ def main():
         else:
             script_name = [['train_cola.py']]
         control_name = [[data_names, model_names, [task_name], ft_name, batch_size]]
-        controls_cola = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode, control_name)
+        controls_cola = make_controls(script_name, init_seeds, world_size, num_experiments, resume_mode, control_name)
 
         ft_name = ['cola-lowrank-1-1', 'cola-linear-1-1']
         batch_size = ['1', '8', '32']
@@ -243,7 +243,7 @@ def main():
         else:
             script_name = [['train_cola.py']]
         control_name = [[data_names, model_names, [task_name], ft_name, batch_size]]
-        controls_cola_merge = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode,
+        controls_cola_merge = make_controls(script_name, init_seeds, world_size, num_experiments, resume_mode,
                                             control_name)
         controls = controls_cola + controls_cola_merge
         if task_name == 'clm':
@@ -252,14 +252,14 @@ def main():
             dist_mode = ['alone']
             script_name = [['train_cola_dist.py']]
             control_name = [[data_names, model_names, [task_name], ft_name, batch_size, dist_mode]]
-            controls_cola_dist = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode,
+            controls_cola_dist = make_controls(script_name, init_seeds, world_size, num_experiments, resume_mode,
                                                control_name)
             ft_name = ['cola-lowrank-1-1', 'cola-lowrank~linear-1-1']
             batch_size = ['1', '8', '32']
             dist_mode = ['col']
             script_name = [['train_cola_dist.py']]
             control_name = [[data_names, model_names, [task_name], ft_name, batch_size, dist_mode]]
-            controls_cola_dist_merge = make_controls(script_name, init_seeds, world_size, num_experiment, resume_mode,
+            controls_cola_dist_merge = make_controls(script_name, init_seeds, world_size, num_experiments, resume_mode,
                                                      control_name)
             controls = controls + controls_cola_dist + controls_cola_dist_merge
     else:
@@ -270,10 +270,10 @@ def main():
     for i in range(len(controls)):
         controls[i] = list(controls[i])
         if offload_gpu:
-            s = s + 'CUDA_VISIBLE_DEVICES=\"{},{}\" python {} --init_seed {} --world_size {} --num_experiment {} ' \
+            s = s + 'CUDA_VISIBLE_DEVICES=\"{},{}\" python {} --init_seed {} --world_size {} --num_experiments {} ' \
                     '--resume_mode {} --control_name {}&\n'.format(gpu_ids[i % len(gpu_ids)], num_gpu, *controls[i])
         else:
-            s = s + 'CUDA_VISIBLE_DEVICES=\"{}\" python {} --init_seed {} --world_size {} --num_experiment {} ' \
+            s = s + 'CUDA_VISIBLE_DEVICES=\"{}\" python {} --init_seed {} --world_size {} --num_experiments {} ' \
                     '--resume_mode {} --control_name {}&\n'.format(gpu_ids[i % len(gpu_ids)], *controls[i])
         if i % round == round - 1:
             if 'computation' in mode:
