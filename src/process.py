@@ -40,8 +40,8 @@ def make_all_controls(mode, task_name):
         model_names = ['bart-base']
     elif task_name == 'clm':
         data_names = ['dolly-15k']
-        model_names = ['llama-2']
-        # model_names = ['gpt2']
+        # model_names = ['llama-2']
+        model_names = ['gpt2']
     elif task_name == 'sc':
         data_names = ['glue-cola', 'glue-mnli', 'glue-mrpc', 'glue-qnli', 'glue-qqp', 'glue-rte', 'glue-sst2',
                       'glue-stsb']
@@ -96,7 +96,7 @@ def make_all_controls(mode, task_name):
             batch_size = ['8']
         else:
             batch_size = ['32']
-        dist_mode = ['alone', 'col']
+        dist_mode = ['alone']
         control_name = [[data_names, model_names, [task_name], ft_name, batch_size, dist_mode]]
         controls = make_controls(control_name)
     elif mode == 'cola_merge':
@@ -131,6 +131,8 @@ def main():
     controls = []
     for mode in modes:
         for task_name in task_names:
+            if mode in ['cola_dist', 'cola_dist_merge'] and task_name not in ['clm']:
+                continue
             controls += make_all_controls(mode, task_name)
     processed_result = process_result(controls)
     df_mean = make_df(processed_result, 'mean')
@@ -149,6 +151,7 @@ def process_result(controls):
     for control in controls:
         model_tag = '_'.join(control)
         gather_result(list(control), model_tag, result)
+    exit()
     summarize_result(None, result)
     save(result, os.path.join(result_path, 'processed_result'))
     processed_result = tree()
@@ -191,8 +194,9 @@ def gather_result(control, model_tag, processed_result):
                     if 'info' in metric_name:
                         continue
                     x = base_result['logger_state_dict'][split]['history'][metric_name]
-                    if len(x) < 40 and len(x) > 10 and 'info' not in metric_name:
-                        # print('a', model_tag, len(x))
+                    # if len(x) < 40 and len(x) > 10 and 'info' not in metric_name:
+                    if len(x) < 40:
+                        print('a', model_tag, len(x))
                         num_miss = 40 - len(x)
                         last_x = x[-1]
                         x = x + [last_x + 1e-5 * np.random.randn() for _ in range(num_miss)]
