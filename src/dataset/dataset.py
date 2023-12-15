@@ -168,7 +168,7 @@ def dreambooth_input_collate(batch):
     return batch
 
 
-def make_data_collate(collate_mode, tokenizer=None):
+def make_data_collate(collate_mode):
     if collate_mode == 'dict':
         return input_collate
     elif collate_mode == 'default':
@@ -177,13 +177,11 @@ def make_data_collate(collate_mode, tokenizer=None):
         return default_data_collator
     elif collate_mode == 'dreambooth':
         return dreambooth_input_collate
-    elif collate_mode == 'pad':
-        return partial(pad_collate, tokenizer=tokenizer)
     else:
         raise ValueError('Not valid collate mode')
 
 
-def make_data_loader(dataset, tokenizer, tag, batch_size=None, shuffle=None, sampler=None):
+def make_data_loader(dataset, tag, batch_size=None, shuffle=None, sampler=None):
     data_loader = {}
     cfg['num_steps'] = {}
     for k in dataset:
@@ -192,12 +190,12 @@ def make_data_loader(dataset, tokenizer, tag, batch_size=None, shuffle=None, sam
         if sampler is None:
             data_loader[k] = DataLoader(dataset=dataset[k], batch_size=batch_size_, shuffle=shuffle_,
                                         pin_memory=cfg['pin_memory'], num_workers=cfg['num_workers'],
-                                        collate_fn=make_data_collate(cfg['collate_mode'], tokenizer),
+                                        collate_fn=make_data_collate(cfg['collate_mode']),
                                         worker_init_fn=np.random.seed(cfg['seed']))
         else:
             data_loader[k] = DataLoader(dataset=dataset[k], batch_size=batch_size_, sampler=sampler[k],
                                         pin_memory=cfg['pin_memory'], num_workers=cfg['num_workers'],
-                                        collate_fn=make_data_collate(cfg['collate_mode'], tokenizer),
+                                        collate_fn=make_data_collate(cfg['collate_mode']),
                                         worker_init_fn=np.random.seed(cfg['seed']))
         cfg['num_steps'][k] = len(data_loader[k])
     return data_loader
