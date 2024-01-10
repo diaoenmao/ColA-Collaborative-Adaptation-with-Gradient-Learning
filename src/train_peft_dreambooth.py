@@ -12,7 +12,7 @@ from config import cfg, process_args
 from dataset import make_dataset, make_data_loader, process_dataset, collate
 from metric import make_metric, make_logger
 from model import make_model, make_optimizer, make_scheduler, make_noise_scheduler, make_ft_model
-from module import save, to_device, process_control, resume, makedir_exist_ok, PeftModel
+from module import save, to_device, process_control, resume, makedir_exist_ok, PeftModel, get_available_gpus
 
 cudnn.benchmark = True
 parser = argparse.ArgumentParser(description='cfg')
@@ -46,6 +46,7 @@ def runExperiment():
     model, tokenizer = make_model(cfg['model_name'], 'unet')
     dataset = process_dataset(dataset, tokenizer)
     data_loader = make_data_loader(dataset, cfg['model_name'])
+    print('len(data_loader): ', len(data_loader['train']))
     result = resume(os.path.join(checkpoint_path, 'model'), resume_mode=cfg['resume_mode'])
     metric = make_metric({'train': ['Loss'], 'test': ['Loss']}, tokenizer)
     logger = make_logger(os.path.join('output', 'runs', 'train_{}'.format(cfg['model_tag'])))
@@ -96,6 +97,11 @@ def train(data_loader, unet, vae, text_encoder, optimizer, scheduler, noise_sche
     vae.train(False)
     text_encoder.train(False)
     start_time = time.time()
+
+    device = cfg['device']
+    if cfg['device'] == 'cuda':
+        gpu_ids, _ = get_available_gpus()
+        device = torch.device('cuda:{}'.format(gpu_ids[-1]))
     for i, input in enumerate(data_loader):
         if cfg['test_computation']:
             s = time.time()
@@ -119,7 +125,6 @@ def train(data_loader, unet, vae, text_encoder, optimizer, scheduler, noise_sche
 
             # Get the text embedding for conditioning
             encoder_hidden_states = text_encoder(input["input_ids"])[0]
-
         # Predict the noise residual
         model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
 
@@ -170,7 +175,11 @@ def train(data_loader, unet, vae, text_encoder, optimizer, scheduler, noise_sche
             logger.append(info, 'train')
             print(logger.write('train', metric.metric_name['train']), flush=True)
         if cfg['test_computation']:
-            mem_free, mem_total = torch.cuda.mem_get_info(cfg['device'])
+            device = cfg['device']
+            if cfg['device'] == 'cuda':
+                gpu_ids, _ = get_available_gpus()
+                device = torch.device('cuda:{}'.format(gpu_ids[-1]))
+            mem_free, mem_total = torch.cuda.mem_get_info(device)
             cfg['mem_used'].append(mem_total - mem_free)
             if i == cfg['num_test_iter']:
                 print(cfg['time_used'])

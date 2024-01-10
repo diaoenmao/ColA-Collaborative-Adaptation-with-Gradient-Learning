@@ -38,9 +38,13 @@ class DreamBooth(Dataset):
         self.transform = transform
 
         if not check_exists(self.processed_folder):
+            print('download dreambooth dataset start')
             self.download_github_directory(self.api_url, self.processed_folder)
+            print('download dreambooth dataset end')
         if not check_exists(self.class_data_dir):
+            print('generate prior data start')
             self.process(model)
+            print('generate prior data end')
         self.make_data()
         return
 
@@ -86,13 +90,17 @@ class DreamBooth(Dataset):
     def generate_prior_data(self, model):
         model_name = cfg['model_name']
         model.to(cfg['device'])
-        for i in range(cfg[cfg['model_name']]['num_class_image']):
-            prompt = self.class_prompt
-            image = model(prompt, num_inference_steps=cfg[model_name]['num_inference_steps'],
-                          guidance_scale=cfg[model_name]['guidance_scale']).images[0]
-            image_path = os.path.join(self.class_data_dir, f"class_pic_{i}.png")
-            # Save the image to the specified path
-            image.save(image_path)
+        model.vae.train(False)
+        model.unet.train(False)
+        model.text_encoder.train(False)
+        with torch.no_grad():
+            for i in range(cfg[cfg['model_name']]['num_class_image']):
+                prompt = self.class_prompt
+                image = model(prompt, num_inference_steps=cfg[model_name]['num_inference_steps'],
+                            guidance_scale=cfg[model_name]['guidance_scale']).images[0]
+                image_path = os.path.join(self.class_data_dir, f"class_pic_{i}.png")
+                # Save the image to the specified path
+                image.save(image_path)
         return
 
     def process(self, model):
@@ -124,7 +132,6 @@ class DreamBooth(Dataset):
         contents_response.raise_for_status()  # Raise an error if the request failed
 
         # Iterate over the files and directories in the current directory
-        print('download dreambooth dataset start')
         for file_info in contents_response.json():
             if file_info['type'] == 'file':
                 # Download each file
@@ -144,5 +151,4 @@ class DreamBooth(Dataset):
                 # Recursively call this function for the new directory
                 new_api_url = file_info['url']  # URL for the subdirectory
                 self.download_github_directory(new_api_url, new_destination)
-        print('download dreambooth dataset end')
         return

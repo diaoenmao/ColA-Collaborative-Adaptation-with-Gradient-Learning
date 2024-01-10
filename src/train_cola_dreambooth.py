@@ -13,7 +13,7 @@ from dataset import make_dataset, make_data_loader, process_dataset, collate
 from metric import make_metric, make_logger
 from model import make_model, make_optimizer, make_scheduler, make_ft_model, freeze_model, unfreeze_model, make_cola, \
     make_delta_weight, make_noise_scheduler
-from module import save, to_device, process_control, resume, makedir_exist_ok, PeftModel
+from module import save, to_device, process_control, resume, makedir_exist_ok, PeftModel, get_available_gpus
 
 cudnn.benchmark = True
 parser = argparse.ArgumentParser(description='cfg')
@@ -230,7 +230,11 @@ def train(data_loader, unet, vae, text_encoder, cola_base, optimizer, scheduler,
             logger.append(info, 'train')
             print(logger.write('train', metric.metric_name['train']), flush=True)
         if cfg['test_computation']:
-            mem_free, mem_total = torch.cuda.mem_get_info(cfg['device'])
+            device = cfg['device']
+            if cfg['device'] == 'cuda':
+                gpu_ids, _ = get_available_gpus()
+                device = torch.device('cuda:{}'.format(gpu_ids[-1]))
+            mem_free, mem_total = torch.cuda.mem_get_info(device)
             cfg['mem_used'].append(mem_total - mem_free)
             if cfg['device_cola'] != 'cpu':
                 mem_free_cola, mem_total_cola = torch.cuda.mem_get_info(cfg['device_cola'])

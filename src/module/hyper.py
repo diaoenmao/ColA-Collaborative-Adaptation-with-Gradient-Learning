@@ -145,7 +145,7 @@ def process_control():
         else:
             raise ValueError('Not valid task name')
 
-    cfg['test_computation'] = False
+    cfg['test_computation'] = True
     if cfg['test_computation']:
         cfg['num_test_iter'] = 10
         cfg['device_cola'] = 'cpu'
