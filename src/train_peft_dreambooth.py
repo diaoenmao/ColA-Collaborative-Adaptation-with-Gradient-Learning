@@ -98,10 +98,6 @@ def train(data_loader, unet, vae, text_encoder, optimizer, scheduler, noise_sche
     text_encoder.train(False)
     start_time = time.time()
 
-    device = cfg['device']
-    if cfg['device'] == 'cuda':
-        gpu_ids, _ = get_available_gpus()
-        device = torch.device('cuda:{}'.format(gpu_ids[-1]))
     for i, input in enumerate(data_loader):
         if cfg['test_computation']:
             s = time.time()
