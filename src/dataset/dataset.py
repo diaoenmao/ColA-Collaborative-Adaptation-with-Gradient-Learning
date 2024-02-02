@@ -108,7 +108,7 @@ def make_dataset(data_name, subset_name=None, verbose=True):
             dataset_['test'] = dataset_['validation']
             del dataset_['validation']
     elif data_name in ['dolly']:
-        dataset_ = load_dataset(cfg['hf_data_name'], cfg['hf_subset_name'], cache_dir=root)
+        dataset_ = load_dataset(cfg['hf_data_name'], cache_dir=root)
         dataset_ = dataset_['train'].train_test_split(test_size=0.1, seed=cfg['seed'])
     elif data_name in ['dreambooth']:
         model, tokenizer = make_model(cfg['model_name'])
