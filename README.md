@@ -1,4 +1,7 @@
 # ColA: Collaborative Adaptation with Gradient Learning
+[arXiv] This is an implementation of [ColA: Collaborative Adaptation with Gradient Learning](https://arxiv.org/abs/2404.13844)
+- Illustration of the Fine-Tuning as a Service (FTaaS) system architecture.
+<img src="/asset/ftaas.png">
 
 ## Requirements
 See `requirements.txt`
@@ -30,3 +33,22 @@ See `requirements.txt`
     ```ruby
     python test_cola_dist.py --init_seed 0 --world_size 1 --num_experiment 1 --resume_mode 1 --control_name dolly-15k_gpt2_clm_cola-lowrank~linear-1_32_col
     ```
+
+## Results
+- Learning curves of (a) Linear (b) MLP and (c) CNN with the CIFAR10 dataset of IC task and Accuracy metric.
+![ic_CIFAR10](/asset/ic_CIFAR10.png)
+
+- Learning curves of (a) MNLI (b) SST-2, and (c) MRPC datasets of SC task with and GLUE metric.
+![sc](/asset/sc.png)
+
+- Learning curves of (a) GPT-2 and (b) Llama-2 (Q, V) on Dolly dataset of CLM task and ROUGE (Longest) metric.
+![clm](/asset/clm.png)
+
+## Acknowledgement
+*Enmao Diao  
+Qi Le  
+Suya Wu  
+Xinran Wang  
+Ali Anwar  
+Jie Ding  
+Vahid Tarokh*
